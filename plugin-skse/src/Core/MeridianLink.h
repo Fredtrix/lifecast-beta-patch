@@ -12,10 +12,11 @@
 //     resolve the QueryMeridianExtension export out of the already-loaded
 //     MeridianUI.dll.
 //
-// The Atelier needs the extensions, not the platform's browser API: the panel
-// is a view (Show/Hide/TryFocus) and the side-by-side comparison is a NifScene
-// actor-appearance surface. The platform handshake is still run first, because
-// it is what initializes the library.
+// The panel is a platform browser (IUIPlatformAPI::AddOrGetBrowser, see
+// Panel/Panel.h), because that is the surface that carries the focus chord.
+// The extensions are still queried: the side-by-side comparison would be a
+// NifScene actor-appearance surface, and View and Input are measured so the
+// choice can be revisited with numbers.
 
 #pragma once
 

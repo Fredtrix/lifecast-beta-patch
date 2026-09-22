@@ -39,6 +39,25 @@ namespace Atelier::Panel
 	void SetVisible(bool a_visible);
 	bool IsVisible();
 
+	// Registers the focus chord on the current browser: up to two DirectInput
+	// scan codes, the second one 0 for a single key. Meridian evaluates it
+	// before a focused browser can swallow the key, and consumes it - it
+	// reaches neither the page nor the game. Registrations belong to one
+	// browser instance, so this is called again every time the panel is
+	// shown rather than once.
+	void ArmFocusChord(std::uint32_t a_key1, std::uint32_t a_key2);
+
+	// Removes the chord, so the keys reach the game again.
+	void DisarmFocusChord();
+
+	// Asks Meridian for focus. Meridian applies it at page load if the page
+	// is not loaded yet, and it deposes whichever browser held focus before.
+	// Only call this with a way out already armed.
+	void RequestFocus();
+
+	// Whether this panel currently owns Meridian's focus.
+	bool IsFocused();
+
 	// Null before Ensure() succeeds and after Meridian's shutdown callback.
 	Meridian::CEF::IBrowser* Browser();
 }

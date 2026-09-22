@@ -1,10 +1,11 @@
 // plugin.cpp
 // Atelier - a modern interface for RaceMenu.
 //
-// This plugin does not edit a character yet. It owns the panel's browser and
-// the message bridge to it (Panel/), and answers one question per log line at
-// startup: does Meridian UI answer, at which version, and which SKEE
-// interfaces are reachable from outside RaceMenu.
+// This plugin does not edit a character yet. It puts its panel on screen
+// every time the RaceSex Menu opens, swaps it with RaceMenu's own film on F4,
+// and owns the message bridge to the page (Panel/). At startup it also answers
+// one question per log line: does Meridian UI answer, at which version, and
+// which SKEE interfaces are reachable from outside RaceMenu.
 //
 // There is no console test here and there cannot be one - the Skyrim console
 // does not call a global function of a plugin. What calls the code below is
@@ -15,6 +16,7 @@
 #include "Core/MeridianLink.h"
 #include "Core/SkeeLink.h"
 #include "Panel/Panel.h"
+#include "Panel/Switcher.h"
 #include "Version.h"
 
 // Local-only instrumentation, absent from this repository by design. A
@@ -81,6 +83,11 @@ namespace
 			// Asking again with the menu OPEN is a separate round and does
 			// not belong here.
 			Atelier::Core::SkeeLink::ReportInterfaces("kDataLoaded");
+
+			// The menu and input sinks need the UI and the input manager,
+			// which exist from here on. The browser itself is not created
+			// now: it is born the first time the RaceSex Menu opens.
+			Atelier::Panel::Switcher::Install();
 			break;
 
 		default:

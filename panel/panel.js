@@ -4,7 +4,7 @@
 "use strict";
 
 (() => {
-  const PAGE_VERSION = "0.1.0";
+  const PAGE_VERSION = "0.2.0";
 
   // How long the page waits for the DLL's answer to "hello" before saying
   // so. Only the status line depends on it; nothing waits on it.
@@ -12,6 +12,7 @@
 
   const statusEl = document.getElementById("bridge-status");
   const versionsEl = document.getElementById("versions");
+  const toRaceMenuEl = document.getElementById("to-racemenu");
 
   let answered = false;
 
@@ -32,6 +33,23 @@
 
   AtelierBridge.on("error", (data) => {
     console.warn("[panel] the DLL reported an error", data);
+  });
+
+  // Back to RaceMenu from inside the page. The DLL hides this page, which
+  // also releases Meridian's focus, and shows RaceMenu's film again.
+  function toRaceMenu() {
+    if (!AtelierBridge.send("show-racemenu")) {
+      setStatus("no bridge", "bad");
+    }
+  }
+
+  toRaceMenuEl.addEventListener("click", toRaceMenu);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !event.repeat) {
+      event.preventDefault();
+      toRaceMenu();
+    }
   });
 
   AtelierBridge.whenAttached((ok) => {

@@ -148,6 +148,41 @@ namespace Atelier::Panel
 		return g_browser && g_visible;
 	}
 
+	void ArmFocusChord(std::uint32_t a_key1, std::uint32_t a_key2)
+	{
+		if (!g_browser) {
+			return;
+		}
+
+		g_browser->ToggleBrowserFocusByKeys(a_key1, a_key2);
+		spdlog::info("[panel] focus chord armed: 0x{:X} + 0x{:X}", a_key1, a_key2);
+	}
+
+	void DisarmFocusChord()
+	{
+		if (!g_browser) {
+			return;
+		}
+
+		g_browser->ToggleBrowserFocusByKeys(0, 0);
+		spdlog::info("[panel] focus chord disarmed");
+	}
+
+	void RequestFocus()
+	{
+		if (!g_browser) {
+			return;
+		}
+
+		g_browser->SetBrowserFocused(true);
+		LogState("focus requested");
+	}
+
+	bool IsFocused()
+	{
+		return g_browser && g_browser->IsBrowserFocused();
+	}
+
 	Meridian::CEF::IBrowser* Browser()
 	{
 		return g_shutdown ? nullptr : g_browser;

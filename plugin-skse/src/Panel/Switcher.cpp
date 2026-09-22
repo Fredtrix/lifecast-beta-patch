@@ -1,0 +1,288 @@
+// Switcher.cpp
+// Atelier
+
+#include "Panel/Switcher.h"
+
+#include "Panel/Bridge.h"
+#include "Panel/Panel.h"
+
+namespace Atelier::Panel::Switcher
+{
+	namespace
+	{
+		using Key = RE::BSKeyboardDevice::Key;
+		using Clock = std::chrono::steady_clock;
+
+		// F4 swaps the two editors - the key the players of the previous
+		// RaceMenu front-end already know.
+		constexpr std::uint32_t kSwapKey = Key::kF4;
+
+		// How long the panel may stay on screen waiting for Meridian to grant
+		// focus. Focus asked for before the page has loaded is applied at
+		// load end, so this covers a slow first load; past it, something is
+		// wrong and the player gets RaceMenu back rather than a panel that
+		// does not answer.
+		constexpr auto kFocusGrace = std::chrono::seconds(5);
+
+		enum class Mode
+		{
+			kClosed,    // the RaceSex Menu is not open
+			kAtelier,   // the panel is on screen and owns (or is getting) focus
+			kRaceMenu,  // RaceMenu's film is on screen, the panel is hidden
+		};
+
+		Mode g_mode = Mode::kClosed;
+
+		// Focus is applied asynchronously, so "not focused" right after the
+		// request is normal. Losing focus only counts once it has been seen.
+		bool              g_focusSeen = false;
+		Clock::time_point g_shownAt{};
+
+		std::uint32_t g_opens = 0;
+		std::uint32_t g_swaps = 0;
+
+		const char* ModeName(Mode a_mode)
+		{
+			switch (a_mode) {
+			case Mode::kClosed:
+				return "closed";
+			case Mode::kAtelier:
+				return "atelier";
+			case Mode::kRaceMenu:
+				return "racemenu";
+			default:
+				return "?";
+			}
+		}
+
+		// RaceMenu's film is hidden and shown through the engine's movie API.
+		// The film itself is never modified; it keeps running underneath and
+		// keeps every value the player set there.
+		void SetFilmVisible(bool a_visible)
+		{
+			auto* ui = RE::UI::GetSingleton();
+			auto  menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto* movie = menu ? menu->uiMovie.get() : nullptr;
+			if (!movie) {
+				spdlog::warn("[switch] RaceMenu film not reachable - cannot {} it",
+					a_visible ? "show" : "hide");
+				return;
+			}
+
+			movie->SetVisible(a_visible);
+			spdlog::info("[switch] RaceMenu film visible = {} (read back {})",
+				a_visible, movie->GetVisible());
+		}
+
+		void SetMode(Mode a_mode)
+		{
+			spdlog::info("[switch] {} -> {}", ModeName(g_mode), ModeName(a_mode));
+			g_mode = a_mode;
+		}
+
+		// Runs on every input tick. Puts RaceMenu back when the panel is on
+		// screen but no longer owns focus, or never got it.
+		void Watch()
+		{
+			if (g_mode != Mode::kAtelier) {
+				return;
+			}
+
+			const bool focused = Panel::IsFocused();
+
+			if (focused) {
+				if (!g_focusSeen) {
+					g_focusSeen = true;
+					const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+						Clock::now() - g_shownAt);
+					spdlog::info("[switch] focus granted, {} ms after the panel was shown", ms.count());
+				}
+				return;
+			}
+
+			if (g_focusSeen) {
+				spdlog::info("[switch] the panel lost focus - back to RaceMenu");
+				ShowRaceMenu();
+				return;
+			}
+
+			if (Clock::now() - g_shownAt > kFocusGrace) {
+				spdlog::warn("[switch] focus was never granted within {} s - back to RaceMenu",
+					kFocusGrace.count());
+				ShowRaceMenu();
+			}
+		}
+
+		void OnMenuOpened()
+		{
+			++g_opens;
+			spdlog::info("[switch] RaceSex Menu opened (#{})", g_opens);
+
+			if (!Panel::Ensure()) {
+				// No panel this time. RaceMenu stays exactly as it was, and
+				// the player loses nothing but the Atelier.
+				SetMode(Mode::kRaceMenu);
+				return;
+			}
+
+			SetMode(Mode::kRaceMenu);
+			ShowAtelier();
+		}
+
+		void OnMenuClosed()
+		{
+			spdlog::info("[switch] RaceSex Menu closed");
+
+			// The film goes away with the menu. The panel is hidden, not
+			// released: re-creating it would make a new browser instance.
+			Panel::DisarmFocusChord();
+			Panel::SetVisible(false);
+			SetMode(Mode::kClosed);
+		}
+
+		void OnPageShowRaceMenu(const nlohmann::json&)
+		{
+			spdlog::info("[switch] the page asked for RaceMenu");
+			ShowRaceMenu();
+		}
+
+		class MenuSink : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
+		{
+		public:
+			static MenuSink* GetSingleton()
+			{
+				static MenuSink s_instance;
+				return &s_instance;
+			}
+
+			RE::BSEventNotifyControl ProcessEvent(
+				const RE::MenuOpenCloseEvent* a_event,
+				RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override
+			{
+				if (a_event && a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
+					if (a_event->opening) {
+						OnMenuOpened();
+					} else {
+						OnMenuClosed();
+					}
+				}
+				return RE::BSEventNotifyControl::kContinue;
+			}
+
+		private:
+			MenuSink() = default;
+		};
+
+		class InputSink : public RE::BSTEventSink<RE::InputEvent*>
+		{
+		public:
+			static InputSink* GetSingleton()
+			{
+				static InputSink s_instance;
+				return &s_instance;
+			}
+
+			RE::BSEventNotifyControl ProcessEvent(
+				RE::InputEvent* const* a_event,
+				RE::BSTEventSource<RE::InputEvent*>*) override
+			{
+				Watch();
+
+				if (!a_event || g_mode != Mode::kRaceMenu) {
+					// With the Atelier on screen, F4 never gets here: it is
+					// the panel's focus chord and Meridian consumes it.
+					return RE::BSEventNotifyControl::kContinue;
+				}
+
+				for (auto* event = *a_event; event; event = event->next) {
+					if (event->GetDevice() != RE::INPUT_DEVICES::kKeyboard) {
+						continue;
+					}
+
+					const auto* button = event->AsButtonEvent();
+					if (button && button->IsDown() && button->GetIDCode() == kSwapKey) {
+						spdlog::info("[switch] F4 from the game");
+						ShowAtelier();
+						break;
+					}
+				}
+
+				return RE::BSEventNotifyControl::kContinue;
+			}
+
+		private:
+			InputSink() = default;
+		};
+
+		bool g_installed = false;
+	}
+
+	void Install()
+	{
+		if (g_installed) {
+			return;
+		}
+
+		auto* ui = RE::UI::GetSingleton();
+		if (!ui) {
+			spdlog::error("[switch] no UI singleton - the Atelier will never open");
+			return;
+		}
+		ui->AddEventSink<RE::MenuOpenCloseEvent>(MenuSink::GetSingleton());
+
+		auto* input = RE::BSInputDeviceManager::GetSingleton();
+		if (input) {
+			input->AddEventSink(InputSink::GetSingleton());
+		} else {
+			// The panel still opens with the menu and the page can still send
+			// the player back, but F4 from RaceMenu is dead and so is the
+			// focus watch. Said here so it is not discovered by pressing F4.
+			spdlog::error("[switch] no BSInputDeviceManager - F4 from RaceMenu will not work");
+		}
+
+		Bridge::On("show-racemenu", &OnPageShowRaceMenu);
+
+		g_installed = true;
+		spdlog::info("[switch] installed - F4 swaps the Atelier and RaceMenu");
+	}
+
+	void ShowAtelier()
+	{
+		if (g_mode != Mode::kRaceMenu || !Panel::Browser()) {
+			return;
+		}
+
+		++g_swaps;
+		spdlog::info("[switch] show the Atelier (swap #{})", g_swaps);
+
+		// The order is the point. The way out exists before the panel can
+		// take the keyboard; focus is the very last thing asked for.
+		Panel::ArmFocusChord(kSwapKey, 0);
+		Panel::SetVisible(true);
+		SetFilmVisible(false);
+
+		g_focusSeen = false;
+		g_shownAt = Clock::now();
+		SetMode(Mode::kAtelier);
+
+		Panel::RequestFocus();
+	}
+
+	void ShowRaceMenu()
+	{
+		if (g_mode != Mode::kAtelier) {
+			return;
+		}
+
+		++g_swaps;
+		spdlog::info("[switch] show RaceMenu (swap #{})", g_swaps);
+
+		// Hiding the browser releases its focus. The chord comes off with it,
+		// so F4 reaches the game again and brings the Atelier back.
+		Panel::SetVisible(false);
+		Panel::DisarmFocusChord();
+		SetFilmVisible(true);
+
+		SetMode(Mode::kRaceMenu);
+	}
+}
