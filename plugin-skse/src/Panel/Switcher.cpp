@@ -74,6 +74,28 @@ namespace Atelier::Panel::Switcher
 				a_visible, movie->GetVisible());
 		}
 
+		// RaceMenu is usually opened from the console (showracemenu), which
+		// stays open underneath. Once the panel owns the keyboard, the key
+		// that would close the console never reaches the game, and the
+		// console sits over the Atelier until the player goes back to
+		// RaceMenu. So it is closed before the panel asks for focus.
+		void CloseConsole()
+		{
+			auto* ui = RE::UI::GetSingleton();
+			if (!ui || !ui->IsMenuOpen(RE::Console::MENU_NAME)) {
+				return;
+			}
+
+			auto* queue = RE::UIMessageQueue::GetSingleton();
+			if (!queue) {
+				spdlog::warn("[switch] the console is open and there is no UI message queue to close it");
+				return;
+			}
+
+			queue->AddMessage(RE::Console::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
+			spdlog::info("[switch] the console was open - asked it to close");
+		}
+
 		void SetMode(Mode a_mode)
 		{
 			spdlog::info("[switch] {} -> {}", ModeName(g_mode), ModeName(a_mode));
@@ -257,6 +279,7 @@ namespace Atelier::Panel::Switcher
 
 		// The order is the point. The way out exists before the panel can
 		// take the keyboard; focus is the very last thing asked for.
+		CloseConsole();
 		Panel::ArmFocusChord(kSwapKey, 0);
 		Panel::SetVisible(true);
 		SetFilmVisible(false);
