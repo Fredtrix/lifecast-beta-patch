@@ -14,8 +14,8 @@ Atelier is released under the GNU General Public License v3.0 (GPL-3.0). See [LI
 ## What is in this repository, and what is not
 
 ```
-Scripts/Source/     Papyrus source (.psc)
 plugin-skse/        SKSE plugin source (C++)
+panel/              the in-game panel (HTML, CSS, JavaScript)
 ```
 
 **This repository holds the source of what players receive.** The development

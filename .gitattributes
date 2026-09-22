@@ -22,6 +22,9 @@ LICENSE           text eol=lf
 .gitignore        text eol=lf
 .gitattributes    text eol=lf
 .gitmodules       text eol=lf
+*.html            text eol=lf
+*.css             text eol=lf
+*.js              text eol=lf
 
 # Text in CRLF - a tool requirement, not a preference: the Papyrus compiler
 # and cmd.exe read these.

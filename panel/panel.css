@@ -1,0 +1,105 @@
+/*
+  Atelier panel - a deliberately neutral frame.
+
+  Every colour, size and font lives in the variables below, so the look can
+  be replaced as a whole without touching the structure.
+*/
+
+:root {
+  --panel-width: 420px;
+  --panel-bg: rgba(18, 18, 20, 0.92);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --text: #e6e6e6;
+  --text-dim: #9a9a9a;
+  --accent: #c8c8c8;
+  --ok: #7fb58a;
+  --warn: #d6b25e;
+  --bad: #d07070;
+  --font: "Segoe UI", system-ui, sans-serif;
+  --gap: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  /* Transparent: the character shows through everywhere the panel is not. */
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--panel-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--panel-border);
+}
+
+.panel-header,
+.panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--gap) calc(var(--gap) * 1.5);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.panel-footer {
+  border-bottom: none;
+  border-top: 1px solid var(--panel-border);
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--gap) calc(var(--gap) * 1.5);
+}
+
+.placeholder {
+  color: var(--text-dim);
+}
+
+.status {
+  font-size: 12px;
+}
+
+.status-wait {
+  color: var(--text-dim);
+}
+
+.status-ok {
+  color: var(--ok);
+}
+
+.status-warn {
+  color: var(--warn);
+}
+
+.status-bad {
+  color: var(--bad);
+}
+
+.versions {
+  font-size: 11px;
+  color: var(--text-dim);
+}

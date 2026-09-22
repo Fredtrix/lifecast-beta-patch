@@ -49,9 +49,16 @@ add_commonlibsse_plugin(
         src/Core/Log.cpp
         src/Core/MeridianLink.cpp
         src/Core/SkeeLink.cpp
+        src/Panel/Bridge.cpp
+        src/Panel/Panel.cpp
 )
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+
+# The panel bridge parses and writes the JSON messages the page exchanges
+# with the DLL. nlohmann-json is already a manifest dependency.
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
 
 # /utf-8 is required by the MeridianUI headers, not a style choice: they ship
 # without a UTF-8 BOM and carry UTF-8 punctuation in their doc comments, so

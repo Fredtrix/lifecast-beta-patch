@@ -77,6 +77,19 @@ when, under which licence, and how to verify the copy is unchanged.
 Meridian UI and RaceMenu themselves are **not** redistributed. They are
 required dependencies the player installs.
 
+## The panel
+
+`panel/` is the page Meridian UI draws over the character editor. It has no
+build step: the files are written by hand, and installing them is a copy.
+
+Copy the **contents** of `panel/` to `Data/MeridianUI/Atelier/`, so that
+`index.html` ends up at `Data/MeridianUI/Atelier/index.html`. The DLL opens it
+as `mod://Atelier/index.html` - the host of that URL is the folder name under
+`Data/MeridianUI/`, so the folder has to be called exactly `Atelier`.
+
+A copy does not delete: a file removed from `panel/` stays in the destination
+until you remove it there too.
+
 ## What the author's own tree does differently, and why you do not need it
 
 The author develops inside a Mod Organizer 2 instance, where this repository

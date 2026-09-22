@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Atelier</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <!--
+    The page is drawn over the whole screen, and only the side panel is
+    opaque: the character stays visible in the rest of it, which is the
+    point of editing live.
+  -->
+  <aside id="panel" class="panel">
+    <header class="panel-header">
+      <h1 class="panel-title">Atelier</h1>
+      <span id="bridge-status" class="status status-wait">connecting</span>
+    </header>
+
+    <main id="sections" class="panel-body">
+      <p class="placeholder">No sections yet.</p>
+    </main>
+
+    <footer class="panel-footer">
+      <span id="versions" class="versions"></span>
+    </footer>
+  </aside>
+
+  <script src="bridge.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>
