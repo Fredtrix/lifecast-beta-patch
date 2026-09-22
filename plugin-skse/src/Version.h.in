@@ -1,0 +1,23 @@
+// Version.h.in
+// Atelier
+//
+// TEMPLATE FILE. Do NOT edit the generated Version.h - edit this file instead.
+// CMake generates Version.h from this template via configure_file(), filling
+// in the numbers declared in project(... VERSION x.y.z ...) in CMakeLists.txt.
+
+#pragma once
+
+#include <cstdint>
+
+namespace Atelier::Version
+{
+	inline constexpr std::uint32_t kMajor = @PROJECT_VERSION_MAJOR@;
+	inline constexpr std::uint32_t kMinor = @PROJECT_VERSION_MINOR@;
+	inline constexpr std::uint32_t kPatch = @PROJECT_VERSION_PATCH@;
+
+	// Human-readable version, e.g. "0.1.0".
+	inline constexpr auto kString = "@PROJECT_VERSION@";
+
+	// Name used for the log file (Atelier.log) and log lines.
+	inline constexpr auto kProjectName = "@PROJECT_NAME@";
+}

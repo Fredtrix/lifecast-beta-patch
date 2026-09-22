@@ -1,0 +1,44 @@
+# Atelier - line endings
+#
+# Without this file, a clone's working copy would depend on the cloning
+# machine's core.autocrlf setting instead of on the project's convention.
+# The index stores LF for all text; this file only fixes what lands in the
+# working copy, here and in every future clone.
+#
+# Attributes for extensions the project does not track yet are inert, and
+# start applying on their own the day the first such file appears.
+
+# Text in LF - documents, C++ source, scripts, configuration
+*.md              text eol=lf
+LICENSE           text eol=lf
+*.txt             text eol=lf
+*.json            text eol=lf
+*.py              text eol=lf
+*.toml            text eol=lf
+*.ini             text eol=lf
+*.h               text eol=lf
+*.cpp             text eol=lf
+*.in              text eol=lf
+.gitignore        text eol=lf
+.gitattributes    text eol=lf
+.gitmodules       text eol=lf
+
+# Text in CRLF - a tool requirement, not a preference: the Papyrus compiler
+# and cmd.exe read these.
+*.psc             text eol=crlf
+*.bat             text eol=crlf
+
+# Binary - never convert, never diff as text
+*.esp             binary
+*.esm             binary
+*.esl             binary
+*.pex             binary
+*.seq             binary
+*.bsa             binary
+*.nif             binary
+*.dds             binary
+*.hkx             binary
+*.fuz             binary
+*.wav             binary
+*.png             binary
+*.jpg             binary

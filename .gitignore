@@ -1,0 +1,40 @@
+# This repository holds SOURCE. Build output is produced from it and is not
+# committed here by accident: a release archive carries the binaries.
+#
+# If a release does commit its exact binaries here, it adds them with
+# `git add -f`, because they are ignored on purpose. That keeps the mistake
+# safe: a stray build output never slips in, and a release that forgets a
+# file shows up as a missing file.
+
+# Papyrus output
+*.pex
+*.pex.tmp
+
+# Native build
+build/
+out/
+*.dll
+*.pdb
+*.lib
+*.exp
+*.ilk
+vcpkg_installed/
+.vs/
+CMakeSettings.json
+*.user
+
+# Plugin data - distributed in the release archive
+*.esp
+*.esl
+*.esm
+*.bsa
+
+# Editor and tool leftovers
+*.bak
+*.bak[0-9]*
+
+# Local-only sources. Development tooling - probes, scratch instrumentation -
+# compiles INTO the DLL, so it has to sit in the source tree; it must never
+# enter this repository. It is kept outside and dropped in here to build. See
+# the OPTIONAL include at the bottom of plugin-skse/CMakeLists.txt.
+plugin-skse/src/_local/
