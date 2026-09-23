@@ -1,9 +1,9 @@
 // plugin.cpp
 // Atelier - a modern interface for RaceMenu.
 //
-// This plugin does not edit a character yet. It puts its panel on screen
-// every time the RaceSex Menu opens, swaps it with RaceMenu's own film on F4,
-// and owns the message bridge to the page (Panel/). At startup it also answers
+// It puts its panel on screen every time the RaceSex Menu opens, swaps it with
+// RaceMenu's own film on F4, owns the message bridge to the page (Panel/), and
+// edits the face morphs live from the panel (Edit/). At startup it also answers
 // one question per log line: does Meridian UI answer, at which version, and
 // which SKEE interfaces are reachable from outside RaceMenu.
 //
@@ -15,6 +15,7 @@
 #include "Core/Log.h"
 #include "Core/MeridianLink.h"
 #include "Core/SkeeLink.h"
+#include "Edit/FaceSliders.h"
 #include "Panel/Panel.h"
 #include "Panel/Switcher.h"
 #include "Version.h"
@@ -88,6 +89,10 @@ namespace
 			// which exist from here on. The browser itself is not created
 			// now: it is born the first time the RaceSex Menu opens.
 			Atelier::Panel::Switcher::Install();
+
+			// The face sliders write the player's face data from the page
+			// and redraw it; they need the same UI and input manager.
+			Atelier::Edit::FaceSliders::Install();
 			break;
 
 		default:

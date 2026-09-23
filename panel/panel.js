@@ -4,7 +4,7 @@
 "use strict";
 
 (() => {
-  const PAGE_VERSION = "0.3.1";
+  const PAGE_VERSION = "0.4.1";
 
   // How long the page waits for the DLL's answer to "hello" before saying
   // so. Only the status line depends on it; nothing waits on it.
@@ -43,14 +43,11 @@
     }
   }
 
+  // The button is the page's only way back. Esc is deliberately NOT one: it
+  // only ever went one way (nothing brings the Atelier back on Esc), and a
+  // key that means "leave" here would fight any text field the page grows.
+  // F4 is the key, and it works in both directions.
   toRaceMenuEl.addEventListener("click", toRaceMenu);
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !event.repeat) {
-      event.preventDefault();
-      toRaceMenu();
-    }
-  });
 
   AtelierBridge.whenAttached((ok) => {
     if (!ok) {

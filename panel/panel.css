@@ -120,3 +120,34 @@ body {
   border-color: var(--accent);
   outline: none;
 }
+
+.section + .section {
+  margin-top: calc(var(--gap) * 2);
+}
+
+.section-title {
+  margin: 0 0 var(--gap);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 4px;
+  margin-bottom: var(--gap);
+}
+
+.slider-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.slider input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--accent);
+}

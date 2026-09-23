@@ -49,6 +49,7 @@ add_commonlibsse_plugin(
         src/Core/Log.cpp
         src/Core/MeridianLink.cpp
         src/Core/SkeeLink.cpp
+        src/Edit/FaceSliders.cpp
         src/Panel/Bridge.cpp
         src/Panel/Panel.cpp
         src/Panel/Switcher.cpp
