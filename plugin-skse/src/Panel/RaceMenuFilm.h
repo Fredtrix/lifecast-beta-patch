@@ -1,0 +1,64 @@
+// RaceMenuFilm.h
+// Atelier - showing in RaceMenu's sliders what the panel changed.
+//
+// RaceMenu's film draws its sliders from its own list of entries, and each
+// entry keeps the value it last showed in "position". An edit made in the
+// panel reaches the game, but not that list: back in RaceMenu the slider
+// shows the old value, and touching it writes from the old value.
+//
+// So every time RaceMenu comes back to the front, the entries this module
+// knows are compared with the game's state, the ones that differ get their
+// "position" set, and the list is asked to redraw. It is the film's data
+// that changes, through the engine's movie API; the film itself is never
+// modified.
+//
+// What is kept in step:
+//   - the game's 18 face morphs (entries with callback ChangeDoubleMorph),
+//     by label, first entry of each label only - RaceMenu adds sliders of
+//     its own under the same callback, and some share a vanilla label;
+//   - the nose, eye and mouth types (ChangePreset), by label;
+//   - the head parts (ChangeHeadPart): each entry's own part list is asked
+//     for (GetSliderPartData, with the entry's sliderID), and the part the
+//     player wears is found in it by editor ID - no label needed;
+//   - the complexion (ChangeFaceDetails), as its index among the race's
+//     face detail sets.
+//   - the weight (ChangeWeight), which that slider shows from 0 to 1.
+// Hair colour and tint masks are not here: RaceMenu re-reads those itself
+// on the mod events the Atelier sends (Core/RaceMenuSync).
+//
+// Labels are the English ones RaceMenu shows. An entry whose label is not
+// known is left alone.
+
+//
+// The other direction: a face edit made in the panel can be handed to the
+// same GameDelegate callback RaceMenu's own slider calls, with the two
+// arguments that slider sends - the value and the entry's sliderID. The
+// menu's handler then reshapes the head in place, where DoReset3D rebuilds
+// the whole actor (and, with HDT-SMP hair, leaves nodes behind every time).
+
+#pragma once
+
+namespace Atelier::Panel::RaceMenuFilm
+{
+	// Queued on the UI thread; returns at once. Call right after RaceMenu's
+	// film is made visible again.
+	void Sync();
+
+	enum class Slider
+	{
+		kMorph,       // a_which: the faceData morph index, 0 to 17
+		kType,        // a_which: the faceData part index (nose 0, eyes 2, mouth 3)
+		kComplexion,  // a_which: unused
+	};
+
+	// a_delivered: whether RaceMenu's callback was called. When it was not
+	// (no film, no such entry, no such callback), the caller shows the value
+	// its own way. a_final: whether any request folded into this call was a
+	// finished edit.
+	using Done = std::function<void(bool a_delivered, bool a_final)>;
+
+	// Queued on the UI thread; returns at once. Requests for the same slider
+	// that arrive before the queued call runs fold into one, with the last
+	// value and the last a_done.
+	void Apply(Slider a_slider, int a_which, double a_value, bool a_final, Done a_done);
+}

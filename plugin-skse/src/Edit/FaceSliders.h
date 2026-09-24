@@ -12,17 +12,8 @@
 // calls VampireMorph; on the player it held FLT_MAX, and it is never read or
 // written here.
 //
-// Redrawing is the expensive half. With RaceMenu open, the only call that
-// makes a new value show is Actor::DoReset3D(true), which rebuilds the whole
-// actor and costs more than a frame. A dragged slider sends many values a
-// second, so writing and redrawing are separated:
-//
-//   every value      -> written at once (cheap)
-//   redraw           -> at most once per kMinRedrawGap while dragging, plus
-//                       one right away when the page says the drag ended
-//
-// Every redraw is timed and logged, so its cost is measured on every run
-// rather than known from one sample.
+// A value is written at once; the redraw that makes it show is throttled and
+// shared with the other sections (Edit/Session.h).
 //
 // Messages (see Panel/Bridge.h for the envelope):
 //
@@ -32,7 +23,8 @@
 //   page -> dll  "face-set"  { "i": index, "v": value, "final": bool }
 //
 // The DLL also pushes "face" by itself every time the panel comes on screen,
-// because the player may have changed the same values in RaceMenu meanwhile.
+// because the player may have changed the same values in RaceMenu meanwhile,
+// and after every final write, read back from the structure.
 
 #pragma once
 
@@ -56,7 +48,7 @@ namespace Atelier::Edit::FaceSliders
 	// are refused, and the values are sent again the moment they arrive.
 	inline constexpr float kPlausibleLimit = 10.0F;
 
-	// Registers the bridge handlers and the input tick that drives the
-	// throttled redraw. Call once, at kDataLoaded. Safe to call twice.
+	// Registers the bridge handlers and the session callbacks. Call once, at
+	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
 }

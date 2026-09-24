@@ -15,7 +15,11 @@
 #include "Core/Log.h"
 #include "Core/MeridianLink.h"
 #include "Core/SkeeLink.h"
+#include "Edit/Appearance.h"
+#include "Edit/BodyScales.h"
 #include "Edit/FaceSliders.h"
+#include "Edit/Session.h"
+#include "Edit/Tints.h"
 #include "Panel/Panel.h"
 #include "Panel/Switcher.h"
 #include "Version.h"
@@ -90,9 +94,14 @@ namespace
 			// now: it is born the first time the RaceSex Menu opens.
 			Atelier::Panel::Switcher::Install();
 
-			// The face sliders write the player's face data from the page
-			// and redraw it; they need the same UI and input manager.
+			// The editing sections write the player's data from the page;
+			// the session they share owns the menu and input sinks and the
+			// redraw, so it goes first.
+			Atelier::Edit::Session::Install();
 			Atelier::Edit::FaceSliders::Install();
+			Atelier::Edit::Appearance::Install();
+			Atelier::Edit::BodyScales::Install();
+			Atelier::Edit::Tints::Install();
 			break;
 
 		default:

@@ -5,6 +5,8 @@
 
 #include "Panel/Bridge.h"
 #include "Panel/Panel.h"
+#include "Panel/RaceMenuFilm.h"
+#include "Panel/RaceMenuTabs.h"
 
 namespace Atelier::Panel::Switcher
 {
@@ -162,10 +164,18 @@ namespace Atelier::Panel::Switcher
 			SetMode(Mode::kClosed);
 		}
 
-		void OnPageShowRaceMenu(const nlohmann::json&)
+		// "show-racemenu" { "for": what }, where "for" is optional: the
+		// control the page hands over to RaceMenu, logged so a round shows
+		// which way the player went.
+		void OnPageShowRaceMenu(const nlohmann::json& a_data)
 		{
-			spdlog::info("[switch] the page asked for RaceMenu");
+			const bool hasFor = a_data.is_object() && a_data.contains("for") && a_data["for"].is_string();
+			spdlog::info("[switch] the page asked for RaceMenu{}{}", hasFor ? " - for " : "",
+				hasFor ? a_data["for"].get<std::string>() : std::string());
 			ShowRaceMenu();
+			if (hasFor) {
+				RaceMenuTabs::Select(a_data["for"].get<std::string>());
+			}
 		}
 
 		class MenuSink : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
@@ -305,6 +315,7 @@ namespace Atelier::Panel::Switcher
 		Panel::SetVisible(false);
 		Panel::DisarmFocusChord();
 		SetFilmVisible(true);
+		RaceMenuFilm::Sync();
 
 		SetMode(Mode::kRaceMenu);
 	}

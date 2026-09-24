@@ -1,0 +1,647 @@
+// Appearance.cpp
+// Atelier
+
+#include "Edit/Appearance.h"
+
+#include "Core/RaceMenuSync.h"
+#include "Edit/Session.h"
+#include "Panel/Bridge.h"
+#include "Panel/RaceMenuFilm.h"
+
+namespace Atelier::Edit::Appearance
+{
+	namespace
+	{
+		using HeadPart = RE::BGSHeadPart;
+		using HPType = RE::BGSHeadPart::HeadPartType;
+		using FaceData = RE::TESNPC::FaceData;
+		using RaceFace = RE::TESRace::FaceRelatedData;
+
+		constexpr float kMinWeight = 0.0F;
+		constexpr float kMaxWeight = 100.0F;
+
+		// A type list: which NAMA slot it writes, and which of the race's
+		// preset counts gives its length. The race counts nose, brows, eyes,
+		// lips; the NAMA slots are nose, (unused), eyes, mouth. Brow type is
+		// NOT the second NAMA slot - it is the eyebrows head part.
+		struct TypeList
+		{
+			const char* key;
+			int         part;
+			int         variant;
+		};
+
+		constexpr TypeList kTypeLists[] = {
+			{ "nose-type", FaceData::Parts::kNose, RaceFace::kNose },
+			{ "eye-shape", FaceData::Parts::kEyes, RaceFace::kEyes },
+			{ "mouth-shape", FaceData::Parts::kMouth, RaceFace::kLips },
+		};
+
+		struct PartList
+		{
+			const char* key;
+			HPType      type;
+		};
+
+		constexpr PartList kPartLists[] = {
+			{ "hair", HPType::kHair },
+			{ "facial-hair", HPType::kFacialHair },
+			{ "eyes", HPType::kEyes },
+			{ "scar", HPType::kScar },
+			{ "brows", HPType::kEyebrows },
+		};
+
+		// The lists for one race and sex. Rebuilt whenever either changes,
+		// because the page's indices point into them.
+		struct Lists
+		{
+			RE::TESRace*                             race = nullptr;
+			RE::SEX                                  sex = RE::SEX::kNone;
+			std::map<std::string, std::vector<HeadPart*>> parts;
+			std::vector<RE::BGSColorForm*>           hairColors;
+			std::vector<RE::BGSTextureSet*>          complexions;
+			std::map<std::string, int>               typeCounts;
+			bool                                     fromMenu = false;
+		} g_lists;
+
+		std::uint32_t g_sets = 0;
+
+		RE::TESNPC* Npc()
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			return player ? player->GetActorBase() : nullptr;
+		}
+
+		RaceFace* RaceFaceOf(RE::TESNPC* a_npc)
+		{
+			auto* race = a_npc ? a_npc->GetRace() : nullptr;
+			if (!race) {
+				return nullptr;
+			}
+			const auto sex = static_cast<std::uint32_t>(a_npc->GetSex());
+			return sex < RE::SEXES::kTotal ? race->faceRelatedData[sex] : nullptr;
+		}
+
+		std::vector<HeadPart*> PartsOf(RE::TESNPC* a_npc, HPType a_type)
+		{
+			std::vector<HeadPart*> out;
+			auto*                  data = RE::TESDataHandler::GetSingleton();
+			auto*                  race = a_npc->GetRace();
+			if (!data || !race) {
+				return out;
+			}
+			const auto sexFlag = a_npc->GetSex() == RE::SEX::kFemale ? HeadPart::Flag::kFemale : HeadPart::Flag::kMale;
+			for (auto* part : data->GetFormArray<HeadPart>()) {
+				if (!part || part->type.get() != a_type) {
+					continue;
+				}
+				if (!part->flags.any(HeadPart::Flag::kPlayable) || part->flags.any(HeadPart::Flag::kIsExtraPart)) {
+					continue;
+				}
+				if (!part->flags.any(sexFlag)) {
+					continue;
+				}
+				if (!part->validRaces || !part->validRaces->HasForm(race)) {
+					continue;
+				}
+				out.push_back(part);
+			}
+			return out;
+		}
+
+		// RaceMenu's own lists. The RaceSex Menu builds one array of head
+		// parts per type when it opens (runtime data +0x40, seven arrays
+		// indexed like HeadPartType: misc, face, eyes, hair, facial hair,
+		// scar, eyebrows - the layout skse64's GameMenus.h publishes), and
+		// RaceMenu's sliders index into them (skee64's GetSliderPartData
+		// reads the same arrays). Measured in the game: the panel's own list, built from
+		// the data handler, had the same hair count in another order (the
+		// player's hair was 36 here and 1119 there) and one eye fewer (348
+		// against 349). Taking the menu's arrays makes both sides count the
+		// same way. Empty without the menu open or before it built them.
+		std::vector<HeadPart*> MenuPartsOf(HPType a_type)
+		{
+			std::vector<HeadPart*> out;
+			auto*                  ui = RE::UI::GetSingleton();
+			auto                   menu = ui ? ui->GetMenu<RE::RaceSexMenu>() : nullptr;
+			const auto             slot = static_cast<std::size_t>(a_type);
+			if (!menu || slot >= 7) {
+				return out;
+			}
+			// CommonLib types these arrays as void*: every item is checked
+			// to be a head part of the asked type, and one that is not
+			// drops the whole list, falling back to the data handler's.
+			for (auto* item : menu->GetRuntimeData().unk040[slot]) {
+				auto* form = static_cast<RE::TESForm*>(item);
+				auto* part = form ? form->As<HeadPart>() : nullptr;
+				if (!part || part->type.get() != a_type) {
+					spdlog::warn("[look] the RaceSex Menu's list {} holds a {:08X} that is not a head part of that "
+								 "type - not used",
+						slot, form ? form->GetFormID() : 0);
+					return {};
+				}
+				out.push_back(part);
+			}
+			return out;
+		}
+
+		template <class T>
+		std::vector<T*> Copy(const RE::BSTArray<T*>* a_list)
+		{
+			std::vector<T*> out;
+			if (a_list) {
+				for (auto* item : *a_list) {
+					out.push_back(item);
+				}
+			}
+			return out;
+		}
+
+		// Rebuilds the lists if the player's race or sex is not the one they
+		// were built for. Returns false without a player.
+		bool EnsureLists(const char* a_why)
+		{
+			auto* npc = Npc();
+			if (!npc) {
+				return false;
+			}
+			auto*      race = npc->GetRace();
+			const auto sex = npc->GetSex();
+			if (race && race == g_lists.race && sex == g_lists.sex &&
+				(g_lists.fromMenu || MenuPartsOf(HPType::kHair).empty())) {
+				return true;
+			}
+
+			g_lists = {};
+			g_lists.race = race;
+			g_lists.sex = sex;
+			g_lists.fromMenu = !MenuPartsOf(HPType::kHair).empty();
+			for (const auto& p : kPartLists) {
+				g_lists.parts[p.key] = g_lists.fromMenu ? MenuPartsOf(p.type) : PartsOf(npc, p.type);
+			}
+			spdlog::info("[look]   head parts from {}", g_lists.fromMenu ? "the RaceSex Menu's own lists (RaceMenu's order)"
+			                                                               : "the data handler (the menu has no lists yet)");
+			auto* rf = RaceFaceOf(npc);
+			if (rf) {
+				g_lists.hairColors = Copy(rf->availableHairColors);
+				g_lists.complexions = Copy(rf->faceDetailsTextureSets);
+			}
+			for (const auto& t : kTypeLists) {
+				g_lists.typeCounts[t.key] = rf ? static_cast<int>(rf->numFlagsSet[t.variant]) : 0;
+			}
+
+			spdlog::info("[look] lists rebuilt ({}): race {:08X}, sex {}", a_why,
+				race ? race->GetFormID() : 0, static_cast<std::uint32_t>(sex));
+			for (const auto& p : kPartLists) {
+				spdlog::info("[look]   {} = {} head parts", p.key, g_lists.parts[p.key].size());
+			}
+			spdlog::info("[look]   hair-color = {}, complexion = {}", g_lists.hairColors.size(),
+				g_lists.complexions.size());
+			// The count per feature is the race's own; it matched what RaceMenu
+			// shows for every race tried, while the morph flag words did not
+			// (all bits set).
+			spdlog::info("[look]   nose-type = {}, eye-shape = {}, mouth-shape = {} presets",
+				g_lists.typeCounts["nose-type"], g_lists.typeCounts["eye-shape"], g_lists.typeCounts["mouth-shape"]);
+			return true;
+		}
+
+		template <class T>
+		int IndexOf(const std::vector<T*>& a_list, const T* a_item)
+		{
+			for (std::size_t i = 0; i < a_list.size(); ++i) {
+				if (a_list[i] == a_item) {
+					return static_cast<int>(i);
+				}
+			}
+			return -1;
+		}
+
+		nlohmann::json List(int a_count, int a_index)
+		{
+			return { { "kind", "list" }, { "count", a_count }, { "index", a_index } };
+		}
+
+		std::string Hex(const RE::Color& a_c)
+		{
+			return fmt::format("#{:02X}{:02X}{:02X}", a_c.red, a_c.green, a_c.blue);
+		}
+
+		bool ParseHex(const std::string& a_s, RE::Color& a_out)
+		{
+			if (a_s.size() != 7 || a_s[0] != '#') {
+				return false;
+			}
+			for (std::size_t i = 1; i < 7; ++i) {
+				if (!std::isxdigit(static_cast<unsigned char>(a_s[i]))) {
+					return false;
+				}
+			}
+			const auto v = std::stoul(a_s.substr(1), nullptr, 16);
+			a_out.red = static_cast<std::uint8_t>((v >> 16) & 0xFF);
+			a_out.green = static_cast<std::uint8_t>((v >> 8) & 0xFF);
+			a_out.blue = static_cast<std::uint8_t>(v & 0xFF);
+			return true;
+		}
+
+		void PushLook(const char* a_why)
+		{
+			auto* npc = Npc();
+			if (!npc || !EnsureLists(a_why) || !npc->faceData) {
+				spdlog::info("[look] {}: no player face yet - sending not ready", a_why);
+				Panel::Bridge::Send("look", { { "ready", false }, { "controls", nlohmann::json::object() } });
+				return;
+			}
+
+			auto controls = nlohmann::json::object();
+			for (const auto& t : kTypeLists) {
+				const int count = g_lists.typeCounts[t.key];
+				const int value = npc->faceData->parts[t.part];
+				controls[t.key] = List(count, value >= 0 && value < count ? value : -1);
+			}
+			for (const auto& p : kPartLists) {
+				const auto& list = g_lists.parts[p.key];
+				auto*       current = npc->GetCurrentHeadPartByType(p.type);
+				auto        control = List(static_cast<int>(list.size()), IndexOf(list, current));
+				// What RaceMenu shows under its slider: the name, the editor
+				// ID, and the plugin it comes from.
+				if (current) {
+					const std::string full = current->GetFullName() ? current->GetFullName() : "";
+					const std::string id = current->GetFormEditorID() ? current->GetFormEditorID() : "";
+					control["name"] = full.empty() || full == id ? id : id.empty() ? full : full + " (" + id + ")";
+					const auto* file = current->GetFile(0);
+					control["source"] = file ? std::string(file->GetFilename()) : std::string();
+				}
+				controls[p.key] = std::move(control);
+			}
+
+			const auto* hrd = npc->headRelatedData;
+			auto        hairColor = List(static_cast<int>(g_lists.hairColors.size()),
+					   IndexOf(g_lists.hairColors, hrd ? hrd->hairColor : nullptr));
+			auto        swatches = nlohmann::json::array();
+			for (const auto* c : g_lists.hairColors) {
+				swatches.push_back(c ? Hex(c->color) : "#000000");
+			}
+			hairColor["swatches"] = std::move(swatches);
+			// The colour itself, for the picker: a free colour is in no list.
+			if (hrd && hrd->hairColor) {
+				hairColor["color"] = Hex(hrd->hairColor->color);
+			}
+			controls["hair-color"] = std::move(hairColor);
+
+			controls["complexion"] = List(static_cast<int>(g_lists.complexions.size()),
+				IndexOf(g_lists.complexions, hrd ? hrd->faceDetails : nullptr));
+
+			controls["weight"] = { { "kind", "range" }, { "min", kMinWeight }, { "max", kMaxWeight },
+				{ "value", npc->weight } };
+
+			spdlog::info("[look] {}: sending {} controls", a_why, controls.size());
+			Panel::Bridge::Send("look", { { "ready", true }, { "controls", std::move(controls) } });
+		}
+
+		// Returns the index in [0, a_count), or -1 with a log line.
+		int CheckIndex(const std::string& a_key, const nlohmann::json& a_v, int a_count)
+		{
+			if (!a_v.is_number_integer()) {
+				spdlog::warn("[look] look-set {}: \"v\" is not an integer - ignored", a_key);
+				return -1;
+			}
+			const int i = a_v.get<int>();
+			if (i < 0 || i >= a_count) {
+				spdlog::warn("[look] look-set {}: {} is outside [0, {}) - ignored", a_key, i, a_count);
+				return -1;
+			}
+			return i;
+		}
+
+		// Head parts and weight are shown without the shared DoReset3D. With
+		// physics (SMP) on the hair, every DoReset3D rebuilds the hair's
+		// physics nodes without dropping the old ones: the actor grows by a
+		// few hundred nodes per redraw, and each redraw costs more than the
+		// last. Swapping a part with the game's own Actor::ChangeHeadPart
+		// drops the old part's nodes, as RaceMenu's swap does; weight shows
+		// with a skin and model update, which adds no node.
+		//
+		// Both are coalesced like the redraw: the latest value waits for a
+		// gap after the last update. A DoReset3D in between shows them too,
+		// and clears what was pending.
+		using Clock = std::chrono::steady_clock;
+
+		constexpr auto kLightGap = std::chrono::milliseconds(100);
+
+		struct PendingPart
+		{
+			HeadPart* shown = nullptr;  // on screen, to be replaced
+			HeadPart* wanted = nullptr;
+		};
+
+		std::map<HPType, PendingPart> g_pendingParts;
+		bool                          g_pendingWeight = false;
+		Clock::time_point             g_lastPartSwap{};
+		Clock::time_point             g_lastWeight{};
+
+		// The game's Actor::ChangeHeadPart(old, new). Not in the CommonLib
+		// version this plugin pins; the IDs are the ones later CommonLibSSE-NG
+		// releases declare for it.
+		void ActorChangeHeadPart(RE::Actor* a_actor, HeadPart* a_old, HeadPart* a_new)
+		{
+			using func_t = void (*)(RE::Actor*, HeadPart*, HeadPart*);
+			static REL::Relocation<func_t> func{ RELOCATION_ID(26468, 27063) };
+			func(a_actor, a_old, a_new);
+		}
+
+		void ShowParts()
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			if (!player || !player->Get3D(false)) {
+				g_pendingParts.clear();
+				Session::RequestRedraw(true);
+				return;
+			}
+			for (const auto& [type, p] : g_pendingParts) {
+				if (p.shown == p.wanted) {
+					continue;
+				}
+				const auto start = Clock::now();
+				ActorChangeHeadPart(player, p.shown, p.wanted);
+				const auto us = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+				spdlog::info("[look] head part {} shown: Actor::ChangeHeadPart({} -> {}) took {} us",
+					static_cast<int>(type), p.shown->GetFormEditorID(), p.wanted->GetFormEditorID(), us);
+			}
+			g_pendingParts.clear();
+			g_lastPartSwap = Clock::now();
+		}
+
+		void ShowWeight()
+		{
+			g_pendingWeight = false;
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			auto* process = player ? player->GetActorRuntimeData().currentProcess : nullptr;
+			if (!process) {
+				Session::RequestRedraw(true);
+				return;
+			}
+			const auto start = Clock::now();
+			process->Set3DUpdateFlag(static_cast<RE::RESET_3D_FLAGS>(
+				static_cast<std::uint32_t>(RE::RESET_3D_FLAGS::kSkin) |
+				static_cast<std::uint32_t>(RE::RESET_3D_FLAGS::kModel)));
+			process->Update3DModel(player);
+			g_lastWeight = Clock::now();
+			const auto us = std::chrono::duration_cast<std::chrono::microseconds>(g_lastWeight - start).count();
+			spdlog::info("[look] weight shown: skin and model update took {} us", us);
+		}
+
+		void OnTick()
+		{
+			if (!Session::MenuOpen()) {
+				return;
+			}
+			const auto now = Clock::now();
+			if (!g_pendingParts.empty() && now - g_lastPartSwap >= Session::kMinRedrawGap) {
+				ShowParts();
+			}
+			if (g_pendingWeight && now - g_lastWeight >= kLightGap) {
+				ShowWeight();
+			}
+		}
+
+		// A DoReset3D rebuilt the actor from its data: what was pending is on
+		// screen already.
+		void OnRedrawn()
+		{
+			g_pendingParts.clear();
+			g_pendingWeight = false;
+		}
+
+		// A nose, eye or mouth type or the complexion goes to RaceMenu's own
+		// slider callback, which reshapes the head in place. Without it the
+		// value is written here and the actor redrawn. A finished edit sends
+		// the page what the game holds once the callback has run.
+		void ThroughRaceMenu(Panel::RaceMenuFilm::Slider a_slider, int a_which, int a_value, bool a_final,
+			std::function<void()> a_write)
+		{
+			Panel::RaceMenuFilm::Apply(a_slider, a_which, a_value, a_final,
+				[write = std::move(a_write)](bool a_delivered, bool a_final) {
+					if (!Npc()) {
+						return;
+					}
+					if (!a_delivered) {
+						write();
+						Session::RequestRedraw(a_final);
+					}
+					if (a_final) {
+						PushLook(a_delivered ? "after RaceMenu applied it" : "after a written value and full redraw");
+					}
+				});
+		}
+
+		// Applies one value. Returns whether it was taken; a_redraw says
+		// whether it needs the shared DoReset3D.
+		bool Apply(RE::TESNPC* a_npc, const std::string& a_key, const nlohmann::json& a_v, bool a_final,
+			bool& a_redraw)
+		{
+			for (const auto& t : kTypeLists) {
+				if (a_key != t.key) {
+					continue;
+				}
+				const int i = CheckIndex(a_key, a_v, g_lists.typeCounts[t.key]);
+				if (i < 0) {
+					return false;
+				}
+				const int part = t.part;
+				ThroughRaceMenu(Panel::RaceMenuFilm::Slider::kType, part, i, a_final, [part, i]() {
+					if (auto* npc = Npc(); npc && npc->faceData) {
+						npc->faceData->parts[part] = i;
+					}
+				});
+				return true;
+			}
+
+			for (const auto& p : kPartLists) {
+				if (a_key != p.key) {
+					continue;
+				}
+				const auto& list = g_lists.parts[p.key];
+				const int   i = CheckIndex(a_key, a_v, static_cast<int>(list.size()));
+				if (i < 0 || !list[i]) {
+					return false;
+				}
+				// A part that is missing on either side (no scar worn) goes
+				// through the full redraw: the game's swap wants both.
+				auto* worn = a_npc->GetCurrentHeadPartByType(p.type);
+				a_npc->ChangeHeadPart(list[i]);
+				if (!worn) {
+					a_redraw = true;
+					return true;
+				}
+				auto& pending = g_pendingParts[p.type];
+				if (!pending.shown) {
+					pending.shown = worn;
+				}
+				pending.wanted = list[i];
+				return true;
+			}
+
+			if (a_key == "hair-color") {
+				const int i = CheckIndex(a_key, a_v, static_cast<int>(g_lists.hairColors.size()));
+				if (i < 0 || !g_lists.hairColors[i]) {
+					return false;
+				}
+				a_npc->SetHairColor(g_lists.hairColors[i]);
+				if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+					player->UpdateHairColor();
+				}
+				return true;
+			}
+
+			// A free colour. The race's colour forms are shared by every NPC
+			// that uses them, so the colour goes to RaceMenu's own hair colour
+			// form, which is there for this: the live preview writes it here,
+			// and the final value is handed to RaceMenu's script (OnLookSet).
+			if (a_key == "hair-rgb") {
+				RE::Color color;
+				if (!a_v.is_string() || !ParseHex(a_v.get<std::string>(), color)) {
+					spdlog::warn("[look] look-set hair-rgb: \"v\" is not #RRGGBB - ignored");
+					return false;
+				}
+				auto* form = Core::RaceMenuSync::HairColorForm();
+				if (!form) {
+					spdlog::warn("[look] look-set hair-rgb: RaceMenu's hair colour form (000801:RaceMenu.esp) "
+								 "is not loaded - ignored");
+					return false;
+				}
+				form->color.red = color.red;
+				form->color.green = color.green;
+				form->color.blue = color.blue;
+				a_npc->SetHairColor(form);
+				if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+					player->UpdateHairColor();
+				}
+				return true;
+			}
+
+			if (a_key == "complexion") {
+				const int i = CheckIndex(a_key, a_v, static_cast<int>(g_lists.complexions.size()));
+				if (i < 0 || !g_lists.complexions[i]) {
+					return false;
+				}
+				auto* set = g_lists.complexions[i];
+				ThroughRaceMenu(Panel::RaceMenuFilm::Slider::kComplexion, 0, i, a_final, [set]() {
+					if (auto* npc = Npc()) {
+						npc->SetFaceTexture(set);
+					}
+				});
+				return true;
+			}
+
+			if (a_key == "weight") {
+				if (!a_v.is_number() || !std::isfinite(a_v.get<float>())) {
+					spdlog::warn("[look] look-set weight: \"v\" is not a finite number - ignored");
+					return false;
+				}
+				a_npc->weight = std::clamp(a_v.get<float>(), kMinWeight, kMaxWeight);
+				g_pendingWeight = true;
+				return true;
+			}
+
+			spdlog::warn("[look] look-set for unknown control \"{}\" - ignored", a_key);
+			return false;
+		}
+
+		void OnLookGet(const nlohmann::json&)
+		{
+			PushLook("the page asked");
+		}
+
+		void OnLookSet(const nlohmann::json& a_data)
+		{
+			if (!Session::MenuOpen()) {
+				spdlog::warn("[look] look-set with the RaceSex Menu closed - ignored");
+				return;
+			}
+			if (!a_data.is_object() || !a_data.contains("k") || !a_data["k"].is_string() || !a_data.contains("v")) {
+				spdlog::warn("[look] look-set without a string \"k\" and a \"v\" - ignored");
+				return;
+			}
+			auto* npc = Npc();
+			if (!npc || !npc->faceData) {
+				spdlog::warn("[look] look-set: the player has no face data - ignored");
+				return;
+			}
+
+			// The page's indices point into the lists it was last sent. If
+			// RaceMenu changed race or sex since, they point into the wrong
+			// lists: refuse, and send the new ones.
+			if (npc->GetRace() != g_lists.race || npc->GetSex() != g_lists.sex) {
+				spdlog::warn("[look] look-set: race or sex changed since the lists were sent - ignored, resending");
+				PushLook("race or sex changed");
+				return;
+			}
+
+			const auto key = a_data["k"].get<std::string>();
+			const bool final = a_data.contains("final") && a_data["final"].is_boolean() && a_data["final"].get<bool>();
+
+			bool redraw = false;
+			if (!Apply(npc, key, a_data["v"], final, redraw)) {
+				return;
+			}
+			++g_sets;
+			if (redraw) {
+				Session::RequestRedraw(final);
+			}
+			if (final) {
+				spdlog::info("[look] {} = {} (drag ended{})", key, a_data["v"].dump(),
+					redraw ? "" : ", no full redraw needed");
+				// RaceMenu keeps its own copy of the hair colour; without this
+				// its controls show the old one and a reload brings it back.
+				if (key == "hair-rgb") {
+					if (const auto* hrd = npc->headRelatedData; hrd && hrd->hairColor) {
+						Core::RaceMenuSync::HairColorChanged(hrd->hairColor->color);
+					}
+				} else if (key == "hair-color") {
+					Core::RaceMenuSync::HairPresetChanged();
+				}
+				PushLook("after a final write");
+			}
+		}
+
+		void OnShown() { PushLook("the panel came on screen"); }
+
+		void OnOpened()
+		{
+			g_sets = 0;
+			g_lists = {};
+			g_pendingParts.clear();
+			g_pendingWeight = false;
+		}
+
+		void OnClosed()
+		{
+			// A value written in the last moments must not stay invisible.
+			if (!g_pendingParts.empty()) {
+				ShowParts();
+			}
+			if (g_pendingWeight) {
+				ShowWeight();
+			}
+			spdlog::info("[look] RaceSex Menu closed: {} values written", g_sets);
+		}
+
+		bool g_installed = false;
+	}
+
+	void Install()
+	{
+		if (g_installed) {
+			return;
+		}
+		Session::OnPanelShown(&OnShown);
+		Session::OnMenuOpened(&OnOpened);
+		Session::OnMenuClosed(&OnClosed);
+		Session::OnTick(&OnTick);
+		Session::OnRedrawn(&OnRedrawn);
+		Panel::Bridge::On("look-get", &OnLookGet);
+		Panel::Bridge::On("look-set", &OnLookSet);
+		g_installed = true;
+		spdlog::info("[look] installed");
+	}
+}

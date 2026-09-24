@@ -1,6 +1,6 @@
 // keyboard.js
 // Atelier - two corrections to the keyboard as Meridian UI delivers it to
-// text fields. Both measured in the game (Fase 1, round A), ABNT2 layout:
+// text fields. Both measured in the game, ABNT2 layout:
 //
 //   1. A dead key does not compose. The accent arrives as its own character
 //      and the next vowel as another: "~" then "a" gives "~a", not the
@@ -42,7 +42,7 @@
   let lastTime = 0;
 
   // INERT under Meridian, and not the defence of a held key. Measured in
-  // round A4: Meridian delivers auto-repeat as fresh presses, repeat false,
+  // the game: Meridian delivers auto-repeat as fresh presses, repeat false,
   // ~59 ms apart at the fastest (~74 ms steady). What keeps a held key from
   // being eaten is that gap against DOUBLE_WINDOW_MS - and nothing promises
   // it. This flag only matters for a route that does mark auto-repeat.
