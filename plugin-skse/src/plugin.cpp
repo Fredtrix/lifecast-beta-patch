@@ -22,6 +22,8 @@
 #include "Edit/Tints.h"
 #include "Panel/Panel.h"
 #include "Panel/Switcher.h"
+#include "Preset/Library.h"
+#include "Preset/Save.h"
 #include "Version.h"
 
 // Local-only instrumentation, absent from this repository by design. A
@@ -102,6 +104,11 @@ namespace
 			Atelier::Edit::Appearance::Install();
 			Atelier::Edit::BodyScales::Install();
 			Atelier::Edit::Tints::Install();
+
+			// The presets on disk, listed for the panel, and saving one -
+			// which RaceMenu does, at the panel's request.
+			Atelier::Preset::Library::Install();
+			Atelier::Preset::Save::Install();
 			break;
 
 		default:

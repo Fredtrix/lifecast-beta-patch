@@ -61,6 +61,9 @@ add_commonlibsse_plugin(
         src/Panel/RaceMenuFilm.cpp
         src/Panel/RaceMenuTabs.cpp
         src/Panel/Switcher.cpp
+        src/Preset/Jslot.cpp
+        src/Preset/Library.cpp
+        src/Preset/Save.cpp
 )
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
