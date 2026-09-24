@@ -394,6 +394,17 @@ body {
   color: var(--bad);
 }
 
-.preset-fallback[hidden] {
+.preset-fallback[hidden],
+.preset-guard[hidden] {
   display: none;
+}
+
+/* The overwrite refusal names what would be lost; its two ways on sit
+   together at the right. */
+.preset-guard .delegate-text {
+  flex: 1;
+}
+
+.preset-guard .delegate-note {
+  color: var(--bad);
 }

@@ -5,6 +5,7 @@
 
 #include "Panel/Bridge.h"
 #include "Preset/FileName.h"
+#include "Preset/Guard.h"
 #include "Preset/Jslot.h"
 #include "Preset/Library.h"
 
@@ -41,6 +42,7 @@ namespace Atelier::Preset::Save
 			std::string   name;
 			fs::path      path;
 			FileState     before;
+			json          sectionsBefore;  // of the file overwritten; empty object for a new one
 			Clock::time_point sentAt{};
 		};
 
@@ -61,23 +63,51 @@ namespace Atelier::Preset::Save
 		}
 
 		void Reply(const std::string& a_name, bool a_ok, const std::string& a_why, bool a_fallback,
-			std::uintmax_t a_size = 0, long long a_ms = 0)
+			std::uintmax_t a_size = 0, long long a_ms = 0, json a_loss = json())
 		{
-			Panel::Bridge::Send("preset-saved", {
-													{ "name", a_name },
-													{ "ok", a_ok },
-													{ "why", a_why },
-													{ "fallback", a_fallback },
-													{ "size", a_size },
-													{ "ms", a_ms },
-												});
+			json data = {
+				{ "name", a_name },
+				{ "ok", a_ok },
+				{ "why", a_why },
+				{ "fallback", a_fallback },
+				{ "size", a_size },
+				{ "ms", a_ms },
+			};
+			if (!a_loss.is_null()) {
+				data["loss"] = std::move(a_loss);
+			}
+			Panel::Bridge::Send("preset-saved", data);
 		}
 
 		// Off the game thread, after a save that landed: does the file RaceMenu
 		// wrote read with the copied parser, and which sections does it carry?
 		// Log only - it answers whether our side holds the full file.
-		void Inspect(fs::path a_path, std::string a_name)
+		void Inspect(fs::path a_path, std::string a_name, json a_before)
 		{
+			// An overwrite: which sections the file had and has now. The
+			// guard allowed it because nothing it counts could be lost; this
+			// is where that is seen against the file RaceMenu actually wrote.
+			if (!a_before.empty()) {
+				std::string text;
+				const auto after = Guard::ReadAll(a_path, text) ? Guard::Sections(text) : json::object();
+				json lost = json::array();
+				json gained = json::array();
+				json changed = json::array();
+				for (const auto& [k, v] : a_before.items()) {
+					if (!after.contains(k)) {
+						lost.push_back(k);
+					} else if (after[k] != v) {
+						changed.push_back(k + " " + v.dump() + "->" + after[k].dump());
+					}
+				}
+				for (const auto& [k, v] : after.items()) {
+					if (!a_before.contains(k)) {
+						gained.push_back(k);
+					}
+				}
+				spdlog::info("[preset-save] {} overwritten: sections lost {}, gained {}, size changed {}", a_name,
+					lost.dump(), gained.dump(), changed.dump());
+			}
 			try {
 				std::ifstream in(a_path, std::ios::binary);
 				std::ostringstream text;
@@ -124,7 +154,7 @@ namespace Atelier::Preset::Save
 				++g_saves;
 				Reply(p.name, true, {}, false, after.size, ms);
 				Library::SendList();
-				std::thread(Inspect, p.path, p.name).detach();
+				std::thread(Inspect, p.path, p.name, p.sectionsBefore).detach();
 				return;
 			}
 
@@ -187,6 +217,19 @@ namespace Atelier::Preset::Save
 				Reply(name, false, "a preset with this name already exists", false);
 				return;
 			}
+			json sectionsBefore = json::object();
+			if (before.exists) {
+				auto verdict = Guard::CheckOverwrite(name, path);
+				spdlog::info("[preset-save] overwrite of {} {}: {} - file sections {}, at risk {}", name,
+					verdict.allow ? "allowed" : "REFUSED", verdict.how, verdict.sections.dump(),
+					verdict.loss.is_null() ? "[]" : verdict.loss.dump());
+				if (!verdict.allow) {
+					Reply(name, false, verdict.how, false, 0, 0,
+						verdict.loss.is_null() ? json::array() : std::move(verdict.loss));
+					return;
+				}
+				sectionsBefore = std::move(verdict.sections);
+			}
 
 			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
 			auto* player = RE::PlayerCharacter::GetSingleton();
@@ -197,7 +240,7 @@ namespace Atelier::Preset::Save
 			}
 
 			const auto id = ++g_nextId;
-			g_pending = Pending{ id, name, path, before, Clock::now() };
+			g_pending = Pending{ id, name, path, before, std::move(sectionsBefore), Clock::now() };
 
 			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new Done(id));
 			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(name));

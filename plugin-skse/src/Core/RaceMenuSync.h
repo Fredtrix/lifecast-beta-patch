@@ -34,4 +34,9 @@ namespace Atelier::Core::RaceMenuSync
 	// Game.UpdateTintMaskColors(), so its native side re-applies what it
 	// layers over the tint (overlays, paints).
 	void ShadersInvalidated();
+
+	// "RSM_RequestTintSave": RaceMenu takes a fresh copy of the hair colour
+	// and the tint masks. RaceMenu's own CharGen.LoadPreset sends it after a
+	// preset load, "some internals were probably modified".
+	void PresetLoaded();
 }

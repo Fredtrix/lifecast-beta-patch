@@ -22,7 +22,9 @@
 #include "Edit/Tints.h"
 #include "Panel/Panel.h"
 #include "Panel/Switcher.h"
+#include "Preset/Guard.h"
 #include "Preset/Library.h"
+#include "Preset/Load.h"
 #include "Preset/Save.h"
 #include "Version.h"
 
@@ -105,10 +107,13 @@ namespace
 			Atelier::Edit::BodyScales::Install();
 			Atelier::Edit::Tints::Install();
 
-			// The presets on disk, listed for the panel, and saving one -
-			// which RaceMenu does, at the panel's request.
+			// The presets on disk, listed for the panel; saving and loading
+			// one, which RaceMenu does at the panel's request; and the guard
+			// that keeps a save from overwriting what was not loaded here.
 			Atelier::Preset::Library::Install();
+			Atelier::Preset::Guard::Install();
 			Atelier::Preset::Save::Install();
+			Atelier::Preset::Load::Install();
 			break;
 
 		default:

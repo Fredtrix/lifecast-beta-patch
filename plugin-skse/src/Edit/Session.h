@@ -50,4 +50,12 @@ namespace Atelier::Edit::Session
 	void OnMenuOpened(Callback a_fn);
 	void OnMenuClosed(Callback a_fn);   // after the last pending redraw
 	void OnRedrawn(Callback a_fn);      // right after each DoReset3D this module runs
+	void OnReplaced(Callback a_fn);     // the whole character was replaced (see Replaced)
+
+	// The whole character was replaced behind the sections' backs - a preset
+	// load. Every OnReplaced callback runs first, so a section drops what it
+	// kept from this session's edits (values it prefers over a re-read,
+	// writes still waiting for a redraw); then, with the panel on screen,
+	// every OnPanelShown callback runs, so the page gets the new values.
+	void Replaced(const char* a_why);
 }

@@ -626,6 +626,18 @@ namespace Atelier::Edit::Appearance
 			spdlog::info("[look] RaceSex Menu closed: {} values written", g_sets);
 		}
 
+		// A loaded preset replaced the head parts and the weight; a swap or
+		// a weight still waiting for its redraw would put the old ones back.
+		void OnReplaced()
+		{
+			if (!g_pendingParts.empty() || g_pendingWeight) {
+				spdlog::info("[look] preset replaced the character: {} part swaps and {} weight dropped",
+					g_pendingParts.size(), g_pendingWeight ? 1 : 0);
+			}
+			g_pendingParts.clear();
+			g_pendingWeight = false;
+		}
+
 		bool g_installed = false;
 	}
 
@@ -637,6 +649,7 @@ namespace Atelier::Edit::Appearance
 		Session::OnPanelShown(&OnShown);
 		Session::OnMenuOpened(&OnOpened);
 		Session::OnMenuClosed(&OnClosed);
+		Session::OnReplaced(&OnReplaced);
 		Session::OnTick(&OnTick);
 		Session::OnRedrawn(&OnRedrawn);
 		Panel::Bridge::On("look-get", &OnLookGet);

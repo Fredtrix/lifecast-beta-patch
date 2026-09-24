@@ -43,4 +43,6 @@ namespace Atelier::Core::RaceMenuSync
 	void HairPresetChanged() { Send("RSM_SliderChange", "ChangeHairColorPreset"); }
 
 	void ShadersInvalidated() { Send("RSM_ShadersInvalidated", ""); }
+
+	void PresetLoaded() { Send("RSM_RequestTintSave", ""); }
 }

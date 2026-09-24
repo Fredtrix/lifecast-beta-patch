@@ -20,13 +20,21 @@
 // refused, the call never returns, or the file is not born, the page is told
 // so and offers RaceMenu's own save instead.
 //
+// Saving over an existing preset is guarded (Guard.h): the existing file is
+// read first, and the overwrite is refused when it would destroy parts of it
+// the live character may not hold. The refusal names them, and the page
+// offers a new name or RaceMenu's own save.
+//
 // Messages (see Panel/Bridge.h for the envelope):
 //
 //   page -> dll  "preset-save"   { "name": text, "overwrite": bool }
 //   dll -> page  "preset-saved"  { "name", "ok": bool, "why": text,
-//                                  "fallback": bool, "size", "ms" }
+//                                  "fallback": bool, "size", "ms",
+//                                  "loss": [{ "section", "count" }] }
 //                                  fallback = saving here is not available;
 //                                  the page points to RaceMenu instead
+//                                  loss = only on a refused overwrite: what
+//                                  it would have destroyed
 
 #pragma once
 

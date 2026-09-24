@@ -331,6 +331,10 @@ namespace Atelier::Edit::BodyScales
 
 		void OnClosed() { spdlog::info("[scales] RaceSex Menu closed: {} values written", g_sets); }
 
+		// A loaded preset brings its own scales; a value written earlier in
+		// this session must not be preferred over the re-read any more.
+		void OnReplaced() { g_written.clear(); }
+
 		bool g_installed = false;
 	}
 
@@ -342,6 +346,7 @@ namespace Atelier::Edit::BodyScales
 		Session::OnPanelShown(&OnShown);
 		Session::OnMenuOpened(&OnOpened);
 		Session::OnMenuClosed(&OnClosed);
+		Session::OnReplaced(&OnReplaced);
 		Panel::Bridge::On("scales-get", &OnScalesGet);
 		Panel::Bridge::On("scales-set", &OnScalesSet);
 		g_installed = true;

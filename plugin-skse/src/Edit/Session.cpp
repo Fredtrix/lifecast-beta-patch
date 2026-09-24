@@ -16,6 +16,7 @@ namespace Atelier::Edit::Session
 		std::vector<Callback> g_onOpened;
 		std::vector<Callback> g_onClosed;
 		std::vector<Callback> g_onRedrawn;
+		std::vector<Callback> g_onReplaced;
 
 		bool              g_redrawPending = false;
 		bool              g_redrawNow = false;
@@ -207,4 +208,20 @@ namespace Atelier::Edit::Session
 	void OnMenuOpened(Callback a_fn) { g_onOpened.push_back(a_fn); }
 	void OnMenuClosed(Callback a_fn) { g_onClosed.push_back(a_fn); }
 	void OnRedrawn(Callback a_fn) { g_onRedrawn.push_back(a_fn); }
+	void OnReplaced(Callback a_fn) { g_onReplaced.push_back(a_fn); }
+
+	void Replaced(const char* a_why)
+	{
+		// A redraw requested for an edit made before the replacement would
+		// rebuild the actor for nothing.
+		g_redrawPending = false;
+		g_redrawNow = false;
+		RunAll(g_onReplaced);
+		const bool shown = Panel::IsVisible();
+		if (shown) {
+			RunAll(g_onShown);
+		}
+		spdlog::info("[session] character replaced ({}): {} sections reset, panel {}", a_why,
+			g_onReplaced.size(), shown ? "refreshed" : "not on screen");
+	}
 }
