@@ -187,6 +187,20 @@ namespace Atelier::Preset::Save
 			}
 		}
 
+		// Game thread, after a save that landed: the file is now the live
+		// character, so the overwrite guard knows it whole. Read back here
+		// and not in Inspect - Inspect runs off the game thread, and the
+		// guard's record is game thread only.
+		void Landed(const fs::path& a_path, const std::string& a_name)
+		{
+			std::string written;
+			if (!Guard::ReadAll(a_path, written) || written.empty()) {
+				spdlog::warn("[preset-save] {} cannot be read back - the guard does not know it", a_name);
+				return;
+			}
+			Guard::Wrote(a_name, std::move(written));
+		}
+
 		void Dispatch(Pending a_pending);
 
 		// The file the player named. a_existing is the file it replaces as
@@ -260,6 +274,7 @@ namespace Atelier::Preset::Save
 					return;
 				}
 				++g_saves;
+				Landed(p.path, p.name);
 				Reply(p.name, true, {}, false, after.size, ms);
 				Library::SendList();
 				std::thread(Inspect, p.path, p.name, std::move(p.existing), std::string()).detach();
@@ -356,6 +371,9 @@ namespace Atelier::Preset::Save
 			}
 			// The preview compared the character with the file as it was
 			// then. A file changed on disk since is a different comparison.
+			// Byte for byte on purpose, unlike the content comparisons: in
+			// this window nothing of ours rewrites the file, so any
+			// difference, even an order-only one, is a real outside change.
 			const auto path = Library::Folder() / (a_name + Library::kExtension);
 			std::string now;
 			if (!Guard::ReadAll(path, now) || now != g_preview->existing) {
@@ -384,6 +402,7 @@ namespace Atelier::Preset::Save
 			++g_saves;
 			spdlog::info("[preset-save] {} replaced by the preview the page showed, in {} ms: {} bytes", a_name, ms,
 				after.size);
+			Landed(path, a_name);
 			Reply(a_name, true, {}, false, after.size, ms);
 			Library::SendList();
 			std::thread(Inspect, path, a_name, std::move(shown.existing), std::move(shown.preview)).detach();

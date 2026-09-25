@@ -12,13 +12,17 @@
 // So before an overwrite the existing file is read (read, never rewritten)
 // and the overwrite is allowed only when one of these holds:
 //
-//   provenance  - the last whole-preset load of this RaceSex Menu session was
-//                 that same file, and its content has not changed since.
-//                 Compared byte for byte: a false "unchanged" would let the
-//                 overwrite through, so identity is the content itself, not
-//                 its size or date. Provenance ends when the menu closes, or
-//                 when another load starts - the live character can change in
-//                 ways this module cannot see.
+//   provenance  - this RaceSex Menu session has seen that same file whole,
+//                 and its content has not changed since. Seen whole means
+//                 loaded it (the live character came from it), or wrote it
+//                 (it came from the live character). Compared byte for byte:
+//                 a false "unchanged" would let the overwrite through, so
+//                 identity is the content itself, not its size or date.
+//                 Every file seen whole is kept, each for its own name only.
+//                 All of it ends when the menu closes, or when another load
+//                 starts - the live character is replaced, or can change in
+//                 ways this module cannot see. A save does NOT end it: the
+//                 live character is the same, one more file now matches it.
 //   nothing     - the file has none of the sections the live character is not
 //     at risk     guaranteed to hold (extended sliders, sculpt, body morphs,
 //                 transforms, overrides, skin overrides).
@@ -52,10 +56,15 @@ namespace Atelier::Preset::Guard
 	nlohmann::json Sections(const std::string& a_text);
 
 	// A whole-preset load of a_name succeeded, and a_bytes is the file it
-	// read. Replaces any earlier provenance.
+	// read. Replaces all earlier provenance: the live character is new.
 	void Remember(const std::string& a_name, std::string a_bytes);
 
-	// Provenance ends; a_why goes to the log.
+	// A save of a_name landed, and a_bytes is the file as read back from
+	// disk - what RaceMenu wrote, not what was asked for. Adds or replaces
+	// the entry of that name only; the others stay.
+	void Wrote(const std::string& a_name, std::string a_bytes);
+
+	// All provenance ends; a_why goes to the log.
 	void Forget(const char* a_why);
 
 	// Reads a whole file; false when it cannot be opened.

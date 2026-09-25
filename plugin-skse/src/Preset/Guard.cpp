@@ -8,8 +8,8 @@
 
 #include <array>
 #include <fstream>
-#include <optional>
 #include <sstream>
+#include <vector>
 
 namespace Atelier::Preset::Guard
 {
@@ -21,10 +21,24 @@ namespace Atelier::Preset::Guard
 		{
 			std::string name;
 			std::string bytes;
+			const char* how;  // "loaded" or "written"
 		};
 
-		// Game thread only.
-		std::optional<Provenance> g_provenance;
+		// The files this menu session has seen whole, one entry per name as
+		// FileName::Same compares them. A load empties it; a save adds or
+		// replaces one entry. No cap: a dropped entry would refuse its
+		// overwrite with nothing in the log to say why. Game thread only.
+		std::vector<Provenance> g_provenance;
+
+		Provenance* Find(const std::string& a_name)
+		{
+			for (auto& p : g_provenance) {
+				if (FileName::Same(p.name, a_name)) {
+					return &p;
+				}
+			}
+			return nullptr;
+		}
 
 		std::size_t Count(const json& a_value)
 		{
@@ -118,13 +132,13 @@ namespace Atelier::Preset::Guard
 		}
 		v.sections = Sections(bytes);
 
-		if (g_provenance && FileName::Same(g_provenance->name, a_name)) {
-			if (g_provenance->bytes == bytes) {
+		if (const auto* seen = Find(a_name)) {
+			if (seen->bytes == bytes) {
 				v.allow = true;
-				v.how = "loaded whole in this session, unchanged since";
+				v.how = std::string(seen->how) + " whole in this session, unchanged since";
 				return v;
 			}
-			spdlog::info("[guard] {} was loaded in this session but changed on disk since", a_name);
+			spdlog::info("[guard] {} was {} in this session but changed on disk since", a_name, seen->how);
 		}
 
 		json root;
@@ -156,16 +170,29 @@ namespace Atelier::Preset::Guard
 
 	void Remember(const std::string& a_name, std::string a_bytes)
 	{
+		g_provenance.clear();
 		spdlog::info("[guard] provenance: {} ({} bytes)", a_name, a_bytes.size());
-		g_provenance = Provenance{ a_name, std::move(a_bytes) };
+		g_provenance.push_back(Provenance{ a_name, std::move(a_bytes), "loaded" });
+	}
+
+	void Wrote(const std::string& a_name, std::string a_bytes)
+	{
+		const auto size = a_bytes.size();
+		if (auto* seen = Find(a_name)) {
+			*seen = Provenance{ a_name, std::move(a_bytes), "written" };
+		} else {
+			g_provenance.push_back(Provenance{ a_name, std::move(a_bytes), "written" });
+		}
+		spdlog::info("[guard] provenance: {} ({} bytes, written) - {} file(s) seen whole", a_name, size,
+			g_provenance.size());
 	}
 
 	void Forget(const char* a_why)
 	{
-		if (g_provenance) {
-			spdlog::info("[guard] provenance of {} ended: {}", g_provenance->name, a_why);
-			g_provenance.reset();
+		for (const auto& p : g_provenance) {
+			spdlog::info("[guard] provenance of {} ended: {}", p.name, a_why);
 		}
+		g_provenance.clear();
 	}
 
 	void Install()
