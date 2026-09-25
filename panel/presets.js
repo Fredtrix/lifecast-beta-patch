@@ -365,6 +365,21 @@
     render();
   });
 
+  // The DLL ended the preview on its side: a load, the menu closing, the
+  // preset changing on disk, another save. The box goes whatever name it
+  // shows - the DLL holds one preview at most, and a box it does not hold
+  // must not be clickable. The notice changes only when a box was showing:
+  // a drop the page caused itself (Cancel, a new save) already said why.
+  AtelierBridge.on("preset-save-preview-dropped", (data) => {
+    const showing = previewName !== null;
+    hidePreview(false);
+    if (showing) {
+      notice = "not saved: " + (data && data.why ? data.why : "the preview ended") +
+        " - save again to see what it would change";
+    }
+    render();
+  });
+
   AtelierBridge.on("presets", (data) => {
     const incoming = data && Array.isArray(data.items) ? data.items : [];
     items = incoming.map((it) => ({ name: String(it.name), time: Number(it.time) || 0, size: it.size, bad: null }));

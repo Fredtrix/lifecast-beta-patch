@@ -171,7 +171,10 @@ namespace Atelier::Panel::Bridge
 			return;
 		}
 
-		spdlog::info("[bridge] dll->page: {}", a_logWhole ? text : Clip(text));
+		// A message sent before the main frame finished loading may never
+		// reach the page's listener; the log says which ones were.
+		spdlog::info("[bridge] dll->page{}: {}", browser->IsPageLoaded() ? "" : " (page not loaded yet)",
+			a_logWhole ? text : Clip(text));
 		browser->ExecEventFunction(kEventName, text.c_str());
 	}
 

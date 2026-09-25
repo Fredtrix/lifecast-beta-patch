@@ -123,9 +123,12 @@ namespace Atelier::Preset::Save
 			}
 		}
 
-		// A preview waiting for an answer ends; the page is told when it
-		// was still showing one.
-		void Drop(const char* a_why, bool a_tellPage)
+		// A preview waiting for an answer ends, and the page is ALWAYS told,
+		// whoever ended it. The box the page may still show describes a file
+		// that is gone: left on screen - the panel is only hidden when the
+		// menu closes, and shows it again when the menu reopens - a click on
+		// it would consent to something the DLL no longer holds.
+		void Drop(const char* a_why)
 		{
 			if (!g_preview) {
 				return;
@@ -134,9 +137,7 @@ namespace Atelier::Preset::Save
 			g_preview.reset();
 			spdlog::info("[preset-save] preview of {} dropped: {}", name, a_why);
 			RemovePreviewFile();
-			if (a_tellPage) {
-				Reply(name, false, std::string(a_why) + " - save again to see what it would change", false);
-			}
+			Panel::Bridge::Send("preset-save-preview-dropped", { { "name", name }, { "why", a_why } }, true);
 		}
 
 		// Off the game thread, after a save that landed: does the file RaceMenu
@@ -358,7 +359,10 @@ namespace Atelier::Preset::Save
 			const auto path = Library::Folder() / (a_name + Library::kExtension);
 			std::string now;
 			if (!Guard::ReadAll(path, now) || now != g_preview->existing) {
-				Drop("the preset changed on disk since the preview", true);
+				Drop("the preset changed on disk since the preview");
+				// The page asked to save and waits for the outcome.
+				Reply(a_name, false,
+					"the preset changed on disk since the preview - save again to see what it would change", false);
 				return;
 			}
 			Preview shown = std::move(*g_preview);
@@ -411,7 +415,7 @@ namespace Atelier::Preset::Save
 				return;
 			}
 			// A new save request replaces a preview left unanswered.
-			Drop("another save was asked for", false);
+			Drop("another save was asked for");
 
 			const auto path = Library::Folder() / (name + Library::kExtension);
 			const FileState before = Stat(path);
@@ -457,17 +461,17 @@ namespace Atelier::Preset::Save
 			                      a_data["name"].get<std::string>() :
 			                      std::string();
 			if (g_preview && FileName::Same(g_preview->name, name)) {
-				Drop("the page cancelled it", false);
+				Drop("the page cancelled it");
 			}
 		}
 
-		void OnMenuClosed() { Drop("the RaceSex Menu closed", false); }
+		void OnMenuClosed() { Drop("the RaceSex Menu closed"); }
 
 		// A load replaced the character: the preview describes someone else.
 		void OnReplaced()
 		{
 			++g_replaced;
-			Drop("a load replaced the character", true);
+			Drop("a load replaced the character");
 		}
 
 		bool g_installed = false;
