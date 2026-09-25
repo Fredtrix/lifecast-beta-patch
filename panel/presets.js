@@ -10,6 +10,8 @@
 //
 // Loading and saving are RaceMenu's, asked for from here: Load applies the
 // selected preset whole, Save writes the character under the field's name.
+// A load the DLL gave up on can still answer later ("late"), and that later
+// answer is the one that describes the character.
 // Saving over an existing preset can be refused by the DLL when the overwrite
 // would destroy parts of that file the live character was not given here;
 // the page then lists them and offers a new name or RaceMenu's own save.
@@ -297,8 +299,10 @@
   AtelierBridge.on("preset-loaded", (data) => {
     loading = false;
     if (data && data.ok) {
+      // A late answer overrides the "not loaded" shown at the timeout.
       selected = data.name;
-      notice = "loaded " + data.name;
+      notice = "loaded " + data.name + (data.late ? " (late, after " + data.ms + " ms)" : "");
+      fallback.hidden = true;
     } else {
       notice = "not loaded: " + (data && data.why ? data.why : "unknown reason");
       if (data && data.fallback) {

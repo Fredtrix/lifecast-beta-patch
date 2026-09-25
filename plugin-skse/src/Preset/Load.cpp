@@ -9,6 +9,7 @@
 #include "Preset/Guard.h"
 #include "Preset/Library.h"
 
+#include <map>
 #include <thread>
 
 namespace Atelier::Preset::Load
@@ -33,12 +34,21 @@ namespace Atelier::Preset::Load
 			Clock::time_point sentAt{};
 		};
 
-		std::optional<Pending> g_pending;
-		std::uint32_t          g_nextId = 0;
-		std::uint32_t          g_loads = 0;  // returned true, this game session
+		// A load given up on at the timeout. The native may still return and
+		// apply the preset after that, so it is kept until it does.
+		struct Abandoned
+		{
+			std::string       name;
+			Clock::time_point sentAt{};
+		};
+
+		std::optional<Pending>                    g_pending;
+		std::map<std::uint32_t, Abandoned>        g_abandoned;
+		std::uint32_t                             g_nextId = 0;
+		std::uint32_t                             g_loads = 0;  // returned true, this game session
 
 		void Reply(const std::string& a_name, bool a_ok, const std::string& a_why, bool a_fallback,
-			long long a_ms = 0)
+			long long a_ms = 0, bool a_late = false)
 		{
 			Panel::Bridge::Send("preset-loaded", {
 													 { "name", a_name },
@@ -46,20 +56,56 @@ namespace Atelier::Preset::Load
 													 { "why", a_why },
 													 { "fallback", a_fallback },
 													 { "ms", a_ms },
+													 { "late", a_late },
 												 });
+		}
+
+		// The native returned for a load already given up on at the timeout.
+		// Whatever it applied, the page was told the load failed, so the
+		// character is re-read, and no provenance is kept: a late load never
+		// authorizes an overwrite.
+		void Late(std::uint32_t a_id, int a_result)
+		{
+			const auto it = g_abandoned.find(a_id);
+			if (it == g_abandoned.end()) {
+				spdlog::info("[preset-load] #{} returned after the load was already settled - ignored", a_id);
+				return;
+			}
+			Abandoned a = std::move(it->second);
+			g_abandoned.erase(it);
+
+			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - a.sentAt).count();
+			spdlog::warn("[preset-load] #{} returned {} LATE, after {} ms (timeout {} ms)", a_id,
+				a_result == 1 ? "true" : "false", ms,
+				std::chrono::duration_cast<std::chrono::milliseconds>(kTimeout).count());
+			Guard::Forget("a load returned after its timeout");
+			if (a_result == 1) {
+				++g_loads;
+				spdlog::info("[preset-load] #{} counted as load {} of this game session", a_id, g_loads);
+				Core::RaceMenuSync::PresetLoaded();
+			}
+			Edit::Session::Replaced(a_result == 1 ? "preset loaded late" : "preset load failed late");
+			Reply(a.name, a_result == 1,
+				a_result == 1 ? std::string() : std::string("RaceMenu could not load this preset"), a_result != 1,
+				ms, true);
 		}
 
 		void Finish(std::uint32_t a_id, int a_result, const std::string& a_how)
 		{
 			// a_result: 1 returned true, 0 returned false, -1 did not return
 			if (!g_pending || g_pending->id != a_id) {
-				spdlog::info("[preset-load] #{} {} after the load was already settled - ignored", a_id, a_how);
+				if (a_result >= 0) {
+					Late(a_id, a_result);
+				}
 				return;
 			}
 			Pending p = std::move(*g_pending);
 			g_pending.reset();
 
 			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - p.sentAt).count();
+			if (a_how == "timed out") {
+				g_abandoned[a_id] = Abandoned{ p.name, p.sentAt };
+			}
 
 			if (a_result == 1) {
 				++g_loads;

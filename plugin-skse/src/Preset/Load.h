@@ -20,9 +20,12 @@
 // byte for byte, as the provenance that lets a later save overwrite it
 // (Guard.h).
 //
-// If the native is not there, the dispatch is refused, the call never
-// returns, or it returns false, the page is told so and offers RaceMenu's own
-// preset page instead.
+// If the native is not there, the dispatch is refused, the call does not
+// return in time, or it returns false, the page is told so and offers
+// RaceMenu's own preset page instead. A call given up on can still return
+// later and apply the preset: that is logged as LATE with its time, the
+// character is re-read, the page is told again ("late": true), and no
+// provenance is kept, so a late load never authorizes an overwrite.
 //
 // Every load is timed and counted, so its cost is measured on every run and
 // the first load of a session can be told from a later one.
@@ -31,7 +34,7 @@
 //
 //   page -> dll  "preset-load"    { "name": text }
 //   dll -> page  "preset-loaded"  { "name", "ok": bool, "why": text,
-//                                   "fallback": bool, "ms" }
+//                                   "fallback": bool, "ms", "late": bool }
 
 #pragma once
 
