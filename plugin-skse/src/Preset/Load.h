@@ -37,9 +37,13 @@
 
 namespace Atelier::Preset::Load
 {
-	// The flags passed to LoadCharacterPresetEx: overrides 1, body morphs 2,
-	// transforms 4, skin overrides 8. The face is applied whatever the flags.
-	inline constexpr std::int32_t kFlags = 1 | 2 | 4 | 8;
+	// The flags passed to LoadCharacterPresetEx: every bit (0xFFFFFFFF, which
+	// Papyrus's 32-bit int holds as -1). That is the native's own declared
+	// default, and what RaceMenu's own LoadCharacterPreset passes - so a load
+	// from here applies everything RaceMenu's Load button does. The known bits
+	// are overrides 1, body morphs 2, transforms 4, skin overrides 8; picking
+	// only those would silently drop any bit not known here.
+	inline constexpr std::int32_t kFlags = -1;
 
 	// Registers the bridge handler. Call once, after kDataLoaded.
 	void Install();

@@ -162,9 +162,9 @@ namespace Atelier::Preset::Load
 				Finish(id, -1, "dispatch refused");
 				return;
 			}
-			spdlog::info("[preset-load] #{} {}.{}(player, \"{}\", hair colour {}, flags {}) dispatched - file {} bytes, "
+			spdlog::info("[preset-load] #{} {}.{}(player, \"{}\", hair colour {}, flags {:#x}) dispatched - file {} bytes, "
 						 "sections {}",
-				id, kClass, kFunction, name, hairColor ? "RaceMenu's" : "NONE", kFlags,
+				id, kClass, kFunction, name, hairColor ? "RaceMenu's" : "NONE", static_cast<std::uint32_t>(kFlags),
 				g_pending->bytes.size(), sections.dump());
 
 			std::thread([id]() {
@@ -185,6 +185,6 @@ namespace Atelier::Preset::Load
 		}
 		Panel::Bridge::On("preset-load", &OnPresetLoad);
 		g_installed = true;
-		spdlog::info("[preset-load] installed - delegates to {}.{}, flags {}", kClass, kFunction, kFlags);
+		spdlog::info("[preset-load] installed - delegates to {}.{}, flags {:#x}", kClass, kFunction, static_cast<std::uint32_t>(kFlags));
 	}
 }
