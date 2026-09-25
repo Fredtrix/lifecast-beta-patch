@@ -23,13 +23,16 @@
 //     would carry a field that changes on every save:
 //       head parts     formIdentifier + type. Never formId: it carries the
 //                      load order of the moment the file was written.
-//       tints          index + type (when present); color AND mask are the
-//                      value, so either one changing is a change, not a
-//                      gain and a loss. The mask at an index follows the
-//                      race's tint list in the load order of the save:
-//                      two saves of the same character in two load orders
-//                      put different masks at the same index, invisible
-//                      ones included.
+//       tints          painted layers only - alpha of the ARGB color not
+//                      0 - labelled index + type (when present) + mask;
+//                      color is the value. The file keeps a slot for every
+//                      layer the race offers, painted or not, and the
+//                      unpainted ones change mask between saves of the
+//                      same face. Being painted is part of the identity:
+//                      painting and wiping a layer are a gain and a loss,
+//                      and a new mask on a painted layer is both; a new
+//                      color is an edit. The cost: a layer painted and
+//                      then set to alpha 0 on purpose counts as absent.
 //       face textures  index + texture, matched regardless of case and
 //                      slash direction; nothing is a value.
 //

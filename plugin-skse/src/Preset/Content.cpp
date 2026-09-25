@@ -23,7 +23,7 @@ namespace Atelier::Preset::Content
 		{
 			kFields,        // every scalar field but the value, nested lists adding a level
 			kHeadPart,      // formIdentifier + type; formId left out
-			kTint,          // index + type; color and texture are the value
+			kTint,          // painted layers only: index + type + texture; color is the value
 			kFaceTexture,   // index + texture, no value
 		};
 
@@ -138,10 +138,24 @@ namespace Atelier::Preset::Content
 			return it == a_element.end() ? std::string() : Scalar(*it);
 		}
 
-		// The three sections whose generic label would carry a field that
-		// changes without anything having changed: formId in head parts, the
-		// mask of a tint layer, and - for face textures, which have no value -
-		// nothing, but their paths match regardless of case and slash.
+		// A tint layer is painted when the alpha of its ARGB color is not 0.
+		// A color that is missing or not a number counts as painted: the
+		// comparison would rather report a layer than hide one.
+		bool Visible(const json& a_layer)
+		{
+			const auto it = a_layer.find("color");
+			if (it == a_layer.end() || !it->is_number_integer()) {
+				return true;
+			}
+			const auto argb = static_cast<std::uint32_t>(it->get<std::int64_t>());
+			return (argb >> 24) != 0;
+		}
+
+		// The three sections whose generic label would get identity wrong:
+		// formId in head parts changes without anything having changed; tint
+		// layers carry a slot for every layer, painted or not; and face
+		// textures, which have no value, match paths regardless of case and
+		// slash.
 		void FlattenOwn(const json& a_list, Identity a_identity, Entries& a_out)
 		{
 			if (!a_list.is_array()) {
@@ -159,16 +173,20 @@ namespace Atelier::Preset::Content
 					break;
 				case Identity::kTint:
 					{
-						// The whole element is the value: a new color or a new
-						// mask at the same index is a change, not a gain and a
-						// loss. The mask at an index follows the race's tint
-						// list in the load order of the save, so it moves
-						// without the player doing anything.
+						// Only painted layers count. The file keeps a slot for
+						// every layer the race offers, and one the player never
+						// painted has alpha 0 and whatever mask the slot had -
+						// counting those reports losses nobody can see.
+						if (!Visible(element)) {
+							break;
+						}
 						std::string label = "index " + Field(element, "index");
 						if (element.contains("type")) {
 							label += ", type " + Field(element, "type");
 						}
-						a_out[label].push_back(&element);
+						label += ", " + Path(element.contains("texture") ? element["texture"] : json());
+						const auto color = element.find("color");
+						a_out[label].push_back(color == element.end() ? &kNoValue : &*color);
 						break;
 					}
 				case Identity::kFaceTexture:
