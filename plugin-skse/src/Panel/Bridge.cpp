@@ -5,6 +5,10 @@
 
 #include "Panel/Panel.h"
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 namespace Atelier::Panel::Bridge
 {
 	namespace
@@ -23,6 +27,85 @@ namespace Atelier::Panel::Bridge
 				return std::string(a_text);
 			}
 			return fmt::format("{}... [{} chars total]", a_text.substr(0, kLogCap), a_text.size());
+		}
+
+		// Meridian's guide says to wait for IsPageLoaded() before
+		// ExecEventFunction: a message sent while the main frame is still
+		// loading may never reach the page's listener. Such messages are
+		// held here, in order, and delivered on the game thread once the
+		// page has loaded. Once one is held, every later one is held behind
+		// it, so the page never sees them out of order.
+		using Clock = std::chrono::steady_clock;
+		constexpr auto kLoadPoll = std::chrono::milliseconds(50);
+		constexpr auto kLoadDeadline = std::chrono::seconds(30);
+
+		struct Held
+		{
+			std::string       type;
+			std::string       text;
+			Clock::time_point since;
+		};
+
+		std::vector<Held>          g_held;
+		std::atomic_bool           g_watching = false;
+		std::atomic<std::uint32_t> g_watch = 0;  // which watcher is the live one
+
+		// Game thread. a_giveUp: the deadline passed - the page never loaded,
+		// and what is held is dropped, said in the log, not kept forever.
+		void Release(std::uint32_t a_watch, bool a_giveUp)
+		{
+			if (a_watch != g_watch) {
+				return;  // asked by a watcher that has been replaced
+			}
+			if (g_held.empty()) {
+				g_watching = false;
+				return;
+			}
+			auto* browser = Panel::Browser();
+			const bool loaded = browser && browser->IsPageLoaded();
+			if (!loaded && !a_giveUp) {
+				return;
+			}
+			g_watching = false;
+			const auto ms =
+				std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_held.front().since).count();
+			std::string types;
+			for (const auto& h : g_held) {
+				types += (types.empty() ? "" : ", ") + h.type;
+			}
+			if (!loaded) {
+				spdlog::warn("[bridge] dll->page DROPPED {} held message{} after {} ms: {} ({})", g_held.size(),
+					g_held.size() == 1 ? "" : "s", ms, browser ? "the page never loaded" : "no browser", types);
+				g_held.clear();
+				return;
+			}
+			spdlog::info("[bridge] the page loaded: delivering {} held message{}, the oldest held {} ms: {}",
+				g_held.size(), g_held.size() == 1 ? "" : "s", ms, types);
+			auto held = std::move(g_held);
+			g_held.clear();
+			for (const auto& h : held) {
+				browser->ExecEventFunction(kEventName, h.text.c_str());
+			}
+		}
+
+		// Off the game thread: only waits, and asks the game thread to look.
+		// No browser call is made here.
+		void Watch()
+		{
+			const auto watch = ++g_watch;
+			std::thread([watch]() {
+				const auto deadline = Clock::now() + kLoadDeadline;
+				while (g_watching && g_watch == watch) {
+					std::this_thread::sleep_for(kLoadPoll);
+					const bool giveUp = Clock::now() >= deadline;
+					if (auto* tasks = SKSE::GetTaskInterface()) {
+						tasks->AddTask([watch, giveUp]() { Release(watch, giveUp); });
+					}
+					if (giveUp) {
+						return;
+					}
+				}
+			}).detach();
 		}
 
 		std::unordered_map<std::string, Handler>& Handlers()
@@ -171,10 +254,16 @@ namespace Atelier::Panel::Bridge
 			return;
 		}
 
-		// A message sent before the main frame finished loading may never
-		// reach the page's listener; the log says which ones were.
-		spdlog::info("[bridge] dll->page{}: {}", browser->IsPageLoaded() ? "" : " (page not loaded yet)",
-			a_logWhole ? text : Clip(text));
+		if (!g_held.empty() || !browser->IsPageLoaded()) {
+			spdlog::info("[bridge] dll->page HELD until the page loads: {}", a_logWhole ? text : Clip(text));
+			g_held.push_back({ std::string(a_type), text, Clock::now() });
+			if (!g_watching.exchange(true)) {
+				Watch();
+			}
+			return;
+		}
+
+		spdlog::info("[bridge] dll->page: {}", a_logWhole ? text : Clip(text));
 		browser->ExecEventFunction(kEventName, text.c_str());
 	}
 
