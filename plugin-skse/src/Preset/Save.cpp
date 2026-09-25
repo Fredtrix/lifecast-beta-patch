@@ -154,9 +154,9 @@ namespace Atelier::Preset::Save
 				const auto diff = Content::Compare(Parse(a_existing), written);
 				spdlog::info("[preset-save] {} overwritten: by content {}", a_name, diff.ToJson().dump());
 			}
-			// The preview is what the page showed; the file written after
-			// the confirmation is compared with it, because the character
-			// can be edited between the two.
+			// The preview is what the page showed. After a confirmation the
+			// file IS the preview, renamed; anything but a match says the
+			// file was touched between the rename and this read.
 			if (!a_preview.empty()) {
 				const auto drift = Content::Compare(Parse(a_preview), written);
 				if (drift.sections.empty()) {
@@ -261,13 +261,7 @@ namespace Atelier::Preset::Save
 				++g_saves;
 				Reply(p.name, true, {}, false, after.size, ms);
 				Library::SendList();
-				std::string preview;
-				if (g_preview && FileName::Same(g_preview->name, p.name)) {
-					preview = std::move(g_preview->preview);
-					g_preview.reset();
-					RemovePreviewFile();
-				}
-				std::thread(Inspect, p.path, p.name, std::move(p.existing), std::move(preview)).detach();
+				std::thread(Inspect, p.path, p.name, std::move(p.existing), std::string()).detach();
 				return;
 			}
 
@@ -347,7 +341,12 @@ namespace Atelier::Preset::Save
 			}).detach();
 		}
 
-		// The page answered a preview: save as shown.
+		// The page answered a preview: the preview file itself becomes the
+		// preset. A .jslot does not carry its own name, so the renamed
+		// preview is what a second save would have written - and it is
+		// exactly what the page showed, even if the character was edited
+		// while the page waited. A second save could differ from what the
+		// player agreed to; a rename cannot.
 		void Confirm(const std::string& a_name)
 		{
 			if (!g_preview || !FileName::Same(g_preview->name, a_name)) {
@@ -362,8 +361,28 @@ namespace Atelier::Preset::Save
 				Drop("the preset changed on disk since the preview", true);
 				return;
 			}
+			Preview shown = std::move(*g_preview);
+			g_preview.reset();
 			spdlog::info("[preset-save] preview of {} confirmed by the page", a_name);
-			SaveNamed(a_name, g_preview->existing);
+
+			const auto      start = Clock::now();
+			std::error_code ec;
+			fs::rename(PreviewPath(), path, ec);
+			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+			if (ec) {
+				spdlog::warn("[preset-save] preview of {} could NOT replace the preset: {}", a_name, ec.message());
+				RemovePreviewFile();
+				Reply(a_name, false, "the preview could not replace the preset (" + ec.message() + ") - save again",
+					false, 0, ms);
+				return;
+			}
+			const FileState after = Stat(path);
+			++g_saves;
+			spdlog::info("[preset-save] {} replaced by the preview the page showed, in {} ms: {} bytes", a_name, ms,
+				after.size);
+			Reply(a_name, true, {}, false, after.size, ms);
+			Library::SendList();
+			std::thread(Inspect, path, a_name, std::move(shown.existing), std::move(shown.preview)).detach();
 		}
 
 		void OnPresetSave(const json& a_data)

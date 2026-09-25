@@ -108,11 +108,15 @@
   const previewTitle = AtelierControls.el("span", "slider-name", "");
   const previewGain = AtelierControls.el("span", "delegate-note", "");
   const previewLoss = AtelierControls.el("span", "delegate-note", "");
+  // What the two lists cover, said in the box: a list the player reads as
+  // complete is worse than no list.
+  const previewScope = AtelierControls.el("span", "delegate-note", "");
   previewText.appendChild(previewTitle);
   previewText.appendChild(previewGain);
   previewText.appendChild(previewLoss);
+  previewText.appendChild(previewScope);
   const previewSave = AtelierControls.el("button", "panel-button", "Save anyway");
-  previewSave.title = "Writes the preset as it is now, with what is listed";
+  previewSave.title = "Writes the preset exactly as compared here";
   const previewCancel = AtelierControls.el("button", "panel-button", "Cancel");
   previewCancel.title = "Keeps the existing preset as it is";
   for (const b of [previewSave, previewCancel]) {
@@ -173,6 +177,9 @@
     transforms: ["node transform value", "node transform values"],
     overrides: ["overlay value", "overlay values"],
     skinOverrides: ["skin override", "skin overrides"],
+    headParts: ["head part", "head parts"],
+    tintInfo: ["tint layer", "tint layers"],
+    faceTextures: ["face texture", "face textures"],
   };
 
   function entryText(diff, side) {
@@ -351,6 +358,8 @@
     previewGain.title = entryLabels(diff, "gained");
     previewLoss.textContent = "It would LOSE: " + (loss || "nothing") + ".";
     previewLoss.title = entryLabels(diff, "lost");
+    previewScope.textContent = "Compared: " + Object.keys(ENTRY_WORDS).map((k) => ENTRY_WORDS[k][1]).join(", ") +
+      ". A value that only changed is an edit, and is not listed.";
     preview.hidden = false;
     notice = "not saved yet - see what it would change";
     render();

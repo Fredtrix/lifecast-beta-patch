@@ -9,7 +9,7 @@
 // as "nothing changed". So each section is taken apart into entries, and the
 // entries are matched one by one.
 //
-// How an entry is matched, and the three fields that change without anything
+// How an entry is matched, and the fields that change without anything
 // having changed:
 //
 //   - an entry is identified by its fields other than its value ("data" or
@@ -19,16 +19,33 @@
 //   - values compare as values, with a tolerance: the file writes 0 and 0.0
 //     for the same number.
 //   - lists compare as SETS of entries, not in order.
-//   - head parts and plugins are matched by formIdentifier and name, never
-//     by formId or the plugin index: those carry the load order of the
-//     moment the file was written, and change between two saves of the same
-//     character. Neither section is compared here today; the rule is written
-//     down for the day one is.
+//   - three sections have labels of their own, because the generic one
+//     would carry a field that changes on every save:
+//       head parts     formIdentifier + type. Never formId: it carries the
+//                      load order of the moment the file was written.
+//       tints          index + type (when present); color AND mask are the
+//                      value, so either one changing is a change, not a
+//                      gain and a loss. The mask at an index follows the
+//                      race's tint list in the load order of the save:
+//                      two saves of the same character in two load orders
+//                      put different masks at the same index, invisible
+//                      ones included.
+//       face textures  index + texture, matched regardless of case and
+//                      slash direction; nothing is a value.
 //
-// Only the sections the live character is not guaranteed to hold are
-// compared - the same six the overwrite guard watches. The rest (head parts,
-// tints, face textures, the 19 face morphs) is what the panel shows and
-// edits, and a difference there is the player's edit, not a leak.
+// Nine sections are compared: the six the overwrite guard watches, and the
+// head parts, tints and face textures. The guard keeps its six on purpose -
+// it decides to refuse, this only describes - but a file that loses its
+// hair or its tint layers must say so, and those three are where a load of
+// content the game does not have loses the most.
+//
+// "changed" never warns, and one case of it looks like a hole: a skin
+// override replaced at the SAME index is a change, not a gain and a loss.
+// That is right because the dangerous form of it - the file's skin having
+// come from content this session never loaded - is refused before: the
+// overwrite guard lets a file with skin overrides be written over only when
+// this session loaded that file whole. Read the guard before "fixing" it
+// here.
 //
 // Pure logic, no engine includes.
 

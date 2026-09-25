@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <map>
 
@@ -17,21 +18,35 @@ namespace Atelier::Preset::Content
 		constexpr std::size_t kLabels = 3;       // labels kept per side and section
 		constexpr double      kTolerance = 1e-4;  // relative, on numbers
 
+		// How the entries of a section are labelled.
+		enum class Identity
+		{
+			kFields,        // every scalar field but the value, nested lists adding a level
+			kHeadPart,      // formIdentifier + type; formId left out
+			kTint,          // index + type; color and texture are the value
+			kFaceTexture,   // index + texture, no value
+		};
+
 		struct Section
 		{
 			const char* name;
 			const char* parent;  // nullptr: top level
 			const char* key;
+			Identity    identity;
 		};
 
-		// The overwrite guard's six, in the order the page lists them.
-		constexpr std::array<Section, 6> kSections{ {
-			{ "sculpt", "morphs", "sculpt" },
-			{ "custom", "morphs", "custom" },
-			{ "bodyMorphs", nullptr, "bodyMorphs" },
-			{ "transforms", nullptr, "transforms" },
-			{ "overrides", nullptr, "overrides" },
-			{ "skinOverrides", nullptr, "skinOverrides" },
+		// The overwrite guard's six first, then the three the panel edits,
+		// in the order the page lists them.
+		constexpr std::array<Section, 9> kSections{ {
+			{ "sculpt", "morphs", "sculpt", Identity::kFields },
+			{ "custom", "morphs", "custom", Identity::kFields },
+			{ "bodyMorphs", nullptr, "bodyMorphs", Identity::kFields },
+			{ "transforms", nullptr, "transforms", Identity::kFields },
+			{ "overrides", nullptr, "overrides", Identity::kFields },
+			{ "skinOverrides", nullptr, "skinOverrides", Identity::kFields },
+			{ "headParts", nullptr, "headParts", Identity::kHeadPart },
+			{ "tintInfo", nullptr, "tintInfo", Identity::kTint },
+			{ "faceTextures", nullptr, "faceTextures", Identity::kFaceTexture },
 		} };
 
 		const json* Find(const json& a_root, const Section& a_section)
@@ -103,6 +118,76 @@ namespace Atelier::Preset::Content
 				if (!value && nested.empty()) {
 					a_out[label].push_back(&kNoValue);
 				}
+			}
+		}
+
+		// A texture path as a label: the same file written with the other
+		// slash or another case is the same texture.
+		std::string Path(const json& a_value)
+		{
+			auto text = a_value.is_string() ? a_value.get<std::string>() : std::string();
+			for (auto& c : text) {
+				c = c == '/' ? '\\' : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			}
+			return text;
+		}
+
+		std::string Field(const json& a_element, const char* a_key)
+		{
+			const auto it = a_element.find(a_key);
+			return it == a_element.end() ? std::string() : Scalar(*it);
+		}
+
+		// The three sections whose generic label would carry a field that
+		// changes without anything having changed: formId in head parts, the
+		// mask of a tint layer, and - for face textures, which have no value -
+		// nothing, but their paths match regardless of case and slash.
+		void FlattenOwn(const json& a_list, Identity a_identity, Entries& a_out)
+		{
+			if (!a_list.is_array()) {
+				return;
+			}
+			static const json kNoValue = nullptr;
+			for (const auto& element : a_list) {
+				if (!element.is_object()) {
+					a_out[Scalar(element)].push_back(&kNoValue);
+					continue;
+				}
+				switch (a_identity) {
+				case Identity::kHeadPart:
+					a_out["type " + Field(element, "type") + ", " + Field(element, "formIdentifier")].push_back(&kNoValue);
+					break;
+				case Identity::kTint:
+					{
+						// The whole element is the value: a new color or a new
+						// mask at the same index is a change, not a gain and a
+						// loss. The mask at an index follows the race's tint
+						// list in the load order of the save, so it moves
+						// without the player doing anything.
+						std::string label = "index " + Field(element, "index");
+						if (element.contains("type")) {
+							label += ", type " + Field(element, "type");
+						}
+						a_out[label].push_back(&element);
+						break;
+					}
+				case Identity::kFaceTexture:
+					a_out["index " + Field(element, "index") + ", " +
+						  Path(element.contains("texture") ? element["texture"] : json())]
+						.push_back(&kNoValue);
+					break;
+				case Identity::kFields:
+					break;
+				}
+			}
+		}
+
+		void Collect(const json& a_list, Identity a_identity, Entries& a_out)
+		{
+			if (a_identity == Identity::kFields) {
+				Flatten(a_list, {}, a_out);
+			} else {
+				FlattenOwn(a_list, a_identity, a_out);
 			}
 		}
 
@@ -205,10 +290,10 @@ namespace Atelier::Preset::Content
 			Entries before;
 			Entries after;
 			if (const auto* v = Find(a_before, section)) {
-				Flatten(*v, {}, before);
+				Collect(*v, section.identity, before);
 			}
 			if (const auto* v = Find(a_after, section)) {
-				Flatten(*v, {}, after);
+				Collect(*v, section.identity, after);
 			}
 
 			SectionDiff d;

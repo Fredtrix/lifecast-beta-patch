@@ -34,12 +34,12 @@
 // preview is compared with the existing file by CONTENT (Content.h): entry
 // by entry inside each section, not section by section. Nothing gained or
 // lost: the save goes on at once. Otherwise the page shows both lists, with
-// the same weight, and the named file is written only when the player
-// confirms - by RaceMenu, again, from the live character; the file written
-// is compared with the preview afterwards, in the log. The preview file is
-// removed when the save is done, cancelled, or can no longer be what the
-// page showed (a load replaced the character, the menu closed, another save
-// was asked for, the file changed on disk).
+// the same weight, and the named file is replaced only when the player
+// confirms - by the preview file itself, renamed over it, so what lands is
+// exactly what the page described. The preview file is removed when the
+// save is cancelled or can no longer be what the page showed (a load
+// replaced the character, the menu closed, another save was asked for, the
+// file changed on disk).
 //
 // A save under a new name has nothing to compare with, and is not previewed.
 //

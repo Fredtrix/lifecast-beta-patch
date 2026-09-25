@@ -107,11 +107,15 @@ namespace Atelier::Core::SkeeLink
 				version, static_cast<std::uint32_t>(Skee::IOverrideInterface::kPluginVersion2));
 			return false;
 		}
-		// The actor goes to SKEE as the address of the engine object, which
-		// is what SKEE's own TESObjectREFR* is. No C++ base-class conversion
-		// is involved: under the multi-runtime build CommonLib's compile-time
-		// layout matches no runtime, so reaching a base through the
-		// hierarchy is exactly what the shared conventions forbid.
+		// The actor goes to SKEE as the address of the engine object. SKEE's
+		// TESObjectREFR has no type relation to CommonLib's Actor, which is
+		// why this is a reinterpret_cast - but what makes it VALID is that
+		// TESObjectREFR is Actor's first base, at offset 000
+		// (extern/commonlibsse-ng/include/RE/A/Actor.h:144): the Actor's
+		// address is its TESObjectREFR's address. Actor has seven bases. For
+		// any other class, recheck its header before copying this line - a
+		// base that is not the first gives a wrong pointer, with no compile
+		// error and no immediate crash.
 		auto* refr = reinterpret_cast<Skee::TESObjectREFR*>(a_actor);
 		static_cast<Skee::IOverrideInterface*>(iface)->RemoveAllSkinOverridesByReference(refr);
 		return true;

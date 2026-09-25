@@ -24,12 +24,14 @@
 // WHAT THIS COSTS. Skee::Actor, Skee::TESObjectREFR and the other
 // forward-declared names are incomplete types of this namespace, NOT aliases
 // of RE::Actor and friends. The conversion was decided where the first actor
-// crosses over, SkeeLink::ClearSkinOverrides, with the multi-runtime layout
-// rule of the shared C++ conventions in hand ("never reach a base class of
-// Actor through the C++ hierarchy"): the actor goes over as the address of
-// the engine object, reinterpret_cast from the RE::Actor pointer the engine
-// handed out, and never through a static_cast to one of its bases. Anything
-// else that passes an actor to SKEE converts the same way, and says so.
+// crosses over, SkeeLink::ClearSkinOverrides: the actor goes over as the
+// address of the engine object, reinterpret_cast from the RE::Actor pointer
+// the engine handed out. The lack of a type relation is only why the cast is
+// a reinterpret_cast; what makes it VALID is that TESObjectREFR is Actor's
+// first base, at offset 000 (extern/commonlibsse-ng/include/RE/A/Actor.h:144),
+// so the two addresses are the same. Anything else that passes an object to
+// SKEE rechecks that in its own class's header first - a base that is not
+// the first gives a wrong pointer with no compile error - and says so.
 
 #pragma once
 
