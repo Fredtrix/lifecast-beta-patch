@@ -156,7 +156,7 @@ namespace Atelier::Panel::Bridge
 		Handlers()[std::string(a_type)] = a_handler;
 	}
 
-	void Send(std::string_view a_type, const nlohmann::json& a_data)
+	void Send(std::string_view a_type, const nlohmann::json& a_data, bool a_logWhole)
 	{
 		const json message = {
 			{ "v", kProtocolVersion },
@@ -167,11 +167,11 @@ namespace Atelier::Panel::Bridge
 
 		auto* browser = Panel::Browser();
 		if (!browser) {
-			spdlog::warn("[bridge] dll->page DROPPED, no browser: {}", Clip(text));
+			spdlog::warn("[bridge] dll->page DROPPED, no browser: {}", a_logWhole ? text : Clip(text));
 			return;
 		}
 
-		spdlog::info("[bridge] dll->page: {}", Clip(text));
+		spdlog::info("[bridge] dll->page: {}", a_logWhole ? text : Clip(text));
 		browser->ExecEventFunction(kEventName, text.c_str());
 	}
 

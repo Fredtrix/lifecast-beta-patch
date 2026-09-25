@@ -76,7 +76,7 @@ namespace Atelier::Preset::Save
 			if (!a_loss.is_null()) {
 				data["loss"] = std::move(a_loss);
 			}
-			Panel::Bridge::Send("preset-saved", data);
+			Panel::Bridge::Send("preset-saved", data, true);
 		}
 
 		// Off the game thread, after a save that landed: does the file RaceMenu

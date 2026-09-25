@@ -23,9 +23,11 @@
 // If the native is not there, the dispatch is refused, the call does not
 // return in time, or it returns false, the page is told so and offers
 // RaceMenu's own preset page instead. A call given up on can still return
-// later and apply the preset: that is logged as LATE with its time, the
-// character is re-read, the page is told again ("late": true), and no
-// provenance is kept, so a late load never authorizes an overwrite.
+// later and apply the preset: that is logged as LATE with its time, and no
+// provenance is kept, so a late load never authorizes an overwrite. If no
+// later load has started, the character is re-read and the page is told
+// again ("late": true); if one has, the late answer is only logged
+// (SUPERSEDED) - the screen belongs to the later load.
 //
 // Every load is timed and counted, so its cost is measured on every run and
 // the first load of a session can be told from a later one.

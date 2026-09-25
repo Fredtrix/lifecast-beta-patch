@@ -56,8 +56,11 @@ namespace Atelier::Panel::Bridge
 	void On(std::string_view a_type, Handler a_handler);
 
 	// Pushes a message to the page. Dropped, with a log line, when there is
-	// no browser to push to.
-	void Send(std::string_view a_type, const nlohmann::json& a_data = nlohmann::json::object());
+	// no browser to push to. Every message is logged as sent; long ones are
+	// cut, unless a_logWhole - for messages whose logged text is meant to be
+	// replayed into the page as a test case, where a cut line would not parse.
+	void Send(std::string_view a_type, const nlohmann::json& a_data = nlohmann::json::object(),
+		bool a_logWhole = false);
 
 	// The bindings the browser has to be created with. The event function in
 	// particular can only be passed at creation time - AddFunctionCallback

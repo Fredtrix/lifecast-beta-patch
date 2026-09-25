@@ -57,13 +57,19 @@ namespace Atelier::Preset::Load
 													 { "fallback", a_fallback },
 													 { "ms", a_ms },
 													 { "late", a_late },
-												 });
+												 },
+				true);
 		}
 
 		// The native returned for a load already given up on at the timeout.
-		// Whatever it applied, the page was told the load failed, so the
-		// character is re-read, and no provenance is kept: a late load never
-		// authorizes an overwrite.
+		// No provenance is ever written here: a late load never authorizes an
+		// overwrite. If no later load has started, this answer describes the
+		// character, so it is re-read and the page is told. If a later load
+		// has started, the screen belongs to that one: re-reading, the tint
+		// request and a "loaded" to the page would all describe the wrong
+		// preset, so they are skipped - but provenance is still dropped,
+		// because the native that ran late may have applied over the later
+		// load, and a dropped provenance can only refuse, never allow.
 		void Late(std::uint32_t a_id, int a_result)
 		{
 			const auto it = g_abandoned.find(a_id);
@@ -75,10 +81,17 @@ namespace Atelier::Preset::Load
 			g_abandoned.erase(it);
 
 			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - a.sentAt).count();
+			Guard::Forget("a load returned after its timeout");
+			if (a_id != g_nextId) {
+				spdlog::warn("[preset-load] #{} returned {} LATE and SUPERSEDED, after {} ms (timeout {} ms) - "
+							 "load #{} started since; page, redraw and tints left to it",
+					a_id, a_result == 1 ? "true" : "false", ms,
+					std::chrono::duration_cast<std::chrono::milliseconds>(kTimeout).count(), g_nextId);
+				return;
+			}
 			spdlog::warn("[preset-load] #{} returned {} LATE, after {} ms (timeout {} ms)", a_id,
 				a_result == 1 ? "true" : "false", ms,
 				std::chrono::duration_cast<std::chrono::milliseconds>(kTimeout).count());
-			Guard::Forget("a load returned after its timeout");
 			if (a_result == 1) {
 				++g_loads;
 				spdlog::info("[preset-load] #{} counted as load {} of this game session", a_id, g_loads);
