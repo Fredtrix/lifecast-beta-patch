@@ -436,8 +436,14 @@
     render();
   });
 
+  // Every answer names its preset. Only an answer about the name the box
+  // shows ends the box: an answer about another name says nothing about the
+  // preview the DLL still holds, and hiding its box would leave that preview
+  // pending with nothing on screen to agree or cancel.
   AtelierBridge.on("preset-saved", (data) => {
-    hidePreview(false);
+    if (previewName !== null && data && same(String(data.name), previewName)) {
+      hidePreview(false);
+    }
     if (data && data.ok) {
       selected = data.name;
       notice = "saved " + data.name;
