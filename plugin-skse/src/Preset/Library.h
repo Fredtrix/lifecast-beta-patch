@@ -35,6 +35,10 @@ namespace Atelier::Preset::Library
 	inline constexpr auto kFolder = "Data\\SKSE\\Plugins\\CharGen\\Presets";
 	inline constexpr auto kExtension = ".jslot";
 
+	// The file RaceMenu writes a save preview into before an overwrite
+	// (Save.h). Never listed, and refused as a name for a preset.
+	inline constexpr auto kPreviewName = "zz Atelier - save preview";
+
 	std::filesystem::path Folder();
 
 	// Walks the folder and sends "presets", then starts the check that

@@ -395,7 +395,8 @@ body {
 }
 
 .preset-fallback[hidden],
-.preset-guard[hidden] {
+.preset-guard[hidden],
+.preset-preview[hidden] {
   display: none;
 }
 
@@ -407,4 +408,10 @@ body {
 
 .preset-guard .delegate-note {
   color: var(--bad);
+}
+
+/* The save preview names what the file would gain and what it would lose,
+   in the same weight: neither side is the warning, both are the change. */
+.preset-preview .delegate-text {
+  flex: 1;
 }

@@ -89,4 +89,31 @@ namespace Atelier::Core::SkeeLink
 			}
 		}
 	}
+
+	bool ClearSkinOverrides(RE::Actor* a_actor)
+	{
+		auto* map = GetInterfaceMap();
+		auto* iface = map ? map->QueryInterface("Override") : nullptr;
+		if (!a_actor || !iface) {
+			spdlog::warn("[skee] skin overrides NOT cleared: actor {}, Override interface {}",
+				static_cast<const void*>(a_actor), static_cast<const void*>(iface));
+			return false;
+		}
+		// The vendored header describes version 2 of the interface; an older
+		// one may lay its table out differently, so it is not called.
+		const auto version = iface->GetVersion();
+		if (version < Skee::IOverrideInterface::kPluginVersion2) {
+			spdlog::warn("[skee] skin overrides NOT cleared: Override interface version {}, header describes {}",
+				version, static_cast<std::uint32_t>(Skee::IOverrideInterface::kPluginVersion2));
+			return false;
+		}
+		// The actor goes to SKEE as the address of the engine object, which
+		// is what SKEE's own TESObjectREFR* is. No C++ base-class conversion
+		// is involved: under the multi-runtime build CommonLib's compile-time
+		// layout matches no runtime, so reaching a base through the
+		// hierarchy is exactly what the shared conventions forbid.
+		auto* refr = reinterpret_cast<Skee::TESObjectREFR*>(a_actor);
+		static_cast<Skee::IOverrideInterface*>(iface)->RemoveAllSkinOverridesByReference(refr);
+		return true;
+	}
 }

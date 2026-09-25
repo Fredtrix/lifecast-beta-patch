@@ -25,16 +25,40 @@
 // the live character may not hold. The refusal names them, and the page
 // offers a new name or RaceMenu's own save.
 //
+// An overwrite the guard allows is PREVIEWED before it happens. The guard
+// watches what the file would lose; what it would GAIN is the other half -
+// a skin override left on the character by an earlier load, say, goes into
+// the file and makes it lie about what it is. What a save writes is only
+// known once RaceMenu has written it, so RaceMenu writes the live character
+// into a preview file first (Library::kPreviewName, never listed), and the
+// preview is compared with the existing file by CONTENT (Content.h): entry
+// by entry inside each section, not section by section. Nothing gained or
+// lost: the save goes on at once. Otherwise the page shows both lists, with
+// the same weight, and the named file is written only when the player
+// confirms - by RaceMenu, again, from the live character; the file written
+// is compared with the preview afterwards, in the log. The preview file is
+// removed when the save is done, cancelled, or can no longer be what the
+// page showed (a load replaced the character, the menu closed, another save
+// was asked for, the file changed on disk).
+//
+// A save under a new name has nothing to compare with, and is not previewed.
+//
 // Messages (see Panel/Bridge.h for the envelope):
 //
-//   page -> dll  "preset-save"   { "name": text, "overwrite": bool }
-//   dll -> page  "preset-saved"  { "name", "ok": bool, "why": text,
-//                                  "fallback": bool, "size", "ms",
-//                                  "loss": [{ "section", "count" }] }
-//                                  fallback = saving here is not available;
-//                                  the page points to RaceMenu instead
-//                                  loss = only on a refused overwrite: what
-//                                  it would have destroyed
+//   page -> dll  "preset-save"         { "name": text, "overwrite": bool,
+//                                        "confirm": bool }
+//                                        confirm = the answer to a preview
+//   page -> dll  "preset-save-cancel"  { "name": text }
+//   dll -> page  "preset-save-preview" { "name", "diff": [{ "section",
+//                                        "gained", "lost", "changed",
+//                                        "gainedLabels", "lostLabels" }] }
+//   dll -> page  "preset-saved"        { "name", "ok": bool, "why": text,
+//                                        "fallback": bool, "size", "ms",
+//                                        "loss": [{ "section", "count" }] }
+//                                        fallback = saving here is not available;
+//                                        the page points to RaceMenu instead
+//                                        loss = only on a refused overwrite: what
+//                                        it would have destroyed
 
 #pragma once
 

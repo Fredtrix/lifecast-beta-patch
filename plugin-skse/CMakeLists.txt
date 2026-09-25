@@ -61,6 +61,7 @@ add_commonlibsse_plugin(
         src/Panel/RaceMenuFilm.cpp
         src/Panel/RaceMenuTabs.cpp
         src/Panel/Switcher.cpp
+        src/Preset/Content.cpp
         src/Preset/Guard.cpp
         src/Preset/Jslot.cpp
         src/Preset/Library.cpp

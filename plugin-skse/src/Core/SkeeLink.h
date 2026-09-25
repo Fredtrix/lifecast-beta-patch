@@ -33,4 +33,14 @@ namespace Atelier::Core::SkeeLink
 	// merely not yet there. That can only be settled by asking at more than
 	// one moment and writing the moment down next to the answer.
 	void ReportInterfaces(const char* a_moment);
+
+	// Removes every skin override SKEE holds for a_actor, through SKEE's
+	// Override interface (RemoveAllSkinOverridesByReference). Loading a
+	// preset does not do this: a preset without skin overrides, or with an
+	// empty list, leaves the ones already on the character, and one with a
+	// different index adds to them.
+	//
+	// False, and nothing removed, when the interface is not there or reports
+	// a version older than the vendored header describes.
+	bool ClearSkinOverrides(RE::Actor* a_actor);
 }

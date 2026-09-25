@@ -10,6 +10,13 @@
 // extended sliders and sculpt included, which no plugin interface can set -
 // and redraws the head itself.
 //
+// Before the call, the skin overrides on the character are cleared through
+// SKEE's Override interface. Loading does not clear them: a preset without
+// skin overrides, or with an empty list, leaves the ones already there, and
+// one with another index adds to them - so going down the preset list would
+// pile up the skin of every preset tried. Every other section a preset
+// carries was measured replaced by the next load; this one alone is not.
+//
 // Editing one value at a time stays the panel's own (Edit/); a whole preset
 // is RaceMenu's, the same way saving one is (Save.h).
 //

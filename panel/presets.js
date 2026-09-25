@@ -15,6 +15,9 @@
 // Saving over an existing preset can be refused by the DLL when the overwrite
 // would destroy parts of that file the live character was not given here;
 // the page then lists them and offers a new name or RaceMenu's own save.
+// An overwrite the DLL allows is previewed first: when the file would gain or
+// lose entries (a skin override left by an earlier load, say), the page shows
+// both, with the same weight, and the file is written only on "Save anyway".
 //
 // ONE text field, on purpose: it searches the list, and its text is also the
 // name the Save button uses. The page keeps a single text field so that the
@@ -98,6 +101,30 @@
   guard.appendChild(guardRaceMenu);
   guard.hidden = true;
 
+  // Shown when an overwrite would change what the existing file holds: what it
+  // would gain and what it would lose, compared entry by entry by the DLL.
+  const preview = AtelierControls.el("div", "delegate preset-preview");
+  const previewText = AtelierControls.el("div", "delegate-text");
+  const previewTitle = AtelierControls.el("span", "slider-name", "");
+  const previewGain = AtelierControls.el("span", "delegate-note", "");
+  const previewLoss = AtelierControls.el("span", "delegate-note", "");
+  previewText.appendChild(previewTitle);
+  previewText.appendChild(previewGain);
+  previewText.appendChild(previewLoss);
+  const previewSave = AtelierControls.el("button", "panel-button", "Save anyway");
+  previewSave.title = "Writes the preset as it is now, with what is listed";
+  const previewCancel = AtelierControls.el("button", "panel-button", "Cancel");
+  previewCancel.title = "Keeps the existing preset as it is";
+  for (const b of [previewSave, previewCancel]) {
+    b.type = "button";
+    b.tabIndex = -1;
+  }
+  preview.appendChild(previewText);
+  preview.appendChild(previewSave);
+  preview.appendChild(previewCancel);
+  preview.hidden = true;
+  let previewName = null;  // the name the shown preview is for
+
   const list = AtelierControls.el("ul", "preset-list");
 
   section.appendChild(field);
@@ -105,6 +132,7 @@
   section.appendChild(status);
   section.appendChild(fallback);
   section.appendChild(guard);
+  section.appendChild(preview);
   section.appendChild(list);
   AtelierControls.mount(section);
 
@@ -135,6 +163,42 @@
     return loss
       .map((l) => (LOSS_WORDS[l.section] || ((n) => n + " " + l.section))(l.count))
       .join(", ");
+  }
+
+  // What an overwrite would gain or lose, entry by entry, in the player's words.
+  const ENTRY_WORDS = {
+    sculpt: ["sculpted mesh", "sculpted meshes"],
+    custom: ["extended slider", "extended sliders"],
+    bodyMorphs: ["body morph value", "body morph values"],
+    transforms: ["node transform value", "node transform values"],
+    overrides: ["overlay value", "overlay values"],
+    skinOverrides: ["skin override", "skin overrides"],
+  };
+
+  function entryText(diff, side) {
+    return diff
+      .filter((d) => d[side] > 0)
+      .map((d) => {
+        const w = ENTRY_WORDS[d.section] || [d.section + " entry", d.section + " entries"];
+        return d[side] + " " + (d[side] === 1 ? w[0] : w[1]);
+      })
+      .join(", ");
+  }
+
+  function entryLabels(diff, side) {
+    const key = side === "gained" ? "gainedLabels" : "lostLabels";
+    return diff
+      .filter((d) => Array.isArray(d[key]) && d[key].length)
+      .map((d) => d.section + ": " + d[key].join("; "))
+      .join("\n");
+  }
+
+  function hidePreview(cancel) {
+    if (cancel && previewName !== null) {
+      AtelierBridge.send("preset-save-cancel", { name: previewName });
+    }
+    previewName = null;
+    preview.hidden = true;
   }
 
   // The first "<name> 2", "<name> 3"... that no preset uses and that stays
@@ -206,6 +270,7 @@
     confirmUntil = 0;
     notice = "";
     guard.hidden = true;
+    hidePreview(true);
     render();
   });
   byName.addEventListener("click", () => {
@@ -252,10 +317,43 @@
     }
     confirmUntil = 0;
     guard.hidden = true;
+    hidePreview(false);
     fallback.hidden = true;
     notice = "saving " + name + "...";
     render();
     AtelierBridge.send("preset-save", { name: name, overwrite: exists });
+  });
+
+  previewSave.addEventListener("click", () => {
+    if (previewName === null) {
+      return;
+    }
+    const name = previewName;
+    hidePreview(false);
+    notice = "saving " + name + "...";
+    render();
+    AtelierBridge.send("preset-save", { name: name, overwrite: true, confirm: true });
+  });
+
+  previewCancel.addEventListener("click", () => {
+    hidePreview(true);
+    notice = "not saved";
+    render();
+  });
+
+  AtelierBridge.on("preset-save-preview", (data) => {
+    const diff = data && Array.isArray(data.diff) ? data.diff : [];
+    const gain = entryText(diff, "gained");
+    const loss = entryText(diff, "lost");
+    previewName = String(data && data.name);
+    previewTitle.textContent = "Save over " + previewName + "?";
+    previewGain.textContent = "It would GAIN: " + (gain || "nothing") + ".";
+    previewGain.title = entryLabels(diff, "gained");
+    previewLoss.textContent = "It would LOSE: " + (loss || "nothing") + ".";
+    previewLoss.title = entryLabels(diff, "lost");
+    preview.hidden = false;
+    notice = "not saved yet - see what it would change";
+    render();
   });
 
   AtelierBridge.on("presets", (data) => {
@@ -276,6 +374,7 @@
   });
 
   AtelierBridge.on("preset-saved", (data) => {
+    hidePreview(false);
     if (data && data.ok) {
       selected = data.name;
       notice = "saved " + data.name;

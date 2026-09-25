@@ -4,6 +4,7 @@
 #include "Preset/Load.h"
 
 #include "Core/RaceMenuSync.h"
+#include "Core/SkeeLink.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 #include "Preset/Guard.h"
@@ -212,19 +213,30 @@ namespace Atelier::Preset::Load
 			const auto sections = Guard::Sections(bytes);
 			g_pending = Pending{ id, name, std::move(bytes), Clock::now() };
 
+			// Loading a preset does not clear the skin overrides already on
+			// the character: a preset without them, or with an empty list,
+			// leaves them, and one with another index adds to them. So they
+			// are cleared first, and "load A" leaves the character with A's
+			// skin and nothing else.
+			const bool skinCleared = Core::SkeeLink::ClearSkinOverrides(player);
+
 			auto* hairColor = Core::RaceMenuSync::HairColorForm();
 			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new Done(id));
 			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(name),
 				static_cast<RE::BGSColorForm*>(hairColor), std::int32_t(kFlags));
 			if (!vm->DispatchStaticCall(kClass, kFunction, args, callback)) {
-				spdlog::warn("[preset-load] #{} DispatchStaticCall({}.{}) refused", id, kClass, kFunction);
+				spdlog::warn("[preset-load] #{} DispatchStaticCall({}.{}) refused{}", id, kClass, kFunction,
+					skinCleared ? " - the skin overrides were already cleared" : "");
+				if (skinCleared) {
+					Edit::Session::Replaced("skin overrides cleared, then the load was refused");
+				}
 				Finish(id, -1, "dispatch refused");
 				return;
 			}
 			spdlog::info("[preset-load] #{} {}.{}(player, \"{}\", hair colour {}, flags {:#x}) dispatched - file {} bytes, "
-						 "sections {}",
+						 "sections {}, skin overrides cleared before {}",
 				id, kClass, kFunction, name, hairColor ? "RaceMenu's" : "NONE", static_cast<std::uint32_t>(kFlags),
-				g_pending->bytes.size(), sections.dump());
+				g_pending->bytes.size(), sections.dump(), skinCleared);
 
 			std::thread([id]() {
 				std::this_thread::sleep_for(kTimeout);

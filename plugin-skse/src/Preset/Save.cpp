@@ -3,7 +3,9 @@
 
 #include "Preset/Save.h"
 
+#include "Edit/Session.h"
 #include "Panel/Bridge.h"
+#include "Preset/Content.h"
 #include "Preset/FileName.h"
 #include "Preset/Guard.h"
 #include "Preset/Jslot.h"
@@ -34,21 +36,39 @@ namespace Atelier::Preset::Save
 			fs::file_time_type written{};
 		};
 
+		enum class Kind
+		{
+			kSave,     // the file the player named
+			kPreview,  // the preview file, before an overwrite
+		};
+
 		// One save at a time. Every field below is touched on the game
 		// thread only; the VM callback and the timeout hop back to it.
 		struct Pending
 		{
 			std::uint32_t id{ 0 };
-			std::string   name;
-			fs::path      path;
-			FileState     before;
-			json          sectionsBefore;  // of the file overwritten; empty object for a new one
+			Kind          kind{ Kind::kSave };
+			std::string   name;            // the player's name, for both kinds
+			fs::path      path;            // the file this call writes
+			FileState     before;          // of that file
+			std::string   existing;        // the file overwritten, as read before the call; empty for a new one
+			std::uint32_t replaced{ 0 };   // g_replaced when the call was made
 			Clock::time_point sentAt{};
 		};
 
+		// A preview shown to the page and not answered yet.
+		struct Preview
+		{
+			std::string name;
+			std::string existing;  // the file it would overwrite, as it was
+			std::string preview;   // what RaceMenu wrote for the live character
+		};
+
 		std::optional<Pending> g_pending;
+		std::optional<Preview> g_preview;
 		std::uint32_t          g_nextId = 0;
 		std::size_t            g_saves = 0;
+		std::uint32_t          g_replaced = 0;  // whole-character replacements (loads) so far
 
 		FileState Stat(const fs::path& a_path)
 		{
@@ -60,6 +80,17 @@ namespace Atelier::Preset::Save
 				s.written = fs::last_write_time(a_path, ec);
 			}
 			return s;
+		}
+
+		fs::path PreviewPath() { return Library::Folder() / (std::string(Library::kPreviewName) + Library::kExtension); }
+
+		json Parse(const std::string& a_text)
+		{
+			try {
+				return json::parse(a_text);
+			} catch (const std::exception&) {
+				return nullptr;
+			}
 		}
 
 		void Reply(const std::string& a_name, bool a_ok, const std::string& a_why, bool a_fallback,
@@ -79,40 +110,64 @@ namespace Atelier::Preset::Save
 			Panel::Bridge::Send("preset-saved", data, true);
 		}
 
-		// Off the game thread, after a save that landed: does the file RaceMenu
-		// wrote read with the copied parser, and which sections does it carry?
-		// Log only - it answers whether our side holds the full file.
-		void Inspect(fs::path a_path, std::string a_name, json a_before)
+		// The preview file is ours to remove: it is not a preset, and the
+		// player never named it. Removing is a file system operation - the
+		// file is never rewritten.
+		void RemovePreviewFile()
 		{
-			// An overwrite: which sections the file had and has now. The
-			// guard allowed it because nothing it counts could be lost; this
-			// is where that is seen against the file RaceMenu actually wrote.
-			if (!a_before.empty()) {
-				std::string text;
-				const auto after = Guard::ReadAll(a_path, text) ? Guard::Sections(text) : json::object();
-				json lost = json::array();
-				json gained = json::array();
-				json changed = json::array();
-				for (const auto& [k, v] : a_before.items()) {
-					if (!after.contains(k)) {
-						lost.push_back(k);
-					} else if (after[k] != v) {
-						changed.push_back(k + " " + v.dump() + "->" + after[k].dump());
-					}
+			std::error_code ec;
+			if (fs::remove(PreviewPath(), ec)) {
+				spdlog::info("[preset-save] preview file removed");
+			} else if (ec) {
+				spdlog::warn("[preset-save] preview file NOT removed: {}", ec.message());
+			}
+		}
+
+		// A preview waiting for an answer ends; the page is told when it
+		// was still showing one.
+		void Drop(const char* a_why, bool a_tellPage)
+		{
+			if (!g_preview) {
+				return;
+			}
+			const auto name = g_preview->name;
+			g_preview.reset();
+			spdlog::info("[preset-save] preview of {} dropped: {}", name, a_why);
+			RemovePreviewFile();
+			if (a_tellPage) {
+				Reply(name, false, std::string(a_why) + " - save again to see what it would change", false);
+			}
+		}
+
+		// Off the game thread, after a save that landed: does the file RaceMenu
+		// wrote read with the copied parser, and what did it gain and lose
+		// against the file it replaced? Log only.
+		void Inspect(fs::path a_path, std::string a_name, std::string a_existing, std::string a_preview)
+		{
+			std::string text;
+			if (!Guard::ReadAll(a_path, text)) {
+				spdlog::warn("[preset-save] {} cannot be read back", a_name);
+				return;
+			}
+			const auto written = Parse(text);
+			if (!a_existing.empty()) {
+				const auto diff = Content::Compare(Parse(a_existing), written);
+				spdlog::info("[preset-save] {} overwritten: by content {}", a_name, diff.ToJson().dump());
+			}
+			// The preview is what the page showed; the file written after
+			// the confirmation is compared with it, because the character
+			// can be edited between the two.
+			if (!a_preview.empty()) {
+				const auto drift = Content::Compare(Parse(a_preview), written);
+				if (drift.sections.empty()) {
+					spdlog::info("[preset-save] {} matches the preview the page showed", a_name);
+				} else {
+					spdlog::warn("[preset-save] {} DIFFERS from the preview the page showed: {}", a_name,
+						drift.ToJson().dump());
 				}
-				for (const auto& [k, v] : after.items()) {
-					if (!a_before.contains(k)) {
-						gained.push_back(k);
-					}
-				}
-				spdlog::info("[preset-save] {} overwritten: sections lost {}, gained {}, size changed {}", a_name,
-					lost.dump(), gained.dump(), changed.dump());
 			}
 			try {
-				std::ifstream in(a_path, std::ios::binary);
-				std::ostringstream text;
-				text << in.rdbuf();
-				const auto root = Jslot::Json::parse(text.str());
+				const auto root = Jslot::Json::parse(text);
 				std::string keys;
 				for (const auto& [k, v] : root.items()) {
 					keys += (keys.empty() ? "" : ",") + k;
@@ -131,13 +186,61 @@ namespace Atelier::Preset::Save
 			}
 		}
 
+		void Dispatch(Pending a_pending);
+
+		// The file the player named. a_existing is the file it replaces as
+		// read before (empty for a new one).
+		void SaveNamed(const std::string& a_name, std::string a_existing)
+		{
+			Pending p;
+			p.kind = Kind::kSave;
+			p.name = a_name;
+			p.path = Library::Folder() / (a_name + Library::kExtension);
+			p.before = Stat(p.path);
+			p.existing = std::move(a_existing);
+			Dispatch(std::move(p));
+		}
+
+		// The preview landed: compare it with the file it would replace.
+		// Nothing gained or lost - the save goes on at once. Otherwise the
+		// page is shown both lists and the save waits for its answer.
+		void Previewed(Pending a_p, long long a_ms)
+		{
+			std::string preview;
+			if (!Guard::ReadAll(a_p.path, preview) || preview.empty()) {
+				Reply(a_p.name, false, "RaceMenu did not write the save preview", true, 0, a_ms);
+				return;
+			}
+			if (a_p.replaced != g_replaced) {
+				spdlog::info("[preset-save] preview of {} discarded: a load replaced the character meanwhile", a_p.name);
+				RemovePreviewFile();
+				Reply(a_p.name, false, "a load replaced the character while the preview was written - save again",
+					false, 0, a_ms);
+				return;
+			}
+			const auto start = Clock::now();
+			const auto diff = Content::Compare(Parse(a_p.existing), Parse(preview));
+			const auto cmpMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
+			spdlog::info("[preset-save] preview of {} ({} bytes, written in {} ms) against the file ({} bytes), "
+						 "compared in {} ms: {}",
+				a_p.name, preview.size(), a_ms, a_p.existing.size(), cmpMs, diff.ToJson().dump());
+
+			if (diff.NothingGainedOrLost()) {
+				RemovePreviewFile();
+				SaveNamed(a_p.name, std::move(a_p.existing));
+				return;
+			}
+			g_preview = Preview{ a_p.name, std::move(a_p.existing), std::move(preview) };
+			Panel::Bridge::Send("preset-save-preview", { { "name", a_p.name }, { "diff", diff.ToJson() } }, true);
+		}
+
 		void Finish(std::uint32_t a_id, bool a_returned, const std::string& a_how)
 		{
 			if (!g_pending || g_pending->id != a_id) {
 				spdlog::info("[preset-save] #{} {} after the save was already settled - ignored", a_id, a_how);
 				return;
 			}
-			const Pending p = *g_pending;
+			Pending p = std::move(*g_pending);
 			g_pending.reset();
 
 			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - p.sentAt).count();
@@ -146,15 +249,25 @@ namespace Atelier::Preset::Save
 			                     after.written != p.before.written || after.size != p.before.size;
 
 			spdlog::info(
-				"[preset-save] #{} {} after {} ms: file {} size {} (before: {} size {}), changed {}",
-				a_id, a_how, ms, after.exists ? "exists" : "MISSING", after.size,
-				p.before.exists ? "existed" : "absent", p.before.size, changed);
+				"[preset-save] #{} {} {} after {} ms: file {} size {} (before: {} size {}), changed {}",
+				a_id, p.kind == Kind::kPreview ? "preview" : "save", a_how, ms, after.exists ? "exists" : "MISSING",
+				after.size, p.before.exists ? "existed" : "absent", p.before.size, changed);
 
 			if (a_returned && after.exists && after.size > 0 && changed) {
+				if (p.kind == Kind::kPreview) {
+					Previewed(std::move(p), ms);
+					return;
+				}
 				++g_saves;
 				Reply(p.name, true, {}, false, after.size, ms);
 				Library::SendList();
-				std::thread(Inspect, p.path, p.name, p.sectionsBefore).detach();
+				std::string preview;
+				if (g_preview && FileName::Same(g_preview->name, p.name)) {
+					preview = std::move(g_preview->preview);
+					g_preview.reset();
+					RemovePreviewFile();
+				}
+				std::thread(Inspect, p.path, p.name, std::move(p.existing), std::move(preview)).detach();
 				return;
 			}
 
@@ -167,6 +280,9 @@ namespace Atelier::Preset::Save
 				why = "RaceMenu wrote an empty file";
 			} else {
 				why = "RaceMenu returned but the existing file did not change";
+			}
+			if (p.kind == Kind::kPreview) {
+				why += " (save preview)";
 			}
 			Reply(p.name, false, why, true, after.size, ms);
 		}
@@ -194,63 +310,34 @@ namespace Atelier::Preset::Save
 			std::uint32_t _id;
 		};
 
-		void OnPresetSave(const json& a_data)
+		void Dispatch(Pending a_pending)
 		{
-			const auto name = a_data.contains("name") && a_data["name"].is_string() ?
-			                      a_data["name"].get<std::string>() :
-			                      std::string();
-			const bool overwrite = a_data.value("overwrite", false);
-
-			if (const auto problem = FileName::Problem(name); !problem.empty()) {
-				spdlog::info("[preset-save] refused \"{}\": {}", name, problem);
-				Reply(name, false, problem, false);
-				return;
-			}
-			if (g_pending) {
-				Reply(name, false, "a save is still running", false);
-				return;
-			}
-
-			const auto path = Library::Folder() / (name + Library::kExtension);
-			const FileState before = Stat(path);
-			if (before.exists && !overwrite) {
-				Reply(name, false, "a preset with this name already exists", false);
-				return;
-			}
-			json sectionsBefore = json::object();
-			if (before.exists) {
-				auto verdict = Guard::CheckOverwrite(name, path);
-				spdlog::info("[preset-save] overwrite of {} {}: {} - file sections {}, at risk {}", name,
-					verdict.allow ? "allowed" : "REFUSED", verdict.how, verdict.sections.dump(),
-					verdict.loss.is_null() ? "[]" : verdict.loss.dump());
-				if (!verdict.allow) {
-					Reply(name, false, verdict.how, false, 0, 0,
-						verdict.loss.is_null() ? json::array() : std::move(verdict.loss));
-					return;
-				}
-				sectionsBefore = std::move(verdict.sections);
-			}
-
 			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
 			auto* player = RE::PlayerCharacter::GetSingleton();
 			if (!vm || !player) {
 				spdlog::warn("[preset-save] no {} - not saved", vm ? "player" : "Papyrus VM");
-				Reply(name, false, "the game is not ready", true);
+				Reply(a_pending.name, false, "the game is not ready", true);
 				return;
 			}
 
 			const auto id = ++g_nextId;
-			g_pending = Pending{ id, name, path, before, std::move(sectionsBefore), Clock::now() };
+			a_pending.id = id;
+			a_pending.sentAt = Clock::now();
+			a_pending.replaced = g_replaced;
+			const auto file = a_pending.kind == Kind::kPreview ? std::string(Library::kPreviewName) : a_pending.name;
+			const bool overwrite = !a_pending.existing.empty();
+			const auto kind = a_pending.kind;
+			g_pending = std::move(a_pending);
 
 			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new Done(id));
-			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(name));
+			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(file));
 			if (!vm->DispatchStaticCall(kClass, kFunction, args, callback)) {
 				spdlog::warn("[preset-save] #{} DispatchStaticCall({}.{}) refused", id, kClass, kFunction);
 				Finish(id, false, "dispatch refused");
 				return;
 			}
-			spdlog::info("[preset-save] #{} {}.{}(player, \"{}\") dispatched, overwrite {}", id, kClass, kFunction,
-				name, before.exists);
+			spdlog::info("[preset-save] #{} {}.{}(player, \"{}\") dispatched - {}, overwrite {}", id, kClass, kFunction,
+				file, kind == Kind::kPreview ? "preview" : "save", overwrite);
 
 			std::thread([id]() {
 				std::this_thread::sleep_for(kTimeout);
@@ -258,6 +345,110 @@ namespace Atelier::Preset::Save
 					tasks->AddTask([id]() { Finish(id, false, "timed out"); });
 				}
 			}).detach();
+		}
+
+		// The page answered a preview: save as shown.
+		void Confirm(const std::string& a_name)
+		{
+			if (!g_preview || !FileName::Same(g_preview->name, a_name)) {
+				Reply(a_name, false, "there is no save preview for this name any more - save again", false);
+				return;
+			}
+			// The preview compared the character with the file as it was
+			// then. A file changed on disk since is a different comparison.
+			const auto path = Library::Folder() / (a_name + Library::kExtension);
+			std::string now;
+			if (!Guard::ReadAll(path, now) || now != g_preview->existing) {
+				Drop("the preset changed on disk since the preview", true);
+				return;
+			}
+			spdlog::info("[preset-save] preview of {} confirmed by the page", a_name);
+			SaveNamed(a_name, g_preview->existing);
+		}
+
+		void OnPresetSave(const json& a_data)
+		{
+			const auto name = a_data.contains("name") && a_data["name"].is_string() ?
+			                      a_data["name"].get<std::string>() :
+			                      std::string();
+			const bool overwrite = a_data.value("overwrite", false);
+			const bool confirm = a_data.value("confirm", false);
+
+			if (const auto problem = FileName::Problem(name); !problem.empty()) {
+				spdlog::info("[preset-save] refused \"{}\": {}", name, problem);
+				Reply(name, false, problem, false);
+				return;
+			}
+			if (FileName::Same(name, Library::kPreviewName)) {
+				Reply(name, false, "this name is reserved by the Atelier", false);
+				return;
+			}
+			if (g_pending) {
+				Reply(name, false, "a save is still running", false);
+				return;
+			}
+			if (confirm) {
+				Confirm(name);
+				return;
+			}
+			// A new save request replaces a preview left unanswered.
+			Drop("another save was asked for", false);
+
+			const auto path = Library::Folder() / (name + Library::kExtension);
+			const FileState before = Stat(path);
+			if (before.exists && !overwrite) {
+				Reply(name, false, "a preset with this name already exists", false);
+				return;
+			}
+			if (!before.exists) {
+				SaveNamed(name, {});
+				return;
+			}
+
+			auto verdict = Guard::CheckOverwrite(name, path);
+			spdlog::info("[preset-save] overwrite of {} {}: {} - file sections {}, at risk {}", name,
+				verdict.allow ? "allowed" : "REFUSED", verdict.how, verdict.sections.dump(),
+				verdict.loss.is_null() ? "[]" : verdict.loss.dump());
+			if (!verdict.allow) {
+				Reply(name, false, verdict.how, false, 0, 0,
+					verdict.loss.is_null() ? json::array() : std::move(verdict.loss));
+				return;
+			}
+			std::string existing;
+			if (!Guard::ReadAll(path, existing) || existing.empty()) {
+				Reply(name, false, "the existing preset could not be read", false);
+				return;
+			}
+
+			// Before an overwrite, RaceMenu writes the live character into the
+			// preview file, and the page sees what the named file would gain
+			// and lose - by content - before it is touched.
+			Pending p;
+			p.kind = Kind::kPreview;
+			p.name = name;
+			p.path = PreviewPath();
+			p.before = Stat(p.path);
+			p.existing = std::move(existing);
+			Dispatch(std::move(p));
+		}
+
+		void OnPresetSaveCancel(const json& a_data)
+		{
+			const auto name = a_data.contains("name") && a_data["name"].is_string() ?
+			                      a_data["name"].get<std::string>() :
+			                      std::string();
+			if (g_preview && FileName::Same(g_preview->name, name)) {
+				Drop("the page cancelled it", false);
+			}
+		}
+
+		void OnMenuClosed() { Drop("the RaceSex Menu closed", false); }
+
+		// A load replaced the character: the preview describes someone else.
+		void OnReplaced()
+		{
+			++g_replaced;
+			Drop("a load replaced the character", true);
 		}
 
 		bool g_installed = false;
@@ -269,7 +460,13 @@ namespace Atelier::Preset::Save
 			return;
 		}
 		Panel::Bridge::On("preset-save", &OnPresetSave);
+		Panel::Bridge::On("preset-save-cancel", &OnPresetSaveCancel);
+		Edit::Session::OnMenuClosed(&OnMenuClosed);
+		Edit::Session::OnReplaced(&OnReplaced);
 		g_installed = true;
-		spdlog::info("[preset-save] installed - delegates to {}.{}", kClass, kFunction);
+		// A preview file left by a game that ended mid-preview.
+		RemovePreviewFile();
+		spdlog::info("[preset-save] installed - delegates to {}.{}, overwrite preview file \"{}\"", kClass, kFunction,
+			Library::kPreviewName);
 	}
 }

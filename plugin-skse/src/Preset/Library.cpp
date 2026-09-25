@@ -5,6 +5,7 @@
 
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
+#include "Preset/FileName.h"
 #include "Preset/Jslot.h"
 
 #include <atomic>
@@ -62,6 +63,9 @@ namespace Atelier::Preset::Library
 				Entry e;
 				e.path = it->path();
 				e.name = Utf8(it->path().stem());
+				if (FileName::Same(e.name, kPreviewName)) {
+					continue;
+				}
 				e.size = it->file_size(fec);
 				const auto written = it->last_write_time(fec);
 				if (!fec) {

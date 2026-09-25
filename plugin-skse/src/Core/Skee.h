@@ -23,12 +23,13 @@
 //
 // WHAT THIS COSTS. Skee::Actor, Skee::TESObjectREFR and the other
 // forward-declared names are incomplete types of this namespace, NOT aliases
-// of RE::Actor and friends. Nothing in the Atelier passes an actor to SKEE
-// yet, so nothing converts between them yet. When something does, the
-// conversion is the interesting part and gets decided then, with the
-// multi-runtime layout rule of the shared C++ conventions in hand ("never
-// reach a base class of Actor through the C++ hierarchy") - a blind
-// reinterpret_cast written here in advance would hide exactly that decision.
+// of RE::Actor and friends. The conversion was decided where the first actor
+// crosses over, SkeeLink::ClearSkinOverrides, with the multi-runtime layout
+// rule of the shared C++ conventions in hand ("never reach a base class of
+// Actor through the C++ hierarchy"): the actor goes over as the address of
+// the engine object, reinterpret_cast from the RE::Actor pointer the engine
+// handed out, and never through a static_cast to one of its bases. Anything
+// else that passes an actor to SKEE converts the same way, and says so.
 
 #pragma once
 
