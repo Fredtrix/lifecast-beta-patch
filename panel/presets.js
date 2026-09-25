@@ -128,6 +128,7 @@
   preview.appendChild(previewCancel);
   preview.hidden = true;
   let previewName = null;  // the name the shown preview is for
+  let reveal = null;       // a box just shown, brought into view by the next render
 
   const list = AtelierControls.el("ul", "preset-list");
 
@@ -227,6 +228,25 @@
       ? "RaceMenu did not load from here. Its own Presets page loads the same files."
       : "RaceMenu did not save from here. Its own Presets page saves the same files.";
     fallback.hidden = false;
+    reveal = fallback;
+  }
+
+  // A box the player has to read or answer is on screen when it appears,
+  // wherever the panel is scrolled: the boxes sit in this section, which
+  // scrolls with the panel body. The body scrolls just enough to show the
+  // whole box, or its top when it is taller than the body.
+  function bringIntoView(box) {
+    const body = box.closest(".panel-body");
+    if (!body || box.hidden) {
+      return;
+    }
+    const b = body.getBoundingClientRect();
+    const r = box.getBoundingClientRect();
+    if (r.top < b.top) {
+      body.scrollTop += r.top - b.top;
+    } else if (r.bottom > b.bottom) {
+      body.scrollTop += Math.min(r.bottom - b.bottom, r.top - b.top);
+    }
   }
 
   function render() {
@@ -271,6 +291,11 @@
 
     const pick = selected === null ? undefined : items.find((it) => same(it.name, selected));
     load.disabled = loading || !pick || pick.bad !== null;
+
+    if (reveal !== null) {
+      bringIntoView(reveal);
+      reveal = null;
+    }
   }
 
   field.addEventListener("input", () => {
@@ -361,6 +386,7 @@
     previewScope.textContent = "Compared: " + Object.keys(ENTRY_WORDS).map((k) => ENTRY_WORDS[k][1]).join(", ") +
       ". A value that only changed is an edit, and is not listed.";
     preview.hidden = false;
+    reveal = preview;
     notice = "not saved yet - see what it would change";
     render();
   });
@@ -397,6 +423,19 @@
     render();
   });
 
+  // The menu closed: what this section showed during that menu session ends
+  // with it - the DLL has already let go of what those boxes stood for. F4
+  // does not send this; the boxes stay for the player who comes back.
+  AtelierBridge.on("menu-closed", () => {
+    guard.hidden = true;
+    fallback.hidden = true;
+    hidePreview(false);
+    confirmUntil = 0;
+    notice = "";
+    reveal = null;
+    render();
+  });
+
   AtelierBridge.on("preset-saved", (data) => {
     hidePreview(false);
     if (data && data.ok) {
@@ -410,6 +449,7 @@
         ? "Saving over it would lose what was not loaded here: " + lossText(data.loss) + "."
         : "Saving over it is not safe: " + (data.why || "unknown reason") + ".";
       guard.hidden = false;
+      reveal = guard;
     } else {
       notice = "not saved: " + (data && data.why ? data.why : "unknown reason");
       if (data && data.fallback) {

@@ -157,6 +157,12 @@ namespace Atelier::Panel::Switcher
 		{
 			spdlog::info("[switch] RaceSex Menu closed");
 
+			// What the page shows for a moment - a refusal, a save preview, a
+			// way to RaceMenu - belongs to the menu session it was shown in,
+			// and the page is told that session ended. The hidden panel is not
+			// that signal: F4 hides it too, and the player comes back to it.
+			Bridge::Send("menu-closed");
+
 			// The film goes away with the menu. The panel is hidden, not
 			// released: re-creating it would make a new browser instance.
 			Panel::DisarmFocusChord();
