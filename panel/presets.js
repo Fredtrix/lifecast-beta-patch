@@ -249,6 +249,62 @@
     }
   }
 
+  // Where bringIntoView leaves a box: all of it inside the body, or its top
+  // at the body's top when it is taller. One pixel of slack for fractions.
+  function inView(box) {
+    const body = box.closest(".panel-body");
+    if (!body || box.hidden) {
+      return false;
+    }
+    const b = body.getBoundingClientRect();
+    const r = box.getBoundingClientRect();
+    return r.top >= b.top - 1 && (r.bottom <= b.bottom + 1 || r.top <= b.top + 1);
+  }
+
+  // A box brought into view stays in view while it is shown. When something
+  // above it changes height - the status line wrapping to a second line, for
+  // one - the box moves under a panel body that did not scroll, and its
+  // buttons can end below the edge. So every height that can move it is
+  // watched: this section's, and those of the sections above it. A section
+  // mounted later is appended after this one and cannot move it. The box is
+  // followed only while it sits where bringIntoView put it: a player who
+  // scrolls it away is left where they scrolled.
+  let kept = null;
+  let keptInView = false;
+  const keeper = typeof ResizeObserver === "function"
+    ? new ResizeObserver(() => {
+      if (kept === null || kept.hidden) {
+        kept = null;
+        return;
+      }
+      if (keptInView && !inView(kept)) {
+        bringIntoView(kept);
+      }
+      keptInView = inView(kept);
+    })
+    : null;
+  let watching = false;
+
+  function keep(box) {
+    kept = box;
+    keptInView = inView(box);
+    if (keeper === null || watching) {
+      return;
+    }
+    watching = true;
+    for (let s = section; s !== null; s = s.previousElementSibling) {
+      keeper.observe(s);
+    }
+    const body = section.closest(".panel-body");
+    if (body) {
+      body.addEventListener("scroll", () => {
+        if (kept !== null) {
+          keptInView = inView(kept);
+        }
+      });
+    }
+  }
+
   function render() {
     const query = field.value.trim().toLowerCase();
     const shown = items.filter((it) => query === "" || it.name.toLowerCase().includes(query));
@@ -294,6 +350,7 @@
 
     if (reveal !== null) {
       bringIntoView(reveal);
+      keep(reveal);
       reveal = null;
     }
   }
