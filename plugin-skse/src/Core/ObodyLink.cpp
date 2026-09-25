@@ -9,6 +9,8 @@ namespace Atelier::Core::ObodyLink
 {
 	namespace
 	{
+		// Measures, never waits: it only feeds the "N ms after the request"
+		// of the log lines. Readiness is the OBodyIsReady event, no timer.
 		using Clock = std::chrono::steady_clock;
 
 		namespace API = OBody::API;

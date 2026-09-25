@@ -66,11 +66,16 @@ namespace Atelier::Edit::Body
 				Panel::Bridge::Send("body", { { "ready", false } });
 				return;
 			}
-			const bool female = IsFemale(player);
-			auto       names = Names(obody, female);
+			// Which list: OBody's own IsFemale, not the actor base. OBody is
+			// the one that knows bodies - the Atelier delegates body work to
+			// whoever owns it - and its header sets the bit whether or not a
+			// preset is assigned. The actor base sex is logged beside it: a
+			// disagreement between the two is a finding.
 			const auto current = Current(obody, player);
-			spdlog::info("[body] {}: sending {} {} presets, current \"{}\" (actor base female {}, OBody IsFemale {})",
-				a_why, names.size(), female ? "female" : "male", current.name, female, current.obodyFemale);
+			const bool female = current.obodyFemale;
+			auto       names = Names(obody, female);
+			spdlog::info("[body] {}: sending {} {} presets, current \"{}\" (OBody IsFemale {}, actor base female {})",
+				a_why, names.size(), female ? "female" : "male", current.name, female, IsFemale(player));
 			Panel::Bridge::Send("body", { { "ready", true }, { "female", female }, { "presets", std::move(names) },
 											{ "current", current.name } });
 		}
