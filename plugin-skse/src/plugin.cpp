@@ -3,7 +3,8 @@
 //
 // It puts its panel on screen every time the RaceSex Menu opens, swaps it with
 // RaceMenu's own film on F4, owns the message bridge to the page (Panel/), and
-// edits the face morphs live from the panel (Edit/). At startup it also answers
+// edits the face morphs live from the panel (Edit/) - the body too, through
+// OBody, when OBody answers. At startup it also answers
 // one question per log line: does Meridian UI answer, at which version, and
 // which SKEE interfaces are reachable from outside RaceMenu.
 //
@@ -14,8 +15,10 @@
 
 #include "Core/Log.h"
 #include "Core/MeridianLink.h"
+#include "Core/ObodyLink.h"
 #include "Core/SkeeLink.h"
 #include "Edit/Appearance.h"
+#include "Edit/Body.h"
 #include "Edit/BodyScales.h"
 #include "Edit/FaceSliders.h"
 #include "Edit/Session.h"
@@ -61,15 +64,17 @@ namespace
 #endif
 
 		switch (a_msg->type) {
-		// NOTE, left behind by the instrumentation that measured it:
-		// the OBody plugin interface is requested at kPostPostLoad, which is
-		// the moment OBody's own header documents. Asking there is what makes
-		// a negative mean "nobody answered" rather than "we asked early", and
-		// the answer arrives through the written-through pointer, not through
-		// the Dispatch return value. The capability call is NOT safe until the
-		// OBodyIsReady event has arrived - measured at 3min50s after the
-		// pointer in one boot and 63 s in another, so the wait is an event and
-		// never a timer.
+		case SKSE::MessagingInterface::kPostPostLoad:
+			// The OBody plugin interface is requested here, the moment OBody's
+			// own header documents. Asking there is what makes a negative mean
+			// "nobody answered" rather than "we asked early", and the answer
+			// arrives through the written-through pointer, not through the
+			// Dispatch return value. The capability calls are NOT safe until
+			// the OBodyIsReady event has arrived - measured at 3min50s after
+			// the pointer in one boot and 63 s in another, so the wait is an
+			// event and never a timer. See Core/ObodyLink.h.
+			Atelier::Core::ObodyLink::Request();
+			break;
 
 		case SKSE::MessagingInterface::kInputLoaded:
 			// The Meridian author guide is explicit that this is where an
@@ -93,6 +98,10 @@ namespace
 			// not belong here.
 			Atelier::Core::SkeeLink::ReportInterfaces("kDataLoaded");
 
+			// OBody's files, for the log only: they separate "not installed"
+			// from "installed and did not answer", and decide nothing.
+			Atelier::Core::ObodyLink::ReportFiles();
+
 			// The menu and input sinks need the UI and the input manager,
 			// which exist from here on. The browser itself is not created
 			// now: it is born the first time the RaceSex Menu opens.
@@ -106,6 +115,9 @@ namespace
 			Atelier::Edit::Appearance::Install();
 			Atelier::Edit::BodyScales::Install();
 			Atelier::Edit::Tints::Install();
+
+			// The body section, offered only while OBody answers.
+			Atelier::Edit::Body::Install();
 
 			// The presets on disk, listed for the panel; saving and loading
 			// one, which RaceMenu does at the panel's request; and the guard

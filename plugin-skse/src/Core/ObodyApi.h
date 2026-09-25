@@ -26,9 +26,12 @@
 // become names at global scope for every translation unit that includes this
 // file. CommonLibSSE-NG keeps its own types in RE::, so nothing it declares
 // collides, and Skee.h keeps its forward declarations inside namespace Skee.
-// NOTHING includes this header today. The first consumer is the body section
-// of the panel. When a second one appears, that is the moment to reconsider
-// the global-scope cost above - not before.
+// Two .cpp files include it, and only .cpp files may: Core/ObodyLink.cpp,
+// which asks OBody for the interface, and Edit/Body.cpp, the body section of
+// the panel. Reconsidered when the second one arrived: the aliases reach
+// those two translation units and nothing else, because no header includes
+// this one (Core/ObodyLink.h forward-declares the one type it names). Keep it
+// that way - a header including this file would carry the cost everywhere.
 //
 // WHAT THE PROJECT GETS IN EXCHANGE, and it is the reason the hand-written
 // mirror of the interface had to go: here OBody::API::Actor is RE::Actor

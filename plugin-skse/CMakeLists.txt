@@ -48,10 +48,12 @@ add_commonlibsse_plugin(
         src/plugin.cpp
         src/Core/Log.cpp
         src/Core/MeridianLink.cpp
+        src/Core/ObodyLink.cpp
         src/Core/RaceMenuSync.cpp
         src/Core/TintRefresh.cpp
         src/Core/SkeeLink.cpp
         src/Edit/Appearance.cpp
+        src/Edit/Body.cpp
         src/Edit/BodyScales.cpp
         src/Edit/FaceSliders.cpp
         src/Edit/Session.cpp
