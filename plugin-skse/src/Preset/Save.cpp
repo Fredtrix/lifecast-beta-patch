@@ -3,6 +3,7 @@
 
 #include "Preset/Save.h"
 
+#include "Edit/Body.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 #include "Preset/Content.h"
@@ -233,8 +234,11 @@ namespace Atelier::Preset::Save
 					false, 0, a_ms);
 				return;
 			}
+			// What the panel wrote itself (a body chosen here) is not a gain.
+			// See Content::Compare and Edit/Body.h.
+			const json written = { { "bodyMorphs", Edit::Body::Written() } };
 			const auto start = Clock::now();
-			const auto diff = Content::Compare(Parse(a_p.existing), Parse(preview));
+			const auto diff = Content::Compare(Parse(a_p.existing), Parse(preview), written);
 			const auto cmpMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
 			spdlog::info("[preset-save] preview of {} ({} bytes, written in {} ms) against the file ({} bytes), "
 						 "compared in {} ms: {}",
@@ -495,6 +499,8 @@ namespace Atelier::Preset::Save
 
 		bool g_installed = false;
 	}
+
+	bool Busy() { return g_pending.has_value(); }
 
 	void Install()
 	{

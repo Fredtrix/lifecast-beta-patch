@@ -59,4 +59,8 @@ namespace Atelier::Preset::Load
 
 	// Registers the bridge handler. Call once, after kDataLoaded.
 	void Install();
+
+	// A load is running: RaceMenu was asked to apply a preset and has not
+	// answered yet, nor timed out. Game thread only.
+	bool Busy();
 }

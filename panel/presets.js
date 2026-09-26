@@ -19,9 +19,15 @@
 // lose entries (a skin override left by an earlier load, say), the page shows
 // both, with the same weight, and the file is written only on "Save anyway".
 //
-// ONE text field, on purpose: it searches the list, and its text is also the
-// name the Save button uses. The page keeps a single text field so that the
-// keyboard corrections in keyboard.js have one case to cover, not two.
+// ONE text field in this section: it searches the list, and its text is also
+// the name the Save button uses. The page as a whole no longer has only one -
+// the character's name field (finish.js) is the second - and keyboard.js,
+// which covers every text field on the page, is shared by both: its window
+// for a doubled key press is the page's, not the field's.
+//
+// The sort order is the one preference the panel keeps across games: it is
+// read from the DLL's settings (settings.js) and written back when the player
+// changes it.
 "use strict";
 
 (() => {
@@ -108,12 +114,17 @@
   const previewTitle = AtelierControls.el("span", "slider-name", "");
   const previewGain = AtelierControls.el("span", "delegate-note", "");
   const previewLoss = AtelierControls.el("span", "delegate-note", "");
+  // What the panel wrote itself in this menu session - a body chosen in the
+  // Body section. Listed apart from the gains, never mixed into them: a gain
+  // is what the player did not do here.
+  const previewChosen = AtelierControls.el("span", "delegate-note", "");
   // What the two lists cover, said in the box: a list the player reads as
   // complete is worse than no list.
   const previewScope = AtelierControls.el("span", "delegate-note", "");
   previewText.appendChild(previewTitle);
   previewText.appendChild(previewGain);
   previewText.appendChild(previewLoss);
+  previewText.appendChild(previewChosen);
   previewText.appendChild(previewScope);
   const previewSave = AtelierControls.el("button", "panel-button", "Save anyway");
   previewSave.title = "Writes the preset exactly as compared here";
@@ -194,7 +205,7 @@
   }
 
   function entryLabels(diff, side) {
-    const key = side === "gained" ? "gainedLabels" : "lostLabels";
+    const key = side === "gained" ? "gainedLabels" : side === "chosen" ? "chosenLabels" : "lostLabels";
     return diff
       .filter((d) => Array.isArray(d[key]) && d[key].length)
       .map((d) => d.section + ": " + d[key].join("; "))
@@ -364,11 +375,22 @@
   });
   byName.addEventListener("click", () => {
     sortBy = "name";
+    AtelierSettings.set("presetsSort", sortBy);
     render();
   });
   byTime.addEventListener("click", () => {
     sortBy = "time";
+    AtelierSettings.set("presetsSort", sortBy);
     render();
+  });
+
+  // The saved order arrives from the DLL; until then the list sorts by name.
+  AtelierSettings.onChange(() => {
+    const saved = AtelierSettings.get("presetsSort");
+    if (saved === "name" || saved === "time") {
+      sortBy = saved;
+      render();
+    }
   });
 
   load.addEventListener("click", () => {
@@ -440,6 +462,10 @@
     previewGain.title = entryLabels(diff, "gained");
     previewLoss.textContent = "It would LOSE: " + (loss || "nothing") + ".";
     previewLoss.title = entryLabels(diff, "lost");
+    const chosen = entryText(diff, "chosen");
+    previewChosen.textContent = chosen ? "Chosen in this panel, not counted above: " + chosen + "." : "";
+    previewChosen.title = entryLabels(diff, "chosen");
+    previewChosen.hidden = !chosen;
     previewScope.textContent = "Compared: " + Object.keys(ENTRY_WORDS).map((k) => ENTRY_WORDS[k][1]).join(", ") +
       ". A value that only changed is an edit, and is not listed.";
     preview.hidden = false;

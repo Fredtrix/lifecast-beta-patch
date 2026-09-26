@@ -69,6 +69,8 @@ namespace Atelier::Preset::Content
 		std::size_t              changed{ 0 };
 		std::vector<std::string> gainedLabels;  // the first few, for the page and the log
 		std::vector<std::string> lostLabels;
+		std::size_t              chosen{ 0 };   // gains the panel itself wrote - see Compare
+		std::vector<std::string> chosenLabels;
 	};
 
 	struct Diff
@@ -76,15 +78,29 @@ namespace Atelier::Preset::Content
 		std::vector<SectionDiff> sections;  // only sections with a gain, a loss or a change
 
 		// True when no entry is gained or lost. Changed values alone leave
-		// it true: changing a value is editing, not a leak.
+		// it true: changing a value is editing, not a leak. Chosen entries
+		// leave it true for the same reason: the player made them here.
 		bool NothingGainedOrLost() const;
 
-		// [{ section, gained, lost, changed, gainedLabels, lostLabels }]
+		// [{ section, gained, lost, changed, gainedLabels, lostLabels,
+		//    chosen, chosenLabels }]
 		nlohmann::json ToJson() const;
 	};
 
 	// What a file with a_after would gain and lose against a_before, section
 	// by section. Either may be a non-object (unreadable file); it then
 	// counts as having no entries.
-	Diff Compare(const nlohmann::json& a_before, const nlohmann::json& a_after);
+	//
+	// a_written is what the panel itself wrote in this menu session, in the
+	// same .jslot shape (today only "bodyMorphs", from Edit/Body.h). An entry
+	// a_after has and a_before does not is a GAIN - unless a_written has the
+	// same entry with the same value (same tolerance as every number here),
+	// and then it is CHOSEN: the player picked it in the panel, and the
+	// preview says so instead of calling it a surprise. Provenance of the
+	// WRITE, not an exemption of the section: a gain a_written does not
+	// cover is still a gain, even in the section and the save where the
+	// player chose a body. Only gains are reclassified; a loss is always a
+	// loss. Default: nothing written, every gain is a gain.
+	Diff Compare(const nlohmann::json& a_before, const nlohmann::json& a_after,
+		const nlohmann::json& a_written = nlohmann::json());
 }

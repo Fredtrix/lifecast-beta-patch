@@ -4,7 +4,8 @@
 // It puts its panel on screen every time the RaceSex Menu opens, swaps it with
 // RaceMenu's own film on F4, owns the message bridge to the page (Panel/), and
 // edits the face morphs live from the panel (Edit/) - the body too, through
-// OBody, when OBody answers. At startup it also answers
+// OBody, when OBody answers - and ends the menu with the character's name
+// (Edit/Finish.h). At startup it also answers
 // one question per log line: does Meridian UI answer, at which version, and
 // which SKEE interfaces are reachable from outside RaceMenu.
 //
@@ -16,11 +17,13 @@
 #include "Core/Log.h"
 #include "Core/MeridianLink.h"
 #include "Core/ObodyLink.h"
+#include "Core/Settings.h"
 #include "Core/SkeeLink.h"
 #include "Edit/Appearance.h"
 #include "Edit/Body.h"
 #include "Edit/BodyScales.h"
 #include "Edit/FaceSliders.h"
+#include "Edit/Finish.h"
 #include "Edit/Session.h"
 #include "Edit/Tints.h"
 #include "Panel/Panel.h"
@@ -118,6 +121,12 @@ namespace
 
 			// The body section, offered only while OBody answers.
 			Atelier::Edit::Body::Install();
+
+			// The character's name and the button that ends the menu.
+			Atelier::Edit::Finish::Install();
+
+			// The panel's own preferences, kept across games.
+			Atelier::Core::Settings::Install();
 
 			// The presets on disk, listed for the panel; saving and loading
 			// one, which RaceMenu does at the panel's request; and the guard

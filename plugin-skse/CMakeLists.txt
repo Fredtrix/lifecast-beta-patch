@@ -52,10 +52,12 @@ add_commonlibsse_plugin(
         src/Core/RaceMenuSync.cpp
         src/Core/TintRefresh.cpp
         src/Core/SkeeLink.cpp
+        src/Core/Settings.cpp
         src/Edit/Appearance.cpp
         src/Edit/Body.cpp
         src/Edit/BodyScales.cpp
         src/Edit/FaceSliders.cpp
+        src/Edit/Finish.cpp
         src/Edit/Session.cpp
         src/Edit/Tints.cpp
         src/Panel/Bridge.cpp

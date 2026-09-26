@@ -5,6 +5,7 @@
 
 #include "Core/ObodyApi.h"
 #include "Core/ObodyLink.h"
+#include "Core/SkeeLink.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 #include "Panel/Panel.h"
@@ -85,6 +86,84 @@ namespace Atelier::Edit::Body
 			Push("the page asked");
 		}
 
+		// What the last effective body-set of this menu session left on the
+		// character. See Body.h, "WHAT THE PANEL WROTE".
+		nlohmann::json g_written = nlohmann::json::array();
+
+		void Forget(const char* a_why)
+		{
+			if (!g_written.empty()) {
+				spdlog::info("[body] {}: the {} body morphs kept as the panel's are forgotten", a_why, g_written.size());
+			}
+			g_written = nlohmann::json::array();
+		}
+
+		using MorphKey = std::pair<std::string, std::string>;  // name, key
+
+		std::map<MorphKey, float> ByNameAndKey(const std::vector<Core::SkeeLink::MorphValue>& a_values)
+		{
+			std::map<MorphKey, float> out;
+			for (const auto& v : a_values) {
+				out[{ v.name, v.key }] = v.value;
+			}
+			return out;
+		}
+
+		void Keep(RE::PlayerCharacter* a_player, const std::vector<Core::SkeeLink::MorphValue>& a_before,
+			bool a_readBefore)
+		{
+			std::vector<Core::SkeeLink::MorphValue> afterValues;
+			if (!a_readBefore || !Core::SkeeLink::ReadBodyMorphs(a_player, afterValues)) {
+				Forget("SKEE could not be read around the body-set");
+				return;
+			}
+			const auto before = ByNameAndKey(a_before);
+			const auto after = ByNameAndKey(afterValues);
+
+			std::set<std::string> touched;
+			for (const auto& [id, value] : after) {
+				const auto it = before.find(id);
+				if (it == before.end() || it->second != value) {
+					touched.insert(id.second);
+				}
+			}
+			for (const auto& [id, value] : before) {
+				if (!after.contains(id)) {
+					touched.insert(id.second);
+				}
+			}
+			if (touched.empty()) {
+				spdlog::info("[body] the body-set changed no body morph ({} before, {} after) - {} kept as before",
+					before.size(), after.size(), g_written.size());
+				return;
+			}
+
+			std::map<std::string, nlohmann::json> byName;
+			std::size_t kept = 0;
+			for (const auto& [id, value] : after) {
+				if (!touched.contains(id.second)) {
+					continue;
+				}
+				auto& entry = byName[id.first];
+				if (entry.is_null()) {
+					entry = { { "name", id.first }, { "keys", nlohmann::json::array() } };
+				}
+				entry["keys"].push_back({ { "key", id.second }, { "value", value } });
+				++kept;
+			}
+			g_written = nlohmann::json::array();
+			for (auto& [name, entry] : byName) {
+				g_written.push_back(std::move(entry));
+			}
+			std::string keys;
+			for (const auto& k : touched) {
+				keys += (keys.empty() ? "" : ", ") + k;
+			}
+			spdlog::info("[body] the body-set touched the keys [{}]: {} body morph values kept as the panel's "
+						 "({} before, {} after, all keys)",
+				keys, kept, before.size(), after.size());
+		}
+
 		void OnBodySet(const nlohmann::json& a_data)
 		{
 			if (!Session::MenuOpen()) {
@@ -112,6 +191,8 @@ namespace Atelier::Edit::Body
 			}
 
 			const auto before = Current(obody, player);
+			std::vector<Core::SkeeLink::MorphValue> morphsBefore;
+			const bool readBefore = Core::SkeeLink::ReadBodyMorphs(player, morphsBefore);
 			API::AssignPresetPayload payload{};
 			payload.flags = API::AssignPresetPayload::Flags::ForceImmediateApplicationOfMorphs;
 			payload.presetName = name;
@@ -121,6 +202,9 @@ namespace Atelier::Edit::Body
 			const auto after = Current(obody, player);
 			spdlog::info("[body] body-set \"{}\": OBody {} in {} us; assigned \"{}\" -> \"{}\"", name,
 				found ? "applied it" : "does not know that preset", us, before.name, after.name);
+			if (found) {
+				Keep(player, morphsBefore, readBefore);
+			}
 			Push(found ? "a body was applied" : "the preset was not found");
 		}
 
@@ -131,6 +215,7 @@ namespace Atelier::Edit::Body
 		// says the player carries at that moment, for the log.
 		void OnReplaced()
 		{
+			Forget("a load replaced the character");
 			auto* obody = Core::ObodyLink::Ready();
 			auto* player = RE::PlayerCharacter::GetSingleton();
 			if (!obody || !player) {
@@ -147,8 +232,12 @@ namespace Atelier::Edit::Body
 			}
 		}
 
+		void OnMenuClosed() { Forget("the RaceSex Menu closed"); }
+
 		bool g_installed = false;
 	}
+
+	const nlohmann::json& Written() { return g_written; }
 
 	void Install()
 	{
@@ -157,6 +246,7 @@ namespace Atelier::Edit::Body
 		}
 		Session::OnPanelShown(&OnShown);
 		Session::OnReplaced(&OnReplaced);
+		Session::OnMenuClosed(&OnMenuClosed);
 		Core::ObodyLink::OnReadinessChanged(&OnReadiness);
 		Panel::Bridge::On("body-get", &OnBodyGet);
 		Panel::Bridge::On("body-set", &OnBodySet);

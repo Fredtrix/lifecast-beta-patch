@@ -249,6 +249,8 @@ namespace Atelier::Preset::Load
 		bool g_installed = false;
 	}
 
+	bool Busy() { return g_pending.has_value(); }
+
 	void Install()
 	{
 		if (g_installed) {

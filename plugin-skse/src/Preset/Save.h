@@ -66,4 +66,8 @@ namespace Atelier::Preset::Save
 {
 	// Registers the bridge handler. Call once, after kDataLoaded.
 	void Install();
+
+	// A save is running: RaceMenu was asked to write a file and has not
+	// answered yet, nor timed out. Game thread only.
+	bool Busy();
 }

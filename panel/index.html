@@ -21,6 +21,21 @@
       <p class="placeholder">No sections yet.</p>
     </main>
 
+    <!--
+      The character's name and the button that ends the menu, outside the
+      scrolling body so they are always on screen. finish.js fills them in.
+      A plain text input on purpose: keyboard.js corrects the keyboard only
+      for textarea and input of type text, search or none.
+    -->
+    <section id="finish" class="panel-finish" aria-label="Name and finish">
+      <label class="finish-label" for="finish-name">Name</label>
+      <div class="finish-row">
+        <input id="finish-name" class="preset-field" type="text" spellcheck="false" autocomplete="off">
+        <button id="finish-button" class="panel-button" type="button">Finish</button>
+      </div>
+      <p id="finish-note" class="finish-note" hidden></p>
+    </section>
+
     <footer class="panel-footer">
       <span id="versions" class="versions"></span>
       <!--
@@ -33,6 +48,7 @@
 
   <script src="keyboard.js"></script>
   <script src="bridge.js"></script>
+  <script src="settings.js"></script>
   <script src="panel.js"></script>
   <script src="controls.js"></script>
   <script src="picker.js"></script>
@@ -43,5 +59,6 @@
   <script src="face.js"></script>
   <script src="presets.js"></script>
   <script src="delegate.js"></script>
+  <script src="finish.js"></script>
 </body>
 </html>

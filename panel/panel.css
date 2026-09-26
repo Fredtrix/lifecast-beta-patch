@@ -415,3 +415,40 @@ body {
 .preset-preview .delegate-text {
   flex: 1;
 }
+
+/* The name and the finish button, between the body and the footer. */
+.panel-finish {
+  padding: var(--gap) calc(var(--gap) * 1.5);
+  border-top: 1px solid var(--panel-border);
+}
+
+.finish-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.finish-row {
+  display: flex;
+  gap: 6px;
+}
+
+.finish-row .preset-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.finish-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--warn);
+}
+
+.finish-note.is-bad {
+  color: var(--bad);
+}
+
+.finish-note.is-ok {
+  color: var(--ok);
+}

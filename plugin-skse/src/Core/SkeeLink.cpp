@@ -120,4 +120,47 @@ namespace Atelier::Core::SkeeLink
 		static_cast<Skee::IOverrideInterface*>(iface)->RemoveAllSkinOverridesByReference(refr);
 		return true;
 	}
+
+	bool ReadBodyMorphs(RE::Actor* a_actor, std::vector<MorphValue>& a_out)
+	{
+		a_out.clear();
+		auto* map = GetInterfaceMap();
+		auto* iface = map ? map->QueryInterface("BodyMorph") : nullptr;
+		if (!a_actor || !iface) {
+			spdlog::warn("[skee] body morphs NOT read: actor {}, BodyMorph interface {}",
+				static_cast<const void*>(a_actor), static_cast<const void*>(iface));
+			return false;
+		}
+		// VisitMorphValues is in the table the vendored header describes as
+		// version 5. An older interface may lay its table out differently, so
+		// it is not called.
+		const auto version = iface->GetVersion();
+		if (version < Skee::IBodyMorphInterface::kCurrentPluginVersion) {
+			spdlog::warn("[skee] body morphs NOT read: BodyMorph interface version {}, header describes {}",
+				version, static_cast<std::uint32_t>(Skee::IBodyMorphInterface::kCurrentPluginVersion));
+			return false;
+		}
+
+		class Collector : public Skee::IBodyMorphInterface::MorphValueVisitor
+		{
+		public:
+			explicit Collector(std::vector<MorphValue>& a_values) :
+				_values(a_values)
+			{}
+
+			void Visit(Skee::TESObjectREFR*, const char* a_name, const char* a_key, float a_value) override
+			{
+				_values.push_back({ a_name ? a_name : "", a_key ? a_key : "", a_value });
+			}
+
+		private:
+			std::vector<MorphValue>& _values;
+		};
+
+		// The same first-base cast as ClearSkinOverrides, for the same reason.
+		auto*     refr = reinterpret_cast<Skee::TESObjectREFR*>(a_actor);
+		Collector collector(a_out);
+		static_cast<Skee::IBodyMorphInterface*>(iface)->VisitMorphValues(refr, collector);
+		return true;
+	}
 }

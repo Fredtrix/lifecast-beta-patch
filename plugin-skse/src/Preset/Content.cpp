@@ -253,8 +253,14 @@ namespace Atelier::Preset::Content
 		// first, so a set that only changed order reads as unchanged; what is
 		// left pairs as changed, and the surplus of either side is gained or
 		// lost.
+		//
+		// a_written holds, for this label, the values the panel itself wrote
+		// in this menu session (see Compare in Content.h). A surplus entry of
+		// the after side that has one of them - by value, with the same
+		// tolerance as everything else here - is counted as chosen instead of
+		// gained, and that written value is used up.
 		void Match(const std::string& a_label, std::vector<const json*> a_before, std::vector<const json*> a_after,
-			SectionDiff& a_diff)
+			SectionDiff& a_diff, std::vector<const json*> a_written = {})
 		{
 			for (auto it = a_after.begin(); it != a_after.end();) {
 				const auto hit = std::find_if(a_before.begin(), a_before.end(),
@@ -269,6 +275,14 @@ namespace Atelier::Preset::Content
 			const auto paired = (std::min)(a_before.size(), a_after.size());
 			a_diff.changed += paired;
 			for (std::size_t i = paired; i < a_after.size(); ++i) {
+				const auto mine = std::find_if(a_written.begin(), a_written.end(),
+					[&](const json* w) { return Same(*w, *a_after[i]); });
+				if (mine != a_written.end()) {
+					a_written.erase(mine);
+					++a_diff.chosen;
+					Note(a_diff.chosenLabels, a_label);
+					continue;
+				}
 				++a_diff.gained;
 				Note(a_diff.gainedLabels, a_label);
 			}
@@ -295,30 +309,38 @@ namespace Atelier::Preset::Content
 				{ "lost", s.lost },
 				{ "changed", s.changed },
 				{ "gainedLabels", s.gainedLabels },
+				{ "chosen", s.chosen },
+				{ "chosenLabels", s.chosenLabels },
 				{ "lostLabels", s.lostLabels },
 			});
 		}
 		return out;
 	}
 
-	Diff Compare(const json& a_before, const json& a_after)
+	Diff Compare(const json& a_before, const json& a_after, const json& a_written)
 	{
 		Diff diff;
 		for (const auto& section : kSections) {
 			Entries before;
 			Entries after;
+			Entries written;
 			if (const auto* v = Find(a_before, section)) {
 				Collect(*v, section.identity, before);
 			}
 			if (const auto* v = Find(a_after, section)) {
 				Collect(*v, section.identity, after);
 			}
+			if (const auto* v = Find(a_written, section)) {
+				Collect(*v, section.identity, written);
+			}
 
 			SectionDiff d;
 			d.section = section.name;
 			for (auto& [label, values] : after) {
 				const auto it = before.find(label);
-				Match(label, it == before.end() ? std::vector<const json*>{} : std::move(it->second), values, d);
+				const auto mine = written.find(label);
+				Match(label, it == before.end() ? std::vector<const json*>{} : std::move(it->second), values, d,
+					mine == written.end() ? std::vector<const json*>{} : mine->second);
 				if (it != before.end()) {
 					before.erase(it);
 				}
@@ -326,7 +348,7 @@ namespace Atelier::Preset::Content
 			for (auto& [label, values] : before) {
 				Match(label, std::move(values), {}, d);
 			}
-			if (d.gained || d.lost || d.changed) {
+			if (d.gained || d.lost || d.changed || d.chosen) {
 				diff.sections.push_back(std::move(d));
 			}
 		}

@@ -43,4 +43,21 @@ namespace Atelier::Core::SkeeLink
 	// False, and nothing removed, when the interface is not there or reports
 	// a version older than the vendored header describes.
 	bool ClearSkinOverrides(RE::Actor* a_actor);
+
+	// One body morph value SKEE holds for an actor: the morph name, the key
+	// it was written under (the mod that wrote it - "OBody", for instance)
+	// and the value. The same pair a .jslot keeps under "bodyMorphs".
+	struct MorphValue
+	{
+		std::string name;
+		std::string key;
+		float       value{ 0.0f };
+	};
+
+	// Every body morph value SKEE holds for a_actor, read through SKEE's
+	// BodyMorph interface (VisitMorphValues) - nothing is written.
+	//
+	// False, and a_out left empty, when the interface is not there or reports
+	// a version older than the vendored header describes.
+	bool ReadBodyMorphs(RE::Actor* a_actor, std::vector<MorphValue>& a_out);
 }
