@@ -4,7 +4,7 @@
 "use strict";
 
 (() => {
-  const PAGE_VERSION = "0.8.0";
+  const PAGE_VERSION = "0.8.1";
 
   // How long the page waits for the DLL's answer to "hello" before saying
   // so. Only the status line depends on it; nothing waits on it.

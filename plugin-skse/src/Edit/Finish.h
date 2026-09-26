@@ -6,16 +6,17 @@
 // Finishing is the one step of the mod that cannot be taken back: at the
 // start of a new game, closing the menu is the end of character creation. So
 // the button does ONE thing, the same in every way the menu can be opened -
-// it gives the name and closes the menu - and what changes from one way to
-// another is only what the page says before the player confirms:
+// it gives the name and closes the menu - on a single click, with no
+// confirmation step on the page. What changes from one way to another is only
+// the words the page shows while it happens:
 //
 //   - at the start of a new game, closing is final;
 //   - from the console, closing keeps the game going, and a race changed in
 //     the menu costs what a race change costs.
 //
-// Nothing destructive depends on telling the two apart. The page asks for a
-// confirmation in both cases, and the name is always required; so a wrong
-// guess only changes the words of the warning, never what happens.
+// Nothing destructive depends on telling the two apart, and the name is
+// always required; so a wrong guess only changes the words, never what
+// happens.
 //
 // HOW IT GUESSES, and every sign is logged on its own, because none of them
 // is proof and a round measures how often each one is right:

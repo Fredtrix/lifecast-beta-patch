@@ -1,13 +1,11 @@
 // finish.js
 // Atelier - the character's name, and the button that ends the menu.
 //
-// Finishing cannot be taken back: at the start of a new game it is the end of
-// character creation. So the button asks twice - the first click shows what
-// will happen and turns the button into "Confirm", and only a second click
-// within CONFIRM_MS sends anything. The DLL does the same thing whichever way
-// the menu was opened (it gives the name and closes the menu); what differs
-// is only what this page SAYS first, from the DLL's guess at whether this is
-// a new game. A wrong guess changes the words, never what happens.
+// One click finishes, however the menu was opened: there is no confirmation
+// step on this page. The DLL does the same thing either way (it gives the name
+// and closes the menu); what differs is only the words this page shows while
+// it happens, from the DLL's guess at whether this is a new game. A wrong
+// guess changes the words, never what happens.
 //
 // The name is always required. What the field shows comes from the
 // character, read by the DLL each time the panel comes on screen; a name the
@@ -25,9 +23,6 @@
 "use strict";
 
 (() => {
-  // Same window as the preset overwrite confirmation (presets.js).
-  const CONFIRM_MS = 3000;
-
   const field = document.getElementById("finish-name");
   const button = document.getElementById("finish-button");
   const note = document.getElementById("finish-note");
@@ -43,7 +38,6 @@
   let readable = null;    // null: no "name" yet; false: the DLL could not read it
   let session = null;     // the menu session the field's text belongs to
   let edited = false;     // the player typed in this session
-  let confirmUntil = 0;
   let sent = false;       // a finish was sent and not refused
 
   function say(text, kind) {
@@ -53,21 +47,12 @@
   }
 
   function render() {
-    const confirming = Date.now() < confirmUntil;
-    button.textContent = confirming ? "Confirm" : "Finish";
     button.disabled = sent || readable === false;
     field.disabled = sent || readable === false;
   }
 
-  function confirmText(name) {
-    return newGame
-      ? "Finish creating \"" + name + "\"?"
-      : "Close the editor as \"" + name + "\"?";
-  }
-
   field.addEventListener("input", () => {
     edited = true;
-    confirmUntil = 0;
     if (!sent) {
       say("");
     }
@@ -79,32 +64,17 @@
       return;
     }
     if (readable !== true) {
-      confirmUntil = 0;
       say(UNREADABLE, "bad");
       render();
       return;
     }
     const name = field.value.trim();
     if (name === "") {
-      confirmUntil = 0;
       say("The character needs a name.", "bad");
       render();
       field.focus();
       return;
     }
-    if (Date.now() >= confirmUntil) {
-      confirmUntil = Date.now() + CONFIRM_MS;
-      say(confirmText(name));
-      render();
-      setTimeout(() => {
-        if (!sent && Date.now() >= confirmUntil) {
-          say("");
-          render();
-        }
-      }, CONFIRM_MS + 50);
-      return;
-    }
-    confirmUntil = 0;
     sent = true;
     say(newGame ? "Finishing..." : "Closing...");
     render();
@@ -125,14 +95,12 @@
       session = incoming;
       edited = false;
       sent = false;
-      confirmUntil = 0;
       say("");
     }
     if (!edited && !sent) {
       field.value = readable && typeof data.name === "string" ? data.name : "";
     }
     if (!readable) {
-      confirmUntil = 0;
       say(UNREADABLE, "bad");
     } else if (note.textContent === UNREADABLE) {
       say("");

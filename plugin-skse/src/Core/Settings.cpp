@@ -141,10 +141,15 @@ namespace Atelier::Core::Settings
 				fs::remove(temp, ec);
 				return false;
 			}
-			// The absolute path is logged because under Mod Organizer the
-			// folder is virtual: where the file really lands is a question the
-			// log alone does not answer, and this is the line to start from.
-			spdlog::info("[settings] wrote {} ({})", path.string(), fs::absolute(path, ec).string());
+			// Only the path that was asked for is logged, relative to the game
+			// folder. Under Mod Organizer that folder is virtual and the file
+			// lands where its virtual file system puts it (its overwrite
+			// folder, for a file no mod ships) - a place this code never sees.
+			// Resolving the path here would print the game folder, which is
+			// where the file is NOT; so no absolute path is printed at all.
+			spdlog::info("[settings] wrote {} (relative to the game folder; under a mod manager the file "
+						 "is wherever its virtual file system put it)",
+				path.string());
 			return true;
 		}
 
