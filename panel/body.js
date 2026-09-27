@@ -28,12 +28,12 @@
     section = AtelierControls.section("Body");
     status = AtelierControls.el("div", "preset-status", "--");
     list = AtelierControls.el("ul", "preset-list");
-    section.appendChild(status);
-    section.appendChild(list);
+    section.body.appendChild(status);
+    section.body.appendChild(list);
     if (anchor && anchor.isConnected) {
       anchor.after(section);
     } else {
-      AtelierControls.mount(section);
+      AtelierControls.mount(section, "obody");
     }
   }
 

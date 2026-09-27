@@ -31,7 +31,7 @@
     go.addEventListener("click", () => AtelierBridge.send("show-racemenu", { for: key }));
     row.appendChild(text);
     row.appendChild(go);
-    section.appendChild(row);
+    section.body.appendChild(row);
   }
-  AtelierControls.mount(section);
+  AtelierControls.mount(section, "delegate");
 })();

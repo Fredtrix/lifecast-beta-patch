@@ -23,6 +23,20 @@
 "use strict";
 
 (() => {
+  // The first section of the panel, and the one that does NOT start closed:
+  // its content is the way out of the menu, and a way out behind a collapsed
+  // header is a way out the player has to find first.
+  const host = document.getElementById("finish");
+  if (host) {
+    const s = AtelierControls.section("Character", { open: true });
+    while (host.firstChild) {
+      s.body.appendChild(host.firstChild);
+    }
+    host.remove();
+    AtelierControls.mount(s, "character");
+    AtelierControls.setOrder(["character"]);
+  }
+
   const field = document.getElementById("finish-name");
   const button = document.getElementById("finish-button");
   const note = document.getElementById("finish-note");

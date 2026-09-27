@@ -11,8 +11,8 @@
 (() => {
   const section = AtelierControls.section("Body Scales");
   const body = AtelierControls.el("div");
-  section.appendChild(body);
-  AtelierControls.mount(section);
+  section.body.appendChild(body);
+  AtelierControls.mount(section, "scales");
 
   let rows = new Map(); // key -> row
   let keys = "";

@@ -143,14 +143,14 @@
 
   const list = AtelierControls.el("ul", "preset-list");
 
-  section.appendChild(field);
-  section.appendChild(bar);
-  section.appendChild(status);
-  section.appendChild(fallback);
-  section.appendChild(guard);
-  section.appendChild(preview);
-  section.appendChild(list);
-  AtelierControls.mount(section);
+  section.body.appendChild(field);
+  section.body.appendChild(bar);
+  section.body.appendChild(status);
+  section.body.appendChild(fallback);
+  section.body.appendChild(guard);
+  section.body.appendChild(preview);
+  section.body.appendChild(list);
+  AtelierControls.mount(section, "presets");
 
   function same(a, b) {
     return a.toLowerCase() === b.toLowerCase();

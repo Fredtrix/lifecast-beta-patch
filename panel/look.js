@@ -132,9 +132,9 @@
   for (const s of SECTIONS) {
     const section = AtelierControls.section(s.title);
     for (const [key, label] of s.controls) {
-      section.appendChild(buildRow(key, label));
+      section.body.appendChild(buildRow(key, label));
     }
-    AtelierControls.mount(section);
+    AtelierControls.mount(section, "look:" + s.title);
   }
 
   AtelierBridge.on("look", (data) => {

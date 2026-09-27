@@ -10,6 +10,14 @@
   // so. Only the status line depends on it; nothing waits on it.
   const HELLO_TIMEOUT_MS = 3000;
 
+  // How big the panel is drawn. The bounds are a guard, not a taste: below
+  // kMin the step buttons stop being hittable, and above kMax the panel eats
+  // the character it exists to show. Where inside the range the player lands
+  // is theirs, and nothing here picks a default other than "as authored".
+  const SCALE_MIN = 0.8;
+  const SCALE_MAX = 1.6;
+  const SCALE_STEP = 0.1;
+
   const statusEl = document.getElementById("bridge-status");
   const versionsEl = document.getElementById("versions");
   const toRaceMenuEl = document.getElementById("to-racemenu");
@@ -48,6 +56,29 @@
   // key that means "leave" here would fight any text field the page grows.
   // F4 is the key, and it works in both directions.
   toRaceMenuEl.addEventListener("click", toRaceMenu);
+
+  // ----- the panel's size ---------------------------------------------------
+  const scaleValueEl = document.getElementById("scale-value");
+  let scale = 1;
+
+  function showScale() {
+    document.documentElement.style.setProperty("--panel-scale", String(scale));
+    scaleValueEl.textContent = Math.round(scale * 100) + "%";
+    document.getElementById("scale-down").disabled = scale <= SCALE_MIN + 0.001;
+    document.getElementById("scale-up").disabled = scale >= SCALE_MAX - 0.001;
+  }
+
+  function stepScale(a_dir) {
+    // Rounded to the step so repeated presses do not drift, the same way a
+    // slider row steps.
+    const next = Math.round((scale + a_dir * SCALE_STEP) / SCALE_STEP) * SCALE_STEP;
+    scale = Math.min(SCALE_MAX, Math.max(SCALE_MIN, next));
+    showScale();
+  }
+
+  document.getElementById("scale-down").addEventListener("click", () => stepScale(-1));
+  document.getElementById("scale-up").addEventListener("click", () => stepScale(1));
+  showScale();
 
   AtelierBridge.whenAttached((ok) => {
     if (!ok) {

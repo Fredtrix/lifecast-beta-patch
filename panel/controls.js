@@ -25,20 +25,77 @@ const AtelierControls = (() => {
     return e;
   }
 
-  function section(title) {
+  // A section is a header that collapses it and a body that holds the rows.
+  // The caller appends into section.body, never into the section itself:
+  // hidden, remove() and closest() stay meaningful on the whole section.
+  //
+  // Collapsed is the default (D064). a_opts.open opts one out, for a section
+  // whose content is the panel's primary action rather than a list to browse.
+  function section(title, a_opts) {
+    const opts = a_opts || {};
     const s = el("section", "section");
-    s.appendChild(el("h2", "section-title", title));
+    const head = el("button", "section-head");
+    head.type = "button";
+    head.tabIndex = -1;
+    head.appendChild(el("span", "section-caret"));
+    head.appendChild(el("h2", "section-title", title));
+    const body = el("div", "section-body");
+    s.appendChild(head);
+    s.appendChild(body);
+    s.body = body;
+    s.dataset.open = opts.open ? "1" : "0";
+    head.setAttribute("aria-expanded", opts.open ? "true" : "false");
+    head.addEventListener("click", () => {
+      const open = s.dataset.open !== "1";
+      s.dataset.open = open ? "1" : "0";
+      head.setAttribute("aria-expanded", open ? "true" : "false");
+    });
     return s;
   }
 
+  // The order the sections appear in. Until something sets it, it is the order
+  // they mount in - which is the order of the <script> tags, and that is the
+  // accident this exists to end. A key the order does not name falls in after
+  // every key it does name, by MOUNTING order.
+  //
+  // The tie-break is the mounting index and not the current position on
+  // purpose: sorting by where things sit now makes an unnamed section drift a
+  // little further every time the order is set again, so the same list applied
+  // twice would not give the same page.
+  let order = [];
+  let mounted = 0;
+
+  function rank(a_el) {
+    const at = order.indexOf(a_el.dataset.key);
+    return at < 0 ? order.length : at;
+  }
+
+  function arrange() {
+    const host = document.getElementById("sections");
+    Array.prototype.slice.call(host.children)
+      .sort((a, b) => rank(a) - rank(b) || Number(a.dataset.mountedAt) - Number(b.dataset.mountedAt))
+      .forEach((el) => host.appendChild(el));
+  }
+
+  // Replaces the order and rearranges what is already mounted. The list comes
+  // from outside this file on purpose: no section order is written here.
+  function setOrder(a_keys) {
+    order = Array.isArray(a_keys) ? a_keys.slice() : [];
+    arrange();
+  }
+
   // Removes the "No sections yet." line the first time a section is added.
-  function mount(a_section) {
+  function mount(a_section, a_key) {
     const host = document.getElementById("sections");
     const placeholder = host.querySelector(".placeholder");
     if (placeholder) {
       placeholder.remove();
     }
+    a_section.dataset.key = a_key === undefined ? "" : a_key;
+    a_section.dataset.mountedAt = String(mounted);
+    mounted += 1;
     host.appendChild(a_section);
+    arrange();
   }
 
   // a_opts: { label, min, max, step, button, format(v), send(v, final) }
@@ -148,5 +205,5 @@ const AtelierControls = (() => {
     };
   }
 
-  return { el: el, section: section, mount: mount, row: row };
+  return { el: el, section: section, mount: mount, setOrder: setOrder, row: row };
 })();

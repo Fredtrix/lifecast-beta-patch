@@ -19,24 +19,36 @@
 
     <main id="sections" class="panel-body">
       <p class="placeholder">No sections yet.</p>
+
+      <!--
+        The character's name and the button that ends the menu. finish.js
+        wraps this into the panel's FIRST section: they are the character's
+        identity, not a footer. A plain text input on purpose: keyboard.js
+        corrects the keyboard only for textarea and input of type text,
+        search or none.
+      -->
+      <div id="finish">
+        <label class="finish-label" for="finish-name">Name</label>
+        <div class="finish-row">
+          <input id="finish-name" class="preset-field" type="text" spellcheck="false" autocomplete="off">
+          <button id="finish-button" class="panel-button" type="button">Finish</button>
+        </div>
+        <p id="finish-note" class="finish-note" hidden></p>
+      </div>
     </main>
 
-    <!--
-      The character's name and the button that ends the menu, outside the
-      scrolling body so they are always on screen. finish.js fills them in.
-      A plain text input on purpose: keyboard.js corrects the keyboard only
-      for textarea and input of type text, search or none.
-    -->
-    <section id="finish" class="panel-finish" aria-label="Name and finish">
-      <label class="finish-label" for="finish-name">Name</label>
-      <div class="finish-row">
-        <input id="finish-name" class="preset-field" type="text" spellcheck="false" autocomplete="off">
-        <button id="finish-button" class="panel-button" type="button">Finish</button>
-      </div>
-      <p id="finish-note" class="finish-note" hidden></p>
-    </section>
-
     <footer class="panel-footer">
+      <!--
+        How big the panel is drawn, set by the player. It sits here, with the
+        panel's own controls, because it is a property of the panel and not of
+        the character - and it stays on screen, which a readability control
+        has to.
+      -->
+      <div class="scale-group" aria-label="Panel size">
+        <button id="scale-down" class="step-button" type="button" title="Smaller">-</button>
+        <span id="scale-value" class="versions">100%</span>
+        <button id="scale-up" class="step-button" type="button" title="Bigger">+</button>
+      </div>
       <span id="versions" class="versions"></span>
       <!--
         One of the two ways back to RaceMenu. The other is F4, which the DLL

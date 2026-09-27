@@ -12,8 +12,8 @@
 (() => {
   const section = AtelierControls.section("Skin & Tints");
   const body = AtelierControls.el("div");
-  section.appendChild(body);
-  AtelierControls.mount(section);
+  section.body.appendChild(body);
+  AtelierControls.mount(section, "tints");
 
   let layers = new Map(); // key -> { pick, r, g, b, alpha, chip, picker, grid, swatches, none }
   let keys = "";

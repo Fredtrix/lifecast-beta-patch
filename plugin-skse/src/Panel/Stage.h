@@ -63,7 +63,7 @@
 
 namespace Atelier::Panel::Stage
 {
-	inline constexpr double kMinDistance = 24.0;    // camera to player, ground plane
+	inline constexpr double kMinDistance = 33.56;   // camera to player, ground plane
 	inline constexpr double kMaxDistance = 320.0;
 	inline constexpr double kLiftUp = 80.0;         // above the opening height
 	inline constexpr double kFloorMargin = 12.0;    // above the player's origin

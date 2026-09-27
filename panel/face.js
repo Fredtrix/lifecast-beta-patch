@@ -37,9 +37,9 @@
         send: (v, final) => AtelierBridge.send("face-set", { i: index, v: v, final: final }),
       });
       rows.set(index, row);
-      section.appendChild(row.el);
+      section.body.appendChild(row.el);
     }
-    AtelierControls.mount(section);
+    AtelierControls.mount(section, "face:" + group.title);
   }
 
   AtelierBridge.on("face", (data) => {
