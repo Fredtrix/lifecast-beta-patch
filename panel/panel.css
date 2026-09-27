@@ -452,3 +452,91 @@ body {
 .finish-note.is-ok {
   color: var(--ok);
 }
+
+/* ----- the character view -------------------------------------------------
+   A frame over the transparent part of the page. It draws a border and the
+   controls; the character inside is the game's, placed by the camera. */
+
+.stage {
+  position: absolute;
+  top: calc(var(--gap) * 2);
+  bottom: calc(var(--gap) * 2);
+  left: calc(var(--panel-width) + var(--gap) * 2);
+  right: calc(var(--gap) * 2);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.stage.is-dragging {
+  cursor: grabbing;
+}
+
+.stage:not(.is-ready) {
+  cursor: default;
+}
+
+.stage-note {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: var(--gap);
+  max-width: 60%;
+  text-align: center;
+  color: var(--warn);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+.stage-readout {
+  position: absolute;
+  top: var(--gap);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--panel-bg);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.stage-bar {
+  position: absolute;
+  bottom: var(--gap);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 6px 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  cursor: default;
+}
+
+.stage-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stage-group-title {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-right: 2px;
+}
+
+.stage-button {
+  min-width: 30px;
+  padding-left: 6px;
+  padding-right: 6px;
+}

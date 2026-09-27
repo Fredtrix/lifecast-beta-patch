@@ -1,0 +1,225 @@
+// stage.js
+// Atelier - the character view: a frame to the right of the panel, and the
+// controls that move the character inside it.
+//
+// The page draws nothing of the character. It is transparent here, and the
+// game draws the RaceSex Menu's character behind it; the DLL moves the camera
+// and turns the body so that the character sits in the frame. This file only
+// draws the border and the controls, and sends the moves.
+//
+// Moves are DELTAS; the DLL keeps where the view is, clamps it to its limits
+// and answers with the state ("stage"), which is what the readout and the
+// disabled buttons show. A drag sends at most one message per SEND_MS, with
+// everything moved since the last one.
+//
+// In the frame, with the mouse:
+//   drag                  turn the character
+//   drag, right button    camera up and down
+//   drag, Ctrl held       tilt the camera (when the DLL can)
+//   wheel                 closer and farther
+// The same moves are on the buttons under the frame, so none of them depends
+// on knowing a mouse gesture.
+//
+// When the DLL says the view is not ready, the frame shows why and the
+// controls go away; nothing else in the panel changes.
+"use strict";
+
+(() => {
+  const SEND_MS = 50;
+
+  // Drag and wheel scales: degrees or units per pixel, units per wheel step.
+  const TURN_PER_PX = 0.4;
+  const LIFT_PER_PX = 0.3;
+  const TILT_PER_PX = 0.1;
+  const DISTANCE_PER_WHEEL = 0.1;  // wheel deltaY is about 100 per notch
+
+  // Button steps.
+  const TURN_STEP = 15;
+  const DISTANCE_STEP = 10;
+  const LIFT_STEP = 10;
+  const TILT_STEP = 5;
+
+  const stage = document.getElementById("stage");
+  const note = document.getElementById("stage-note");
+  const bar = document.getElementById("stage-bar");
+  const readout = document.getElementById("stage-readout");
+
+  let state = null;
+  const pending = { turn: 0, distance: 0, lift: 0, tilt: 0 };
+  let timer = null;
+
+  function flush() {
+    timer = null;
+    const moved = pending.turn || pending.distance || pending.lift || pending.tilt;
+    if (!moved) {
+      return;
+    }
+    const data = {};
+    for (const key of ["turn", "distance", "lift", "tilt"]) {
+      if (pending[key]) {
+        data[key] = pending[key];
+        pending[key] = 0;
+      }
+    }
+    AtelierBridge.send("stage-move", data);
+  }
+
+  function move(key, amount) {
+    if (!state || !state.ready || !amount) {
+      return;
+    }
+    if (key === "tilt" && !state.tilt) {
+      return;
+    }
+    pending[key] += amount;
+    if (timer === null) {
+      timer = setTimeout(flush, SEND_MS);
+    }
+  }
+
+  // ----- buttons -----------------------------------------------------------
+
+  const buttons = [];
+
+  function button(label, title, onClick, isAtLimit) {
+    const b = AtelierControls.el("button", "panel-button stage-button", label);
+    b.type = "button";
+    b.title = title;
+    b.addEventListener("click", onClick);
+    buttons.push({ el: b, isAtLimit: isAtLimit });
+    return b;
+  }
+
+  function group(title, items) {
+    const g = AtelierControls.el("div", "stage-group");
+    g.appendChild(AtelierControls.el("span", "stage-group-title", title));
+    items.forEach((i) => g.appendChild(i));
+    bar.appendChild(g);
+    return g;
+  }
+
+  const near = 0.01;
+  group("Turn", [
+    button("\u25C0", "Turn left", () => move("turn", -TURN_STEP), null),
+    button("\u25B6", "Turn right", () => move("turn", TURN_STEP), null),
+  ]);
+  group("Zoom", [
+    button("+", "Closer", () => move("distance", -DISTANCE_STEP),
+      (s) => s.distance <= s.limits.minDistance + near),
+    button("\u2212", "Farther", () => move("distance", DISTANCE_STEP),
+      (s) => s.distance >= s.limits.maxDistance - near),
+  ]);
+  group("Height", [
+    button("\u25B2", "Camera up", () => move("lift", LIFT_STEP),
+      (s) => s.lift >= s.limits.liftMax - near),
+    button("\u25BC", "Camera down", () => move("lift", -LIFT_STEP),
+      (s) => s.lift <= s.limits.liftMin + near),
+  ]);
+  const tiltGroup = group("Tilt", [
+    button("\u25B2", "Tilt one way", () => move("tilt", TILT_STEP),
+      (s) => s.tiltDeg >= s.limits.tiltMax - near),
+    button("\u25BC", "Tilt the other way", () => move("tilt", -TILT_STEP),
+      (s) => s.tiltDeg <= -s.limits.tiltMax + near),
+  ]);
+  const reframe = AtelierControls.el("button", "panel-button stage-reframe", "Reframe");
+  reframe.type = "button";
+  reframe.title = "Back to the view the menu opened with";
+  reframe.addEventListener("click", () => {
+    pending.turn = pending.distance = pending.lift = pending.tilt = 0;
+    AtelierBridge.send("stage-reset");
+  });
+  bar.appendChild(reframe);
+
+  // ----- mouse in the frame --------------------------------------------------
+
+  let drag = null;
+
+  stage.addEventListener("pointerdown", (e) => {
+    if (bar.contains(e.target) || !state || !state.ready) {
+      return;
+    }
+    const mode = e.button === 2 ? "lift" : (e.ctrlKey ? "tilt" : (e.button === 0 ? "turn" : null));
+    if (!mode) {
+      return;
+    }
+    drag = { mode: mode, x: e.clientX, y: e.clientY, id: e.pointerId };
+    stage.setPointerCapture(e.pointerId);
+    stage.classList.add("is-dragging");
+    e.preventDefault();
+  });
+
+  stage.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) {
+      return;
+    }
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    if (drag.mode === "turn") {
+      move("turn", dx * TURN_PER_PX);
+    } else if (drag.mode === "lift") {
+      move("lift", -dy * LIFT_PER_PX);  // drag up, camera up
+    } else {
+      move("tilt", -dy * TILT_PER_PX);
+    }
+  });
+
+  function endDrag(e) {
+    if (drag && e.pointerId === drag.id) {
+      drag = null;
+      stage.classList.remove("is-dragging");
+    }
+  }
+  stage.addEventListener("pointerup", endDrag);
+  stage.addEventListener("pointercancel", endDrag);
+  stage.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  stage.addEventListener("wheel", (e) => {
+    if (bar.contains(e.target)) {
+      return;
+    }
+    move("distance", e.deltaY * DISTANCE_PER_WHEEL);
+    e.preventDefault();
+  }, { passive: false });
+
+  // ----- what the DLL says ----------------------------------------------------
+
+  function render() {
+    const ready = !!(state && state.ready);
+    bar.hidden = !ready;
+    readout.hidden = !ready;
+    stage.classList.toggle("is-ready", ready);
+    if (!ready) {
+      note.hidden = false;
+      note.textContent = "Character view unavailable" + (state && state.why ? ": " + state.why : "");
+      return;
+    }
+    note.hidden = true;
+    tiltGroup.hidden = !state.tilt;
+    for (const b of buttons) {
+      b.el.disabled = b.isAtLimit ? b.isAtLimit(state) : false;
+    }
+    readout.textContent =
+      "turn " + Math.round(state.turn) + " deg  |  distance " + Math.round(state.distance) +
+      "  |  height " + Math.round(state.lift) + (state.tilt ? "  |  tilt " + Math.round(state.tiltDeg) + " deg" : "");
+  }
+
+  AtelierBridge.on("stage", (data) => {
+    state = data && typeof data === "object" ? data : null;
+    render();
+  });
+
+  // The DLL can hide the frame without touching anything else: the view
+  // underneath stays exactly where it is.
+  AtelierBridge.on("stage-visible", (data) => {
+    stage.hidden = !(data && data.on);
+  });
+
+  render();
+  AtelierBridge.whenAttached((ok) => {
+    if (ok) {
+      AtelierBridge.send("stage-get");
+    }
+  });
+})();

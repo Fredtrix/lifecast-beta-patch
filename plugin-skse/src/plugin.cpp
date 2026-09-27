@@ -27,6 +27,7 @@
 #include "Edit/Session.h"
 #include "Edit/Tints.h"
 #include "Panel/Panel.h"
+#include "Panel/Stage.h"
 #include "Panel/Switcher.h"
 #include "Preset/Guard.h"
 #include "Preset/Library.h"
@@ -124,6 +125,10 @@ namespace
 
 			// The character's name and the button that ends the menu.
 			Atelier::Edit::Finish::Install();
+
+			// The character view: the frame in the page and the camera moves
+			// that put the character in it.
+			Atelier::Panel::Stage::Install();
 
 			// The panel's own preferences, kept across games.
 			Atelier::Core::Settings::Install();

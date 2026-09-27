@@ -46,6 +46,16 @@
     </footer>
   </aside>
 
+  <!--
+    The character view. Transparent: the character inside it is the game's
+    own, placed here by the camera (stage.js, Panel/Stage in the DLL).
+  -->
+  <section id="stage" class="stage" aria-label="Character view">
+    <p id="stage-note" class="stage-note"></p>
+    <p id="stage-readout" class="stage-readout" hidden></p>
+    <div id="stage-bar" class="stage-bar" hidden></div>
+  </section>
+
   <script src="keyboard.js"></script>
   <script src="bridge.js"></script>
   <script src="settings.js"></script>
@@ -60,5 +70,6 @@
   <script src="presets.js"></script>
   <script src="delegate.js"></script>
   <script src="finish.js"></script>
+  <script src="stage.js"></script>
 </body>
 </html>
