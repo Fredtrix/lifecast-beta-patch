@@ -48,7 +48,13 @@
     let totalSections = 0;
 
     host.querySelectorAll(":scope > .section").forEach((section) => {
-      const rows = section.querySelectorAll(".section-body > .slider");
+      // .slider at any depth under this section's body - scales.js and
+      // tints.js hang rows off an intermediate div (E1) - but stopping at
+      // the nearest .section ancestor keeps a future nested section's own
+      // rows out of this count, same as the old > selector did.
+      const rows = Array.from(section.querySelectorAll(".slider")).filter(
+        (row) => row.closest(".section") === section
+      );
       if (rows.length === 0) {
         // Not a slider section - neither filter touches it.
         section.hidden = false;
