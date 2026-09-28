@@ -6,12 +6,17 @@
 */
 
 :root {
-  --panel-width: 420px;
-  /* What the player sets. No fixed size serves every resolution: the same
-     panel is read close up on one machine and from a couch on another, so a
-     number chosen here is a guess about someone else's monitor. Width and
-     type scale together, and .stage follows because its left edge is the same
-     expression. */
+  --panel-width: 546px;
+  /* What the player sets before touching the scale control - 420 x 1.3, the
+     author's own comparison ("o 100% igual ao 130% de hoje"). No fixed size
+     serves every resolution: the same panel is read close up on one machine
+     and from a couch on another, so a number chosen here is a guess about
+     someone else's monitor. Width and type scale together, and .stage
+     follows because its left edge is the same expression. Measured at both
+     100% and 160%, at 1280x720 and 2560x1440: the 100% figure only
+     improves the ratio at both resolutions, so it is safe to apply on its
+     own - the same measurement found the 160% ceiling DOES eat the
+     character at 1280x720, and that number is not decided here. */
   --panel-scale: 1;
   --panel-bg: rgba(18, 18, 20, 0.92);
   --panel-border: rgba(255, 255, 255, 0.08);
