@@ -112,8 +112,9 @@ namespace Atelier::Panel::Stage
 
 	// One step of the slide, when there is one under way. Game thread, and a
 	// single atomic read when there is not - it is called from the input tick
-	// the Switcher already runs, measured at about 66 a second whether the
-	// panel holds focus or not, rather than from a second tick of its own.
-	// The step itself is queued to the UI thread like every other move.
+	// the Switcher already runs, measured between 56.7 and 64.6 a second
+	// whether the panel holds focus or not, rather than from a second tick
+	// of its own. The step itself is queued to the UI thread like every
+	// other move.
 	void Tick();
 }

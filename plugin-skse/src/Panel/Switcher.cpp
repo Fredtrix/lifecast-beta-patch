@@ -228,11 +228,11 @@ namespace Atelier::Panel::Switcher
 				Watch();
 
 				// This is the input tick that drives the stage, not a frame
-				// tick: it fires on input dispatch, measured at about 66 a
-				// second whether the panel holds focus or not, so it is also
-				// where the character view slides. A second tick of its own
-				// would buy nothing extra; the stage reads one atomic and
-				// returns when nothing is moving.
+				// tick: it fires on input dispatch, measured between 56.7
+				// and 64.6 a second whether the panel holds focus or not,
+				// so it is also where the character view slides. A second
+				// tick of its own would buy nothing extra; the stage reads
+				// one atomic and returns when nothing is moving.
 				Stage::Tick();
 
 				if (!a_event || g_mode != Mode::kRaceMenu) {
