@@ -166,6 +166,33 @@ body {
   gap: 6px;
 }
 
+/* Search, the "changed" filter and the counter (E2 items 3, 4, 5) - a
+   second bar, outside the scrolling body for the same reason the header and
+   footer are: a tool for finding a slider is useless if it scrolls away
+   with the sliders. Reuses .preset-field and .panel-button - no new token,
+   D072 still holds. */
+.panel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(var(--gap) * 0.75) calc(var(--gap) * 1.5);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.panel-toolbar .preset-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-toolbar .panel-button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.panel-toolbar .versions {
+  white-space: nowrap;
+}
+
 .section + .section {
   margin-top: var(--gap);
 }
@@ -245,6 +272,17 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* A dot for "moved from where it opened" (E2 item 4). The row itself sets
+   data-changed in controls.js - this only draws what is already decided. */
+.slider[data-changed="1"] .slider-name::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
 }
 
 /* The range and its two step buttons: one press moves one step. */

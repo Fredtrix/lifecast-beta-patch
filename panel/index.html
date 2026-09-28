@@ -27,6 +27,17 @@
       <span id="bridge-status" class="status status-wait">connecting</span>
     </header>
 
+    <!--
+      Search, the "changed" filter and the counter (E2 items 3, 4, 5): a
+      second bar, outside the scrolled list for the same reason the header
+      and footer are - search.js.
+    -->
+    <div id="toolbar" class="panel-toolbar">
+      <input id="search" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Search sliders">
+      <button id="filter-changed" class="panel-button" type="button" aria-pressed="false">Changed</button>
+      <span id="row-counter" class="versions"></span>
+    </div>
+
     <main id="sections" class="panel-body">
       <p class="placeholder">No sections yet.</p>
 
@@ -84,6 +95,7 @@
   <script src="panel.js"></script>
   <script src="controls.js"></script>
   <script src="shortcuts.js"></script>
+  <script src="search.js"></script>
   <script src="picker.js"></script>
   <script src="look.js"></script>
   <script src="scales.js"></script>

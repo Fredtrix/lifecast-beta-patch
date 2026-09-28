@@ -128,7 +128,8 @@ const AtelierControls = (() => {
     wrap.appendChild(value);
     wrap.appendChild(track);
 
-    const state = { dragging: false, timer: null, lastSent: 0 };
+    const state = { dragging: false, timer: null, lastSent: 0, hasInitial: false, initial: null };
+    wrap.dataset.changed = "0";
 
     function show(v) {
       value.textContent = a_opts.format(v);
@@ -184,6 +185,11 @@ const AtelierControls = (() => {
       // The player's hand wins over a value from before it moved.
       dragging: () => state.dragging,
       // null disables the row and shows "--".
+      //
+      // The FIRST number a row ever receives is its baseline (V079: nothing
+      // else in the page keeps one). data-changed on the row's own element
+      // is the public form of that comparison - search.js reads it, so a
+      // "changed" filter never needs a map back to this closure.
       set(a_v) {
         const off = a_v === null || typeof a_v !== "number" || !isFinite(a_v);
         input.disabled = off;
@@ -195,6 +201,11 @@ const AtelierControls = (() => {
         }
         input.value = String(a_v);
         show(a_v);
+        if (!state.hasInitial) {
+          state.hasInitial = true;
+          state.initial = a_v;
+        }
+        wrap.dataset.changed = a_v !== state.initial ? "1" : "0";
       },
       setRange(a_min, a_max) {
         input.min = String(a_min);
@@ -202,6 +213,7 @@ const AtelierControls = (() => {
       },
       // Replaces the value text with arbitrary content (a colour chip).
       valueEl: value,
+      changed: () => wrap.dataset.changed === "1",
     };
   }
 
