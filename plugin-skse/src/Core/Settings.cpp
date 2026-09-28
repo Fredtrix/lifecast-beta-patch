@@ -32,8 +32,35 @@ namespace Atelier::Core::Settings
 			return a_value.is_string() && (a_value == "name" || a_value == "time");
 		}
 
-		const std::array<Key, 1> kKeys{ {
+		// Mirrors panel.js's SCALE_MIN/SCALE_MAX (H-5). The two are not the
+		// same file by construction - this side only has to reject what would
+		// crash CSS math, not police the UI's own bounds - but they are the
+		// same NUMBERS today, and a future change to one is a change to both.
+		bool IsPanelScale(const json& a_value)
+		{
+			return a_value.is_number() && a_value.get<double>() >= 0.8 && a_value.get<double>() <= 1.6;
+		}
+
+		// Every value under the key has to be a bool; the key names themselves
+		// are section keys from the page, which this module does not know and
+		// does not validate - an unknown one is simply a bit nobody reads yet.
+		bool IsSectionsOpen(const json& a_value)
+		{
+			if (!a_value.is_object()) {
+				return false;
+			}
+			for (const auto& [name, v] : a_value.items()) {
+				if (!v.is_boolean()) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		const std::array<Key, 3> kKeys{ {
 			{ "presetsSort", "name", &IsSortOrder },
+			{ "panelScale", 1.0, &IsPanelScale },
+			{ "sectionsOpen", json::object(), &IsSectionsOpen },
 		} };
 
 		json g_values = json::object();

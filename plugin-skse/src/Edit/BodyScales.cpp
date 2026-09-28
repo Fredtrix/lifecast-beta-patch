@@ -318,6 +318,11 @@ namespace Atelier::Edit::BodyScales
 				spdlog::info("[scales] {} ({}) = {:.2f}{} (drag ended); read back {:.3f} ({})", key, node->node,
 					scale, scale == 1.0F ? ", key removed" : "", back, how);
 				ReadByPapyrus(player, *node, female, scale);
+				// The other three edit modules echo after a final write (Face,
+				// Look, Tints); this one did not, so data-changed on a Body
+				// Scales row never flipped and the "Changed" filter and its
+				// counter stayed blind to them (Fase 6.4, V079/V080 gap).
+				PushScales("after a final write");
 			}
 		}
 

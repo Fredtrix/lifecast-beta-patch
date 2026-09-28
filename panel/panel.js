@@ -76,9 +76,27 @@
     showScale();
   }
 
-  document.getElementById("scale-down").addEventListener("click", () => stepScale(-1));
-  document.getElementById("scale-up").addEventListener("click", () => stepScale(1));
+  document.getElementById("scale-down").addEventListener("click", () => {
+    stepScale(-1);
+    AtelierSettings.set("panelScale", scale);
+  });
+  document.getElementById("scale-up").addEventListener("click", () => {
+    stepScale(1);
+    AtelierSettings.set("panelScale", scale);
+  });
   showScale();
+
+  // The saved scale arrives after this page has already drawn at the
+  // default (1) - settings.js's own doc explains why nothing here can wait
+  // for it. Only a number inside the authored bounds is taken; anything
+  // else leaves the default in place, same as presets.js's sort order.
+  AtelierSettings.onChange(() => {
+    const saved = AtelierSettings.get("panelScale");
+    if (typeof saved === "number" && saved >= SCALE_MIN && saved <= SCALE_MAX) {
+      scale = saved;
+      showScale();
+    }
+  });
 
   AtelierBridge.whenAttached((ok) => {
     if (!ok) {

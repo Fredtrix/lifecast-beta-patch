@@ -49,9 +49,49 @@ const AtelierControls = (() => {
       const open = s.dataset.open !== "1";
       s.dataset.open = open ? "1" : "0";
       head.setAttribute("aria-expanded", open ? "true" : "false");
+      if (s.dataset.key) {
+        saveOpen(s.dataset.key, open);
+      }
     });
     return s;
   }
+
+  // Which sections the player left open, kept by the DLL (autor
+  // 2026-09-28). This file stays ignorant of which key means what, same as
+  // order and group - it only reads and writes a key -> bool object under
+  // the "sectionsOpen" setting.
+  //
+  // The saved object always arrives AFTER every section below has already
+  // mounted at its own default (settings.js's answer is async; the scripts
+  // that build sections are not), so applying it means walking what is
+  // already in the DOM, not something mount() can do for a section that
+  // does not exist yet at that instant.
+  function saveOpen(a_key, a_open) {
+    const current = AtelierSettings.get("sectionsOpen");
+    const next = current && typeof current === "object" ? Object.assign({}, current) : {};
+    next[a_key] = a_open;
+    AtelierSettings.set("sectionsOpen", next);
+  }
+
+  AtelierSettings.onChange(() => {
+    const saved = AtelierSettings.get("sectionsOpen");
+    if (!saved || typeof saved !== "object") {
+      return;
+    }
+    const host = document.getElementById("sections");
+    host.querySelectorAll(":scope > .section").forEach((s) => {
+      const key = s.dataset.key;
+      if (!key || !Object.prototype.hasOwnProperty.call(saved, key)) {
+        return;
+      }
+      const open = !!saved[key];
+      s.dataset.open = open ? "1" : "0";
+      const head = s.querySelector(".section-head");
+      if (head) {
+        head.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    });
+  });
 
   // The order the sections appear in. Until something sets it, it is the order
   // they mount in - which is the order of the <script> tags, and that is the
