@@ -14,7 +14,7 @@
 //
 // In the frame, with the mouse:
 //   drag                  turn the character
-//   drag, right button    camera up and down
+//   drag, right button    move the camera, up/down and left/right
 //   drag, Ctrl held       tilt the camera (when the DLL can)
 //   wheel                 closer and farther
 // The same moves are on the buttons under the frame, so none of them depends
@@ -30,6 +30,7 @@
   // Drag and wheel scales: degrees or units per pixel, units per wheel step.
   const TURN_PER_PX = 0.4;
   const LIFT_PER_PX = 0.3;
+  const PAN_PER_PX = 0.3;
   const TILT_PER_PX = 0.1;
   const DISTANCE_PER_WHEEL = 0.1;  // wheel deltaY is about 100 per notch
 
@@ -45,17 +46,17 @@
   const readout = document.getElementById("stage-readout");
 
   let state = null;
-  const pending = { turn: 0, distance: 0, lift: 0, tilt: 0 };
+  const pending = { turn: 0, distance: 0, lift: 0, pan: 0, tilt: 0 };
   let timer = null;
 
   function flush() {
     timer = null;
-    const moved = pending.turn || pending.distance || pending.lift || pending.tilt;
+    const moved = pending.turn || pending.distance || pending.lift || pending.pan || pending.tilt;
     if (!moved) {
       return;
     }
     const data = {};
-    for (const key of ["turn", "distance", "lift", "tilt"]) {
+    for (const key of ["turn", "distance", "lift", "pan", "tilt"]) {
       if (pending[key]) {
         data[key] = pending[key];
         pending[key] = 0;
@@ -125,7 +126,7 @@
   reframe.type = "button";
   reframe.title = "Back to the view the menu opened with";
   reframe.addEventListener("click", () => {
-    pending.turn = pending.distance = pending.lift = pending.tilt = 0;
+    pending.turn = pending.distance = pending.lift = pending.pan = pending.tilt = 0;
     AtelierBridge.send("stage-reset");
   });
   bar.appendChild(reframe);
@@ -159,7 +160,13 @@
     if (drag.mode === "turn") {
       move("turn", dx * TURN_PER_PX);
     } else if (drag.mode === "lift") {
-      move("lift", -dy * LIFT_PER_PX);  // drag up, camera up
+      // E4 (Fase 6.5): the author measured the old vertical-only, inverted
+      // drag as wrong - "o eixo ta invertido... alem disso ele so mexe na
+      // vertical." Both axes now follow the same grab convention as a map
+      // or a Blender pan: the view moves WITH the cursor, so the camera
+      // itself moves the opposite way.
+      move("lift", dy * LIFT_PER_PX);
+      move("pan", -dx * PAN_PER_PX);
     } else {
       move("tilt", -dy * TILT_PER_PX);
     }
@@ -202,7 +209,8 @@
     }
     readout.textContent =
       "turn " + Math.round(state.turn) + " deg  |  distance " + Math.round(state.distance) +
-      "  |  height " + Math.round(state.lift) + (state.tilt ? "  |  tilt " + Math.round(state.tiltDeg) + " deg" : "");
+      "  |  height " + Math.round(state.lift) + "  |  pan " + Math.round(state.pan) +
+      (state.tilt ? "  |  tilt " + Math.round(state.tiltDeg) + " deg" : "");
   }
 
   AtelierBridge.on("stage", (data) => {

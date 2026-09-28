@@ -8,13 +8,18 @@
 // this module moves the camera and turns the body, and the page only draws a
 // border and the controls around it.
 //
-// Four moves, all relative to what the menu showed when it opened:
+// Five moves, all relative to what the menu showed when it opened:
 //
 //   turn      the body, about its own vertical axis - RaceMenu's own
 //             SetPlayerRotation, the call its camera mode makes (delegated)
 //   distance  the camera, along the line from the player to it, in the
 //             ground plane - RaceMenu's SetRaceSexCameraPos
 //   lift      the camera, up and down - RaceMenu's SetRaceSexCameraPos
+//   pan       the camera, sideways - perpendicular to the player-camera
+//             line, in the ground plane - RaceMenu's SetRaceSexCameraPos.
+//             E4, Fase 6.5: the right-button drag moved lift only; the
+//             author measured that as "so mexe na vertical" and this is
+//             the axis that was missing.
 //   tilt      the camera node's own rotation, about the horizontal axis
 //             across the line of sight. RaceMenu has no call for this (it
 //             reads the rotation and never writes it), so the node is
@@ -46,9 +51,13 @@
 //
 // Limits are part of the design, not a detail: the camera never comes closer
 // to the player than kMinDistance in the ground plane, never goes below the
-// player's origin plus kFloorMargin, and never tilts past kTiltMax. The one
-// measured way to lose the character is the camera ending up almost on top of
-// the player (1 unit away in the plane and 124 above the origin).
+// player's origin plus kFloorMargin, never strays sideways past kPanMax, and
+// never tilts past kTiltMax. The one measured way to lose the character is
+// the camera ending up almost on top of the player (1 unit away in the plane
+// and 124 above the origin). kPanMax is not measured the same way - it has
+// no failure mode like that to bound it against, so it is set to the same
+// order of magnitude as kLiftUp and is the author's to retune at OLHO DO
+// AUTOR (E4, Fase 6.5).
 //
 // Every RaceMenu call and every node write runs on the UI thread, like
 // RaceMenu's own calls from its film; the answer to the page is sent from
@@ -63,15 +72,17 @@
 //
 //   page -> dll  "stage-get"    {}
 //   page -> dll  "stage-move"   { "turn": deg, "distance": units,
-//                                 "lift": units, "tilt": deg }  (deltas, any
-//                                 subset)
+//                                 "lift": units, "pan": units,
+//                                 "tilt": deg }  (deltas, any subset)
 //   page -> dll  "stage-reset"  {}
 //   dll -> page  "stage"        { "ready": false, "why": text }
 //                            or { "ready": true, "tilt": bool,
 //                                 "turn": deg, "distance": units,
-//                                 "lift": units, "tiltDeg": deg,
+//                                 "lift": units, "pan": units,
+//                                 "tiltDeg": deg,
 //                                 "limits": { "minDistance", "maxDistance",
 //                                             "liftMin", "liftMax",
+//                                             "panMin", "panMax",
 //                                             "tiltMax" } }
 //   dll -> page  "stage-visible" { "on": bool }  hides or shows the frame and
 //                                 its controls; the view itself is untouched.
@@ -86,6 +97,7 @@ namespace Atelier::Panel::Stage
 	inline constexpr double kMaxDistance = 320.0;
 	inline constexpr double kLiftUp = 80.0;         // above the opening height
 	inline constexpr double kFloorMargin = 12.0;    // above the player's origin
+	inline constexpr double kPanMax = 80.0;         // sideways, either way - see note above
 	inline constexpr double kTiltMax = 35.0;        // degrees, either way
 
 	// Registers the bridge handlers and the session callbacks. Call once, at
@@ -95,7 +107,7 @@ namespace Atelier::Panel::Stage
 	// The same requests as "stage-move" and "stage-reset", for code that is
 	// not the page. Game thread; queued like the page's, answered to the page
 	// like the page's.
-	void Move(double a_turn, double a_distance, double a_lift, double a_tilt);
+	void Move(double a_turn, double a_distance, double a_lift, double a_pan, double a_tilt);
 	void Reset();
 
 	// One step of the slide, when there is one under way. Game thread, and a

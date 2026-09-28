@@ -63,6 +63,7 @@ namespace Atelier::Panel::Stage
 			double turn{ 0.0 };
 			double distance{ 0.0 };
 			double lift{ 0.0 };
+			double pan{ 0.0 };
 			double tilt{ 0.0 };
 		};
 
@@ -90,6 +91,7 @@ namespace Atelier::Panel::Stage
 			double turn{ 0.0 };
 			double distance{ 0.0 };
 			double lift{ 0.0 };
+			double pan{ 0.0 };
 			double tilt{ 0.0 };
 			bool   reset{ false };
 			bool   any{ false };
@@ -355,9 +357,15 @@ namespace Atelier::Panel::Stage
 
 		bool WriteCameraPos(RE::GFxMovieView* a_movie, RE::GFxValue& a_cg)
 		{
+			// pan moves the camera along the perpendicular of the player-camera
+			// line, in the ground plane - the same kind of offset lift already
+			// is on the vertical axis, just sideways instead of up (E4, Fase
+			// 6.5). (-dirY, dirX) is dirX,dirY turned 90 degrees.
+			const double perpX = -g_frame.dirY;
+			const double perpY = g_frame.dirX;
 			const RE::NiPoint3 p(
-				static_cast<float>(g_frame.player.x + g_frame.dirX * g_at.distance),
-				static_cast<float>(g_frame.player.y + g_frame.dirY * g_at.distance),
+				static_cast<float>(g_frame.player.x + g_frame.dirX * g_at.distance + perpX * g_at.pan),
+				static_cast<float>(g_frame.player.y + g_frame.dirY * g_at.distance + perpY * g_at.pan),
 				static_cast<float>(g_frame.camera.z + g_at.lift));
 			return SetCameraPos(a_movie, a_cg, p);
 		}
@@ -395,9 +403,11 @@ namespace Atelier::Panel::Stage
 				return { { "ready", false }, { "why", g_why.empty() ? std::string("not measured yet") : g_why } };
 			}
 			return { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
-				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "tiltDeg", g_target.tilt },
+				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_target.pan },
+				{ "tiltDeg", g_target.tilt },
 				{ "limits", { { "minDistance", DistanceMin() }, { "maxDistance", kMaxDistance }, { "liftMin", LiftMin() },
-								{ "liftMax", kLiftUp }, { "tiltMax", kTiltMax } } } };
+								{ "liftMax", kLiftUp }, { "panMin", -kPanMax }, { "panMax", kPanMax },
+								{ "tiltMax", kTiltMax } } } };
 		}
 
 		void Answer(json a_state)
@@ -466,6 +476,9 @@ namespace Atelier::Panel::Stage
 			if (p.lift != 0.0) {
 				g_target.lift = ClampSaid(g_target.lift + p.lift, LiftMin(), kLiftUp, "height");
 			}
+			if (p.pan != 0.0) {
+				g_target.pan = ClampSaid(g_target.pan + p.pan, -kPanMax, kPanMax, "pan");
+			}
 			if (p.tilt != 0.0 && g_frame.node) {
 				g_target.tilt = ClampSaid(g_target.tilt + p.tilt, -kTiltMax, kTiltMax, "tilt");
 			}
@@ -474,13 +487,14 @@ namespace Atelier::Panel::Stage
 			const bool turnMoved = StepAngle(g_at.turn, g_target.turn, kSnapDegrees);
 			const bool distanceMoved = Step(g_at.distance, g_target.distance, kSnapUnits);
 			const bool liftMoved = Step(g_at.lift, g_target.lift, kSnapUnits);
+			const bool panMoved = Step(g_at.pan, g_target.pan, kSnapUnits);
 			const bool tiltMoved = g_frame.node && Step(g_at.tilt, g_target.tilt, kSnapDegrees);
 
 			// A reframe writes all three even when nothing moved: RaceMenu's
 			// own tabs move this camera, and the kept frame is what the
 			// player asked to see again.
 			const bool body = turnMoved || p.reset;
-			const bool camera = distanceMoved || liftMoved || p.reset;
+			const bool camera = distanceMoved || liftMoved || panMoved || p.reset;
 			const bool tilt = g_frame.node && (tiltMoved || p.reset);
 
 			const bool bodyOk = !body || SetBody(movie, cg, TurnedBy(g_frame.body, g_at.turn));
@@ -489,13 +503,15 @@ namespace Atelier::Panel::Stage
 
 			const bool wasMoving = g_moving.load(std::memory_order_relaxed);
 			const bool moving = g_at.turn != g_target.turn || g_at.distance != g_target.distance ||
-			                    g_at.lift != g_target.lift || g_at.tilt != g_target.tilt;
+			                    g_at.lift != g_target.lift || g_at.pan != g_target.pan ||
+			                    g_at.tilt != g_target.tilt;
 			g_moving.store(moving, std::memory_order_relaxed);
 
 			if (p.any) {
-				spdlog::info("[stage] {}target turn {:.1f} deg, distance {:.2f}, lift {:.2f}, tilt {:.1f} deg{}{}{}",
-					p.reset ? "reframe: " : "", g_target.turn, g_target.distance, g_target.lift, g_target.tilt,
-					bodyOk ? "" : " - body NOT written", cameraOk ? "" : " - camera NOT written",
+				spdlog::info(
+					"[stage] {}target turn {:.1f} deg, distance {:.2f}, lift {:.2f}, pan {:.2f}, tilt {:.1f} deg{}{}{}",
+					p.reset ? "reframe: " : "", g_target.turn, g_target.distance, g_target.lift, g_target.pan,
+					g_target.tilt, bodyOk ? "" : " - body NOT written", cameraOk ? "" : " - camera NOT written",
 					tiltOk ? "" : " - tilt NOT written");
 			}
 
@@ -515,10 +531,11 @@ namespace Atelier::Panel::Stage
 				if (us > g_worstUs) {
 					g_worstUs = us;
 				}
-				spdlog::trace("[stage] tick {}: at turn {:.2f} distance {:.2f} lift {:.2f} tilt {:.2f} -> target "
-							  "{:.2f} {:.2f} {:.2f} {:.2f} - {:.0f} us",
-					g_ticks, g_at.turn, g_at.distance, g_at.lift, g_at.tilt, g_target.turn, g_target.distance,
-					g_target.lift, g_target.tilt, us);
+				spdlog::trace(
+					"[stage] tick {}: at turn {:.2f} distance {:.2f} lift {:.2f} pan {:.2f} tilt {:.2f} -> target "
+					"{:.2f} {:.2f} {:.2f} {:.2f} {:.2f} - {:.0f} us",
+					g_ticks, g_at.turn, g_at.distance, g_at.lift, g_at.pan, g_at.tilt, g_target.turn,
+					g_target.distance, g_target.lift, g_target.pan, g_target.tilt, us);
 				if (!moving) {
 					const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_slideAt);
 					spdlog::info("[stage] arrived after {} ticks in {} ms - {:.0f} us of work in all, worst tick "
@@ -540,6 +557,7 @@ namespace Atelier::Panel::Stage
 				g_pending.turn += a_add.turn;
 				g_pending.distance += a_add.distance;
 				g_pending.lift += a_add.lift;
+				g_pending.pan += a_add.pan;
 				g_pending.tilt += a_add.tilt;
 				g_pending.reset = g_pending.reset || a_add.reset;
 				g_pending.any = g_pending.any || a_add.any;
@@ -585,7 +603,8 @@ namespace Atelier::Panel::Stage
 
 		void OnMove(const json& a_data)
 		{
-			Move(Number(a_data, "turn"), Number(a_data, "distance"), Number(a_data, "lift"), Number(a_data, "tilt"));
+			Move(Number(a_data, "turn"), Number(a_data, "distance"), Number(a_data, "lift"), Number(a_data, "pan"),
+				Number(a_data, "tilt"));
 		}
 
 		void OnReset(const json&)
@@ -615,14 +634,15 @@ namespace Atelier::Panel::Stage
 		}
 	}
 
-	void Move(double a_turn, double a_distance, double a_lift, double a_tilt)
+	void Move(double a_turn, double a_distance, double a_lift, double a_pan, double a_tilt)
 	{
 		Pending p;
 		p.turn = a_turn;
 		p.distance = a_distance;
 		p.lift = a_lift;
+		p.pan = a_pan;
 		p.tilt = a_tilt;
-		p.any = p.turn != 0.0 || p.distance != 0.0 || p.lift != 0.0 || p.tilt != 0.0;
+		p.any = p.turn != 0.0 || p.distance != 0.0 || p.lift != 0.0 || p.pan != 0.0 || p.tilt != 0.0;
 		p.answer = true;
 		Queue(p);
 	}
