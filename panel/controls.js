@@ -73,15 +73,32 @@ const AtelierControls = (() => {
     AtelierSettings.set("sectionsOpen", next);
   }
 
+  // The DLL echoes "settings" on every settings-set, from wherever it came
+  // (E3, Fase 6.5 - a single scale drag produced ten echoes in ten seconds,
+  // measured in the phase document). Reapplying the whole saved map on every
+  // one of them fights reveal(), which opens a section in the DOM without
+  // saving it: the very next echo used to put it right back where the saved
+  // map still said it was. lastSeen is the map as of the last echo this
+  // listener actually saw - only a key whose SAVED value changed since then
+  // gets pushed onto the DOM; a key that has not changed is left alone, so a
+  // section opened by any path that does not call saveOpen (reveal today,
+  // whatever else tomorrow) survives an echo that was never about it.
+  let lastSeen = null;
+
   AtelierSettings.onChange(() => {
     const saved = AtelierSettings.get("sectionsOpen");
     if (!saved || typeof saved !== "object") {
       return;
     }
+    const previous = lastSeen;
+    lastSeen = saved;
     const host = document.getElementById("sections");
     host.querySelectorAll(":scope > .section").forEach((s) => {
       const key = s.dataset.key;
       if (!key || !Object.prototype.hasOwnProperty.call(saved, key)) {
+        return;
+      }
+      if (previous && Object.prototype.hasOwnProperty.call(previous, key) && previous[key] === saved[key]) {
         return;
       }
       const open = !!saved[key];
