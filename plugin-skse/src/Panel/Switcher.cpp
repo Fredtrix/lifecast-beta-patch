@@ -234,6 +234,28 @@ namespace Atelier::Panel::Switcher
 				// atomic and returns when nothing is moving.
 				Stage::Tick();
 
+				// [e5] disposable sonda, Fase 6.4 E5: the ~66/s in the
+				// comment above is a claim, not a measurement. Counts this
+				// sink's own cadence for one second at a time, only while
+				// the Atelier is the mode on screen, and logs the count.
+				// Strip this block once E5 has a real number.
+				if (g_mode == Mode::kAtelier) {
+					static std::uint32_t   s_e5Count = 0;
+					static Clock::time_point s_e5WindowAt{};
+					if (s_e5WindowAt.time_since_epoch().count() == 0) {
+						s_e5WindowAt = Clock::now();
+					}
+					++s_e5Count;
+					const auto elapsed = Clock::now() - s_e5WindowAt;
+					if (elapsed >= std::chrono::seconds(1)) {
+						const double secs = std::chrono::duration<double>(elapsed).count();
+						spdlog::info("[e5] input sink cadence with the Atelier on screen: {:.1f}/s ({} in {:.3f} s)",
+							s_e5Count / secs, s_e5Count, secs);
+						s_e5Count = 0;
+						s_e5WindowAt = Clock::now();
+					}
+				}
+
 				if (!a_event || g_mode != Mode::kRaceMenu) {
 					// With the Atelier on screen, F4 never gets here: it is
 					// the panel's focus chord and Meridian consumes it.
