@@ -22,8 +22,27 @@
 //
 // Every move is computed from the frame kept at the first move after the menu
 // opened - never added to the last written value -, so a long drag does not
-// drift and "reframe" is exact: it writes the kept frame back. The kept frame
-// is dropped when the menu closes.
+// drift. The kept frame is dropped when the menu closes.
+//
+// A move sets a TARGET and the camera slides to it, because applying a move
+// whole in the frame it arrives in reads as jumpy: a button click is 15
+// degrees at once, and a drag arrives as steps 50 ms apart. So "stage-move"
+// moves the target and nothing else; a tick moves the current position a
+// fraction of the gap that is left and writes camera, body and tilt; and the
+// state sent back to the page is the TARGET, which is what the player asked
+// for and what a button sitting at a limit has to reflect. Both are offsets
+// from the kept frame - the easing lives between them, and neither is ever
+// read back from the engine.
+//
+// So "reframe" is no longer exact at the instant of the click: it sets the
+// target to the kept frame, and the kept frame is written when the current
+// position gets there. Arrival is real and not asymptotic - inside the snap
+// epsilon the current position is set to the target - which is what lets a
+// button at a limit come back and what ends the tick.
+//
+// Limits are clamped on the TARGET, never on the current position: clamping
+// what is about to be written would stop a button for a reason the page has
+// no way to show. A target that gets clamped says so in the log.
 //
 // Limits are part of the design, not a detail: the camera never comes closer
 // to the player than kMinDistance in the ground plane, never goes below the
@@ -78,4 +97,11 @@ namespace Atelier::Panel::Stage
 	// like the page's.
 	void Move(double a_turn, double a_distance, double a_lift, double a_tilt);
 	void Reset();
+
+	// One step of the slide, when there is one under way. Game thread, and a
+	// single atomic read when there is not - it is called from the input tick
+	// the Switcher already runs, measured at about 66 a second whether the
+	// panel holds focus or not, rather than from a second tick of its own.
+	// The step itself is queued to the UI thread like every other move.
+	void Tick();
 }

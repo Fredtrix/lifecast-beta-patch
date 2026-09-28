@@ -7,6 +7,7 @@
 #include "Panel/Panel.h"
 #include "Panel/RaceMenuFilm.h"
 #include "Panel/RaceMenuTabs.h"
+#include "Panel/Stage.h"
 
 namespace Atelier::Panel::Switcher
 {
@@ -225,6 +226,13 @@ namespace Atelier::Panel::Switcher
 				RE::BSTEventSource<RE::InputEvent*>*) override
 			{
 				Watch();
+
+				// This sink runs about 66 times a second, whether the panel
+				// holds focus or not, so it is also where the character view
+				// slides. A second tick of its own would buy nothing and
+				// cost a frame's worth of dispatch; the stage reads one
+				// atomic and returns when nothing is moving.
+				Stage::Tick();
 
 				if (!a_event || g_mode != Mode::kRaceMenu) {
 					// With the Atelier on screen, F4 never gets here: it is

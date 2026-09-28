@@ -7,6 +7,8 @@
 #include "Panel/Bridge.h"
 
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <mutex>
 
@@ -16,9 +18,25 @@ namespace Atelier::Panel::Stage
 	{
 		using json = nlohmann::json;
 		using Rot = std::array<double, 9>;  // flat, row after row - RaceMenu's order
+		using Clock = std::chrono::steady_clock;
 
 		constexpr auto   kCharGen = "_global.skse.plugins.CharGen";
 		constexpr double kPi = 3.14159265358979323846;
+
+		// How much of the gap that is left the current position covers in one
+		// tick, and how close to the target counts as arrived.
+		//
+		// WORKING VALUES, not chosen ones. The only evidence that exists about
+		// what this camera sliding should feel like is the engine's own zoom
+		// delegate, and that is one grandeza, one boot, and a movement with no
+		// value to read - not a population to derive a rate from. The number
+		// is the author's to pick once he has seen it move.
+		//
+		// The snap epsilons are in the units each grandeza is measured in:
+		// game units for distance and height, degrees for turn and tilt.
+		constexpr double kEase = 0.25;
+		constexpr double kSnapUnits = 0.05;
+		constexpr double kSnapDegrees = 0.05;
 
 		// The five RaceMenu calls this module needs; any one missing and the
 		// view is refused, since a half-working view is worse than none.
@@ -49,8 +67,21 @@ namespace Atelier::Panel::Stage
 		};
 
 		Frame       g_frame;
-		At          g_at;
-		std::string g_why;  // why the view is not ready, when it is not
+		At          g_target;  // where the page asked the view to be
+		At          g_at;      // where it is now, which is what was last written
+		std::string g_why;     // why the view is not ready, when it is not
+
+		// Read by the tick on the game thread, written by the work on the UI
+		// thread. A stale read costs one frame of the slide and nothing else,
+		// so it is relaxed.
+		std::atomic<bool> g_moving{ false };
+
+		// The slide under way, for the log: this is the measurement the change
+		// exists to produce, and there is nowhere else to take it from.
+		std::uint32_t     g_ticks = 0;
+		Clock::time_point g_slideAt{};
+		double            g_workUs = 0.0;
+		double            g_worstUs = 0.0;
 
 		// ----- requests from the page (game thread), folded ----------------------
 
@@ -62,6 +93,10 @@ namespace Atelier::Panel::Stage
 			double tilt{ 0.0 };
 			bool   reset{ false };
 			bool   any{ false };
+			// Whether the page is waiting for an answer. A tick is not: the
+			// state it would send is the target, and the target is exactly
+			// what a tick does not change.
+			bool answer{ false };
 		};
 
 		bool g_installed = false;
@@ -91,6 +126,51 @@ namespace Atelier::Panel::Stage
 				d += 360.0;
 			}
 			return d;
+		}
+
+		// Clamps, and says so. A target that is silently clipped leaves the
+		// page showing a value nobody asked for with nothing in the log to
+		// explain where it came from.
+		double ClampSaid(double a_v, double a_lo, double a_hi, const char* a_what)
+		{
+			const double c = Clamp(a_v, a_lo, a_hi);
+			if (c != a_v) {
+				spdlog::info("[stage] {} target {:.2f} is outside {:.2f} .. {:.2f} - clamped to {:.2f}", a_what, a_v,
+					a_lo, a_hi, c);
+			}
+			return c;
+		}
+
+		// One step of the slide. Returns whether the value moved, which is
+		// what decides if this grandeza gets written this tick.
+		bool Step(double& a_cur, double a_target, double a_snap)
+		{
+			const double gap = a_target - a_cur;
+			if (std::abs(gap) <= a_snap) {
+				if (a_cur == a_target) {
+					return false;
+				}
+				a_cur = a_target;  // exactly, so arrival is a comparison and not a guess
+				return true;
+			}
+			a_cur += gap * kEase;
+			return true;
+		}
+
+		// The same, the short way round: turn lives on a circle, so a target
+		// just past 180 degrees is a small move and not an almost whole turn.
+		bool StepAngle(double& a_cur, double a_target, double a_snap)
+		{
+			const double gap = Wrap(a_target - a_cur);
+			if (std::abs(gap) <= a_snap) {
+				if (a_cur == a_target) {
+					return false;
+				}
+				a_cur = a_target;
+				return true;
+			}
+			a_cur = Wrap(a_cur + gap * kEase);
+			return true;
 		}
 
 		RE::GPtr<RE::RaceSexMenu> Menu()
@@ -263,6 +343,8 @@ namespace Atelier::Panel::Stage
 			g_frame = f;
 			g_at = At{};
 			g_at.distance = f.distance;
+			g_target = g_at;
+			g_moving.store(false, std::memory_order_relaxed);
 			g_why.clear();
 			spdlog::info("[stage] frame kept: camera {} player {} - {:.2f} apart in the ground plane, {:.2f} above; "
 						 "camera node {}",
@@ -303,13 +385,17 @@ namespace Atelier::Panel::Stage
 			return true;
 		}
 
+		// The TARGET, not where the camera has got to. The page disables a
+		// button at a limit from this, and the readout is a destination: both
+		// have to answer the click that was just made, not the frame the
+		// slide happens to be in.
 		json State()
 		{
 			if (!g_frame.have) {
 				return { { "ready", false }, { "why", g_why.empty() ? std::string("not measured yet") : g_why } };
 			}
-			return { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_at.turn }, { "distance", g_at.distance },
-				{ "lift", g_at.lift }, { "tiltDeg", g_at.tilt },
+			return { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
+				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "tiltDeg", g_target.tilt },
 				{ "limits", { { "minDistance", DistanceMin() }, { "maxDistance", kMaxDistance }, { "liftMin", LiftMin() },
 								{ "liftMax", kLiftUp }, { "tiltMax", kTiltMax } } } };
 		}
@@ -323,8 +409,20 @@ namespace Atelier::Panel::Stage
 			tasks->AddTask([state = std::move(a_state)]() { Panel::Bridge::Send("stage", state); });
 		}
 
+		void Refuse(std::string a_why, bool a_answer)
+		{
+			g_frame = Frame{};
+			g_why = std::move(a_why);
+			g_moving.store(false, std::memory_order_relaxed);
+			if (a_answer) {
+				Answer(State());
+			}
+		}
+
 		void Work()
 		{
+			const auto startedAt = Clock::now();
+
 			Pending p;
 			{
 				std::scoped_lock lock(g_lock);
@@ -337,59 +435,101 @@ namespace Atelier::Panel::Stage
 			auto*        movie = menu ? menu->uiMovie.get() : nullptr;
 			RE::GFxValue cg;
 			if (!movie) {
-				g_frame = Frame{};
-				g_why = "the RaceSex Menu is not open";
-				Answer(State());
+				Refuse("the RaceSex Menu is not open", p.answer);
 				return;
 			}
 			if (!CharGen(movie, cg)) {
-				g_frame = Frame{};
-				g_why = "RaceMenu's CharGen object is not there";
+				Refuse("RaceMenu's CharGen object is not there", p.answer);
 				spdlog::warn("[stage] {} - the view is refused", g_why);
-				Answer(State());
 				return;
 			}
 			if (!g_frame.have && !Capture(menu.get(), cg)) {
 				spdlog::warn("[stage] {} - the view is refused", g_why);
-				Answer(State());
+				g_moving.store(false, std::memory_order_relaxed);
+				if (p.answer) {
+					Answer(State());
+				}
 				return;
 			}
 
-			bool body = false;
-			bool camera = false;
-			bool tilt = false;
+			// The move goes on the target, and the clamp with it.
 			if (p.reset) {
-				g_at = At{};
-				g_at.distance = g_frame.distance;
-				body = camera = tilt = true;
+				g_target = At{};
+				g_target.distance = g_frame.distance;
 			}
 			if (p.turn != 0.0) {
-				g_at.turn = Wrap(g_at.turn + p.turn);
-				body = true;
+				g_target.turn = Wrap(g_target.turn + p.turn);
 			}
 			if (p.distance != 0.0) {
-				g_at.distance = Clamp(g_at.distance + p.distance, DistanceMin(), kMaxDistance);
-				camera = true;
+				g_target.distance = ClampSaid(g_target.distance + p.distance, DistanceMin(), kMaxDistance, "distance");
 			}
 			if (p.lift != 0.0) {
-				g_at.lift = Clamp(g_at.lift + p.lift, LiftMin(), kLiftUp);
-				camera = true;
+				g_target.lift = ClampSaid(g_target.lift + p.lift, LiftMin(), kLiftUp, "height");
 			}
 			if (p.tilt != 0.0 && g_frame.node) {
-				g_at.tilt = Clamp(g_at.tilt + p.tilt, -kTiltMax, kTiltMax);
-				tilt = true;
+				g_target.tilt = ClampSaid(g_target.tilt + p.tilt, -kTiltMax, kTiltMax, "tilt");
 			}
+
+			// And the tick moves what is written, one step closer.
+			const bool turnMoved = StepAngle(g_at.turn, g_target.turn, kSnapDegrees);
+			const bool distanceMoved = Step(g_at.distance, g_target.distance, kSnapUnits);
+			const bool liftMoved = Step(g_at.lift, g_target.lift, kSnapUnits);
+			const bool tiltMoved = g_frame.node && Step(g_at.tilt, g_target.tilt, kSnapDegrees);
+
+			// A reframe writes all three even when nothing moved: RaceMenu's
+			// own tabs move this camera, and the kept frame is what the
+			// player asked to see again.
+			const bool body = turnMoved || p.reset;
+			const bool camera = distanceMoved || liftMoved || p.reset;
+			const bool tilt = g_frame.node && (tiltMoved || p.reset);
 
 			const bool bodyOk = !body || SetBody(movie, cg, TurnedBy(g_frame.body, g_at.turn));
 			const bool cameraOk = !camera || WriteCameraPos(movie, cg);
 			const bool tiltOk = !tilt || WriteTilt(menu.get());
+
+			const bool wasMoving = g_moving.load(std::memory_order_relaxed);
+			const bool moving = g_at.turn != g_target.turn || g_at.distance != g_target.distance ||
+			                    g_at.lift != g_target.lift || g_at.tilt != g_target.tilt;
+			g_moving.store(moving, std::memory_order_relaxed);
+
 			if (p.any) {
-				spdlog::info("[stage] {}turn {:.1f} deg, distance {:.2f}, lift {:.2f}, tilt {:.1f} deg{}{}{}",
-					p.reset ? "reframe: " : "", g_at.turn, g_at.distance, g_at.lift, g_at.tilt,
+				spdlog::info("[stage] {}target turn {:.1f} deg, distance {:.2f}, lift {:.2f}, tilt {:.1f} deg{}{}{}",
+					p.reset ? "reframe: " : "", g_target.turn, g_target.distance, g_target.lift, g_target.tilt,
 					bodyOk ? "" : " - body NOT written", cameraOk ? "" : " - camera NOT written",
 					tiltOk ? "" : " - tilt NOT written");
 			}
-			Answer(State());
+
+			// The slide, tick by tick. At trace because it is one line a
+			// frame while something is moving: raising the level silences it
+			// without touching this file.
+			if (wasMoving || moving) {
+				const double us = std::chrono::duration<double, std::micro>(Clock::now() - startedAt).count();
+				if (!wasMoving) {
+					g_ticks = 0;
+					g_workUs = 0.0;
+					g_worstUs = 0.0;
+					g_slideAt = startedAt;
+				}
+				++g_ticks;
+				g_workUs += us;
+				if (us > g_worstUs) {
+					g_worstUs = us;
+				}
+				spdlog::trace("[stage] tick {}: at turn {:.2f} distance {:.2f} lift {:.2f} tilt {:.2f} -> target "
+							  "{:.2f} {:.2f} {:.2f} {:.2f} - {:.0f} us",
+					g_ticks, g_at.turn, g_at.distance, g_at.lift, g_at.tilt, g_target.turn, g_target.distance,
+					g_target.lift, g_target.tilt, us);
+				if (!moving) {
+					const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_slideAt);
+					spdlog::info("[stage] arrived after {} ticks in {} ms - {:.0f} us of work in all, worst tick "
+								 "{:.0f} us",
+						g_ticks, ms.count(), g_workUs, g_worstUs);
+				}
+			}
+
+			if (p.answer) {
+				Answer(State());
+			}
 		}
 
 		void Queue(const Pending& a_add)
@@ -403,6 +543,7 @@ namespace Atelier::Panel::Stage
 				g_pending.tilt += a_add.tilt;
 				g_pending.reset = g_pending.reset || a_add.reset;
 				g_pending.any = g_pending.any || a_add.any;
+				g_pending.answer = g_pending.answer || a_add.answer;
 				if (!g_queued) {
 					g_queued = true;
 					queue = true;
@@ -430,9 +571,16 @@ namespace Atelier::Panel::Stage
 
 		// ----- bridge and session (game thread) -----------------------------------
 
+		Pending Asked()
+		{
+			Pending p;
+			p.answer = true;
+			return p;
+		}
+
 		void OnGet(const json&)
 		{
-			Queue(Pending{});
+			Queue(Asked());
 		}
 
 		void OnMove(const json& a_data)
@@ -447,7 +595,7 @@ namespace Atelier::Panel::Stage
 
 		void OnShown()
 		{
-			Queue(Pending{});
+			Queue(Asked());
 		}
 
 		void OnMenuClosed()
@@ -459,6 +607,8 @@ namespace Atelier::Panel::Stage
 					}
 					g_frame = Frame{};
 					g_at = At{};
+					g_target = At{};
+					g_moving.store(false, std::memory_order_relaxed);
 					g_why.clear();
 				});
 			}
@@ -473,6 +623,7 @@ namespace Atelier::Panel::Stage
 		p.lift = a_lift;
 		p.tilt = a_tilt;
 		p.any = p.turn != 0.0 || p.distance != 0.0 || p.lift != 0.0 || p.tilt != 0.0;
+		p.answer = true;
 		Queue(p);
 	}
 
@@ -481,7 +632,16 @@ namespace Atelier::Panel::Stage
 		Pending p;
 		p.reset = true;
 		p.any = true;
+		p.answer = true;
 		Queue(p);
+	}
+
+	void Tick()
+	{
+		if (!g_moving.load(std::memory_order_relaxed)) {
+			return;
+		}
+		Queue(Pending{});
 	}
 
 	void Install()
