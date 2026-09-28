@@ -35,6 +35,14 @@
     <div id="toolbar" class="panel-toolbar">
       <input id="search" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Search sliders">
       <button id="filter-changed" class="panel-button" type="button" aria-pressed="false">Changed</button>
+      <!--
+        Undo and redo are buttons and not Ctrl+Z / Ctrl+Y on purpose: Meridian
+        delivers some key presses twice, ~15 ms apart, as fresh presses
+        (measured in keyboard.js), and an undo that fires twice undoes a step
+        the player never asked about and says nothing. A click cannot double.
+      -->
+      <button id="undo" class="panel-button" type="button" disabled>Undo</button>
+      <button id="redo" class="panel-button" type="button" disabled>Redo</button>
       <span id="row-counter" class="versions"></span>
     </div>
 
@@ -92,6 +100,7 @@
   <script src="keyboard.js"></script>
   <script src="bridge.js"></script>
   <script src="settings.js"></script>
+  <script src="history.js"></script>
   <script src="panel.js"></script>
   <script src="controls.js"></script>
   <script src="shortcuts.js"></script>

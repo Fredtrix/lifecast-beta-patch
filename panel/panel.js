@@ -4,7 +4,10 @@
 "use strict";
 
 (() => {
-  const PAGE_VERSION = "0.9.0";
+  // Bumped for the Fase 6.5 round: the DLL logs this string on "hello", and
+  // the whole of 6.5 changed the page without changing the number - a log
+  // that says 0.9.0 could not tell which page had run.
+  const PAGE_VERSION = "0.9.1";
 
   // How long the page waits for the DLL's answer to "hello" before saying
   // so. Only the status line depends on it; nothing waits on it.

@@ -50,7 +50,8 @@ const AtelierPicker = (() => {
     return { h: h, s: max > 0 ? d / max : 0, v: max };
   }
 
-  // a_opts: { get() -> "#RRGGBB", send(hex, final) }
+  // a_opts: { label, get() -> "#RRGGBB", send(hex, final) }
+  // label names the control in the undo history; it is not drawn.
   // Returns { el, toggle(), refresh() }. el goes where the picker should
   // open; it is hidden until toggled.
   function create(a_opts) {
@@ -64,10 +65,38 @@ const AtelierPicker = (() => {
     wrap.appendChild(hexLabel);
 
     const hsv = { h: 0, s: 0, v: 0 };
-    const state = { dragging: false, timer: null, lastSent: 0 };
+    const state = { dragging: false, timer: null, lastSent: 0, last: null };
 
     function current() {
       return hsvToHex(hsv.h, hsv.s, hsv.v);
+    }
+
+    // Same shape as a slider row's: state.last is the colour before the drag
+    // now ending, and refresh() - which is where a colour from the DLL
+    // arrives - is its only other writer. refresh() bows out while dragging,
+    // so the "before" survives the echoes that land mid-drag.
+    function commit(a_hex) {
+      const before = state.last;
+      state.last = a_hex;
+      if (typeof before !== "string") {
+        return;
+      }
+      AtelierHistory.record({
+        label: a_opts.label || "Colour",
+        before: before,
+        after: a_hex,
+        apply: (v) => {
+          const next = hexToHsv(v);
+          if (next.s > 0 && next.v > 0) {
+            hsv.h = next.h;
+          }
+          hsv.s = next.s;
+          hsv.v = next.v;
+          state.last = current();
+          draw();
+          a_opts.send(current(), true);
+        },
+      });
     }
 
     function draw() {
@@ -120,6 +149,9 @@ const AtelierPicker = (() => {
       }
       state.lastSent = performance.now();
       a_opts.send(current(), final);
+      if (final) {
+        commit(current());
+      }
     }
 
     function moved() {
@@ -176,6 +208,7 @@ const AtelierPicker = (() => {
         hsv.s = next.s;
         hsv.v = next.v;
       }
+      state.last = current();
       draw();
     }
 

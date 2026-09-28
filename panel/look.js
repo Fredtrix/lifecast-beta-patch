@@ -76,6 +76,7 @@
       entry.chip.title = "Pick any colour";
       entry.row.el.firstChild.appendChild(entry.chip);
       entry.picker = AtelierPicker.create({
+        label: "Hair Color",
         get: () => entry.color || "#000000",
         send: (hex, final) => {
           entry.color = hex;
@@ -119,11 +120,18 @@
       b.dataset.index = String(i);
       b.style.background = color;
       b.title = String(i);
+      // A swatch does not go through the row's own send, so it records its
+      // own entry: read the index BEFORE set() moves it, then pick.
+      const pick = (index) => {
+        entry.row.set(index);
+        entry.color = entry.swatches && entry.swatches[index];
+        paintChip(entry, index);
+        send("hair-color", index, true);
+      };
       b.addEventListener("click", () => {
-        entry.row.set(i);
-        entry.color = color;
-        paintChip(entry, i);
-        send("hair-color", i, true);
+        const before = Number(entry.row.input.value);
+        pick(i);
+        AtelierHistory.record({ label: "Hair Color", before: before, after: i, apply: pick });
       });
       entry.grid.appendChild(b);
     });

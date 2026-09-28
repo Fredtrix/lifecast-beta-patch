@@ -73,6 +73,7 @@
       head.appendChild(name);
       body.appendChild(head);
       entry.picker = AtelierPicker.create({
+        label: l.label,
         get: () => colorOf(entry),
         send: (hex, final) => {
           setColor(entry, hex);
@@ -119,7 +120,7 @@
     }
   }
 
-  function fillSwatches(key, entry, swatches) {
+  function fillSwatches(key, entry, label, swatches) {
     const same = entry.swatches && entry.swatches.join() === swatches.join();
     entry.swatches = swatches;
     entry.grid.hidden = swatches.length === 0;
@@ -133,9 +134,19 @@
       b.tabIndex = -1;
       b.style.background = color;
       b.title = color;
+      // A swatch does not go through a colour row's send, so it records its
+      // own entry: read the colour BEFORE setColor() moves the R/G/B rows.
+      const pick = (hex) => {
+        setColor(entry, hex);
+        send(key, { color: hex }, true);
+      };
       b.addEventListener("click", () => {
-        setColor(entry, color);
-        send(key, { color: color }, true);
+        const before = colorOf(entry);
+        pick(color);
+        // colorOf() is always upper case; a swatch from the DLL need not be,
+        // and the same colour in two spellings would be an entry that undoes
+        // to itself.
+        AtelierHistory.record({ label: label, before: before, after: color.toUpperCase(), apply: pick });
       });
       entry.grid.appendChild(b);
     }
@@ -179,7 +190,7 @@
           entry.alpha.set(Math.round(l.alpha * 100));
         }
       }
-      fillSwatches(l.k, entry, none ? [] : Array.isArray(l.swatches) ? l.swatches : []);
+      fillSwatches(l.k, entry, l.label, none ? [] : Array.isArray(l.swatches) ? l.swatches : []);
     }
   });
 

@@ -555,6 +555,10 @@
       selected = data.name;
       notice = "loaded " + data.name + (data.late ? " (late, after " + data.ms + " ms)" : "");
       fallback.hidden = true;
+      // A preset replaces the whole character at once. Undoing one slider
+      // back to what it held before the preset would mix two characters,
+      // and nothing on screen would say so - so the history starts over.
+      AtelierHistory.clear("a preset was loaded");
     } else {
       notice = "not loaded: " + (data && data.why ? data.why : "unknown reason");
       if (data && data.fallback) {

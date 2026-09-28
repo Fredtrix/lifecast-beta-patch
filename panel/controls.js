@@ -214,7 +214,7 @@ const AtelierControls = (() => {
     wrap.appendChild(value);
     wrap.appendChild(track);
 
-    const state = { dragging: false, timer: null, lastSent: 0, hasInitial: false, initial: null };
+    const state = { dragging: false, timer: null, lastSent: 0, hasInitial: false, initial: null, last: null };
     wrap.dataset.changed = "0";
 
     function show(v) {
@@ -228,6 +228,37 @@ const AtelierControls = (() => {
       }
       state.lastSent = performance.now();
       a_opts.send(Number(input.value), final);
+    }
+
+    // One finished gesture, offered to the history. state.last is the value
+    // the row held before it - and the only OTHER writer of state.last is
+    // set(), which is where a value from the DLL arrives. So a value the
+    // player did not move never becomes the start of an entry, and a drag
+    // keeps the value from before the hand touched it: while dragging()
+    // is true the sections stop calling set(), which is what makes the
+    // "before" survive the echoes that arrive mid-drag.
+    function commit(a_v) {
+      const before = state.last;
+      state.last = a_v;
+      if (typeof before !== "number") {
+        return;
+      }
+      AtelierHistory.record({
+        label: a_opts.label,
+        before: before,
+        after: a_v,
+        // The same write the player's own gesture would do, with the older
+        // value: set the input, show it, and send it as final.
+        apply: (v) => {
+          if (input.disabled) {
+            return;
+          }
+          input.value = String(v);
+          show(Number(input.value));
+          state.last = Number(input.value);
+          send(true);
+        },
+      });
     }
 
     input.addEventListener("input", () => {
@@ -244,6 +275,7 @@ const AtelierControls = (() => {
     input.addEventListener("change", () => {
       state.dragging = false;
       send(true);
+      commit(Number(input.value));
     });
 
     function stepBy(a_dir) {
@@ -260,6 +292,7 @@ const AtelierControls = (() => {
       input.value = String(v);
       show(Number(input.value));
       send(true);
+      commit(Number(input.value));
     }
 
     down.addEventListener("click", () => stepBy(-1));
@@ -283,10 +316,12 @@ const AtelierControls = (() => {
         up.disabled = off;
         if (off) {
           value.textContent = "--";
+          state.last = null;
           return;
         }
         input.value = String(a_v);
         show(a_v);
+        state.last = a_v;
         if (!state.hasInitial) {
           state.hasInitial = true;
           state.initial = a_v;
