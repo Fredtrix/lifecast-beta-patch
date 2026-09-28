@@ -215,31 +215,6 @@ body {
   margin-top: 0;
 }
 
-/* The category grid inside the "Index" section (E2 item 2): each tile
-   reveals the first section of its group. Reuses .panel-button's frame. */
-.index-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.index-tile {
-  padding: 10px 8px;
-  font: inherit;
-  text-align: center;
-  color: inherit;
-  background: transparent;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.index-tile:hover,
-.index-tile:focus-visible {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 /* A section collapses from its header, and closed is the default (D064): the
    panel opens as a list of names instead of a wall of sliders. Nothing here
    picks a look - it reuses the variables at the top, so the Fase 7 skin still
