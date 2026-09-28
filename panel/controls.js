@@ -70,17 +70,46 @@ const AtelierControls = (() => {
     return at < 0 ? order.length : at;
   }
 
+  // What group a section's key belongs to (E2 item 1). null means no group -
+  // the section stays a heading of one. The function itself is domain
+  // knowledge this file does not have; it comes from outside, same as order.
+  let groupOf = () => null;
+
   function arrange() {
     const host = document.getElementById("sections");
-    Array.prototype.slice.call(host.children)
-      .sort((a, b) => rank(a) - rank(b) || Number(a.dataset.mountedAt) - Number(b.dataset.mountedAt))
-      .forEach((el) => host.appendChild(el));
+    // Headings are rebuilt every call, not patched - cheap at panel size, and
+    // it means a heading can never survive its group becoming empty.
+    host.querySelectorAll(":scope > .group-heading").forEach((h) => h.remove());
+    const sections = Array.prototype.slice.call(host.querySelectorAll(":scope > .section"))
+      .sort((a, b) => rank(a) - rank(b) || Number(a.dataset.mountedAt) - Number(b.dataset.mountedAt));
+    let last;
+    sections.forEach((s) => {
+      const g = groupOf(s.dataset.key);
+      // Read by search.js to tell which heading a hidden section belongs to
+      // without depending on DOM adjacency (an ungrouped section can sit
+      // right after a group, and must not be read as still part of it).
+      s.dataset.group = g || "";
+      if (g && g !== last) {
+        const heading = el("div", "group-heading", g);
+        host.appendChild(heading);
+      }
+      last = g;
+      host.appendChild(s);
+    });
   }
 
   // Replaces the order and rearranges what is already mounted. The list comes
   // from outside this file on purpose: no section order is written here.
   function setOrder(a_keys) {
     order = Array.isArray(a_keys) ? a_keys.slice() : [];
+    arrange();
+  }
+
+  // Replaces the grouping function and rearranges to draw the headings it
+  // implies. Same shape as setOrder: this file stays ignorant of what a
+  // "Body" or a "Face" is.
+  function setGroups(a_fn) {
+    groupOf = typeof a_fn === "function" ? a_fn : () => null;
     arrange();
   }
 
@@ -238,5 +267,5 @@ const AtelierControls = (() => {
     return true;
   }
 
-  return { el: el, section: section, mount: mount, setOrder: setOrder, row: row, reveal: reveal };
+  return { el: el, section: section, mount: mount, setOrder: setOrder, setGroups: setGroups, row: row, reveal: reveal };
 })();

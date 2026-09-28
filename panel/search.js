@@ -87,6 +87,25 @@
       }
     });
 
+    // A group heading (E2 item 1, controls.js's arrange()) with every one of
+    // its sections hidden is a label over nothing - hide it along with them.
+    // Matched by data-group, not DOM adjacency: an ungrouped section (e.g.
+    // Presets) can sit right after a group's last section and must not be
+    // read as extending it.
+    const groupVisible = new Map();
+    host.querySelectorAll(":scope > .section").forEach((s) => {
+      const g = s.dataset.group;
+      if (!g) {
+        return;
+      }
+      if (!s.hidden || !groupVisible.has(g)) {
+        groupVisible.set(g, groupVisible.get(g) || !s.hidden);
+      }
+    });
+    host.querySelectorAll(":scope > .group-heading").forEach((h) => {
+      h.hidden = !groupVisible.get(h.textContent);
+    });
+
     if (changedOnly) {
       counterEl.textContent = changedMatched + " changed of " + matchedRows;
     } else if (q !== "") {
