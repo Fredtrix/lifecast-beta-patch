@@ -39,4 +39,8 @@ namespace Atelier::Core::RaceMenuSync
 	// and the tint masks. RaceMenu's own CharGen.LoadPreset sends it after a
 	// preset load, "some internals were probably modified".
 	void PresetLoaded();
+
+	// "RSM_ToggleLight" with numArg 1.0/0.0: RaceMenu's own chargen light
+	// toggle, the same event its "L" hotkey sends.
+	void ToggleLight(bool a_on);
 }

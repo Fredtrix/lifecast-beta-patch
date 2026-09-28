@@ -10,16 +10,16 @@ namespace Atelier::Core::RaceMenuSync
 		constexpr RE::FormID kHairColorId = 0x801;
 		constexpr auto       kRaceMenuPlugin = "RaceMenu.esp"sv;
 
-		void Send(const char* a_event, const std::string& a_str)
+		void Send(const char* a_event, const std::string& a_str, float a_num = 0.0F)
 		{
 			auto* source = SKSE::GetModCallbackEventSource();
 			if (!source) {
 				spdlog::warn("[sync] no mod callback source - {} \"{}\" not sent", a_event, a_str);
 				return;
 			}
-			SKSE::ModCallbackEvent event{ a_event, a_str.c_str(), 0.0F, nullptr };
+			SKSE::ModCallbackEvent event{ a_event, a_str.c_str(), a_num, nullptr };
 			source->SendEvent(&event);
-			spdlog::info("[sync] sent {} \"{}\"", a_event, a_str);
+			spdlog::info("[sync] sent {} \"{}\" {}", a_event, a_str, a_num);
 		}
 	}
 
@@ -45,4 +45,6 @@ namespace Atelier::Core::RaceMenuSync
 	void ShadersInvalidated() { Send("RSM_ShadersInvalidated", ""); }
 
 	void PresetLoaded() { Send("RSM_RequestTintSave", ""); }
+
+	void ToggleLight(bool a_on) { Send("RSM_ToggleLight", "", a_on ? 1.0F : 0.0F); }
 }
