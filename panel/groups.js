@@ -18,7 +18,13 @@
   // to browse) and "index" opts out of indexing itself.
   const UNINDEXED = new Set(["character", "index"]);
 
+  // key can be undefined for a section still mounting (E2 item 3): a section
+  // without a key must never reach a group's test, because one test here
+  // (Face) calls .indexOf on it without a guard of its own.
   function groupOf(key) {
+    if (typeof key !== "string") {
+      return null;
+    }
     const hit = GROUPS.find((g) => g.test(key));
     return hit ? hit.title : null;
   }
@@ -30,7 +36,17 @@
   const grid = AtelierControls.el("div", "index-grid");
   section.body.appendChild(grid);
   AtelierControls.mount(section, "index");
-  AtelierControls.setOrder(["character", "index"]);
+
+  // The explicit order this page had by accident, from the <script> tags,
+  // before OBody's section started mounting on the DLL's own time (E2 item
+  // 1): without a declared order an async mount always lands last, wherever
+  // "last" happens to be when the DLL answers. Only OBody needed naming to
+  // fix that; character, index and the Body group members are named too so
+  // that naming OBody does not silently move any of them.
+  AtelierControls.setOrder([
+    "character", "index",
+    "look:Body", "look:Hair", "look:Features", "scales", "obody", "tints",
+  ]);
 
   // One tile per group, and one per section that belongs to no group - the
   // categories a player can jump to. The first section mounted under a

@@ -13,11 +13,11 @@
 "use strict";
 
 (() => {
-  // scales.js mounted the Body Scales section just before this file ran; the
-  // body section goes right after it, whenever it is built.
-  const host = document.getElementById("sections");
-  const last = host.lastElementChild;
-  const anchor = last && last.matches("section") ? last : null;
+  // Where this section lands among the others is declared once, in
+  // groups.js, not here: mount() only takes a key, and arrange() places it
+  // (E2 item 1 - the DOM-order shortcut this file used to take broke the
+  // OBody shortcut button, the group index, and the placeholder cleanup;
+  // see groups.js and controls.js).
 
   let section = null;
   let status = null;
@@ -25,16 +25,12 @@
   let pending = null;  // the name asked for, until the next "body" message
 
   function build() {
-    section = AtelierControls.section("Body");
+    section = AtelierControls.section("OBody");
     status = AtelierControls.el("div", "preset-status", "--");
     list = AtelierControls.el("ul", "preset-list");
     section.body.appendChild(status);
     section.body.appendChild(list);
-    if (anchor && anchor.isConnected) {
-      anchor.after(section);
-    } else {
-      AtelierControls.mount(section, "obody");
-    }
+    AtelierControls.mount(section, "obody");
   }
 
   function remove() {
