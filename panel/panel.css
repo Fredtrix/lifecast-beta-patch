@@ -151,6 +151,21 @@ body {
   outline: none;
 }
 
+.panel-button:disabled {
+  color: var(--text-dim);
+  border-color: var(--panel-border);
+  cursor: default;
+}
+
+/* The always-present shortcuts (E2 item 8), between the title and the
+   status: buttons that jump to a section below, not a second navigation
+   structure. Reuses .panel-button and --gap - no token of its own, so the
+   Fase 7 skin still owns colour (D072: the palette is frozen). */
+.shortcuts {
+  display: flex;
+  gap: 6px;
+}
+
 .section + .section {
   margin-top: var(--gap);
 }

@@ -14,6 +14,16 @@
   <aside id="panel" class="panel">
     <header class="panel-header">
       <h1 class="panel-title">Atelier</h1>
+      <!--
+        Always-present shortcuts (E2 item 8): one click from anywhere in the
+        scrolled list to Presets or Body, and to RaceMenu's own Sculpt.
+        Buttons that jump, not a second navigation structure - shortcuts.js.
+      -->
+      <nav id="shortcuts" class="shortcuts" aria-label="Quick access">
+        <button id="shortcut-presets" class="panel-button" type="button">Presets</button>
+        <button id="shortcut-obody" class="panel-button" type="button">Body</button>
+        <button id="shortcut-sculpt" class="panel-button" type="button" title="Opens RaceMenu (F4 comes back)">Sculpt</button>
+      </nav>
       <span id="bridge-status" class="status status-wait">connecting</span>
     </header>
 
@@ -73,6 +83,7 @@
   <script src="settings.js"></script>
   <script src="panel.js"></script>
   <script src="controls.js"></script>
+  <script src="shortcuts.js"></script>
   <script src="picker.js"></script>
   <script src="look.js"></script>
   <script src="scales.js"></script>

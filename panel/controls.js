@@ -205,5 +205,26 @@ const AtelierControls = (() => {
     };
   }
 
-  return { el: el, section: section, mount: mount, setOrder: setOrder, row: row };
+  // Opens the section named a_key if it is collapsed, and scrolls it into
+  // view. Returns false when the key names no mounted section - the caller
+  // (a shortcut button, e.g.) decides what that means; this function does
+  // not, so it stays correct whether the section is conditional or not.
+  function reveal(a_key) {
+    const host = document.getElementById("sections");
+    const s = host.querySelector('.section[data-key="' + a_key + '"]');
+    if (!s) {
+      return false;
+    }
+    if (s.dataset.open !== "1") {
+      s.dataset.open = "1";
+      const head = s.querySelector(".section-head");
+      if (head) {
+        head.setAttribute("aria-expanded", "true");
+      }
+    }
+    s.scrollIntoView({ block: "start", behavior: "smooth" });
+    return true;
+  }
+
+  return { el: el, section: section, mount: mount, setOrder: setOrder, row: row, reveal: reveal };
 })();
