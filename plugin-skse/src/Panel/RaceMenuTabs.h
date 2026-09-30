@@ -32,4 +32,9 @@ namespace Atelier::Panel::RaceMenuTabs
 	// which mods inject them, so the page decides what it covers by matching
 	// labels against its own list rather than trusting a count.
 	void Report();
+
+	// Once the page has asked through Report(), the list is watched while the
+	// menu is open and pushed again whenever it changes: a mod's tabs arrive
+	// after the menu opens. Call after Edit::Session::Install().
+	void Install();
 }

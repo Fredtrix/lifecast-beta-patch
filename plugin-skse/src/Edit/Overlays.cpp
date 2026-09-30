@@ -619,9 +619,67 @@ namespace Atelier::Edit::Overlays
 
 		void OnShown() { PushOverlays("the panel came on screen"); }
 
+		// How many entries the film's five paint lists hold right now, one
+		// number: five GetArraySize calls and nothing read. -1 when the lists
+		// are not there.
+		int CatalogSize()
+		{
+			auto*        ui = RE::UI::GetSingleton();
+			auto         menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto*        movie = menu ? menu->uiMovie.get() : nullptr;
+			RE::GFxValue lists;
+			if (!movie || !movie->GetVariable(&lists, kCatalogList) || !lists.IsArray()) {
+				return -1;
+			}
+			int          total = 0;
+			const auto   count = std::min<std::uint32_t>(lists.GetArraySize(), kCatalogCount);
+			for (std::uint32_t i = 0; i < count; ++i) {
+				RE::GFxValue list;
+				if (lists.GetElement(i, &list) && list.IsArray()) {
+					total += static_cast<int>(list.GetArraySize());
+				}
+			}
+			return total;
+		}
+
+		// The catalogs are filled by scripts after the menu opens, exactly as a
+		// mod's tabs are (D091): the round that read them once, when the panel
+		// came on screen, saw all five empty. So the film is watched, and the
+		// catalogs are read again when their size moves.
+		int                                   g_catalogSize = -2;
+		std::chrono::steady_clock::time_point g_looked{};
+
+		void OnTick()
+		{
+			if (!Session::MenuOpen()) {
+				g_catalogSize = -2;
+				return;
+			}
+			const auto now = std::chrono::steady_clock::now();
+			if (now - g_looked < std::chrono::seconds(1)) {
+				return;
+			}
+			g_looked = now;
+			auto* tasks = SKSE::GetTaskInterface();
+			if (!tasks) {
+				return;
+			}
+			tasks->AddUITask([]() {
+				const auto size = CatalogSize();
+				if (size < 0 || size == g_catalogSize) {
+					return;
+				}
+				g_catalogSize = size;
+				spdlog::info("[overlays] the film's paint lists hold {} entries - reading them", size);
+				ReadCatalogNow();
+				PushOverlays("the paint catalog changed");
+			});
+		}
+
 		void OnOpened()
 		{
 			g_sets = 0;
+			g_catalogSize = -2;
 			// The catalog is the film's, and a new menu means a new film.
 			std::scoped_lock lock(g_catalogLock);
 			g_catalogRead = false;
@@ -642,6 +700,7 @@ namespace Atelier::Edit::Overlays
 		}
 		Session::OnPanelShown(&OnShown);
 		Session::OnMenuOpened(&OnOpened);
+		Session::OnTick(&OnTick);
 		Session::OnMenuClosed(&OnClosed);
 		Panel::Bridge::On("overlays-get", &OnOverlaysGet);
 		Panel::Bridge::On("overlay-set", &OnOverlaySet);

@@ -3,6 +3,7 @@
 
 #include "Panel/RaceMenuTabs.h"
 
+#include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
 #include <thread>
@@ -21,6 +22,7 @@ namespace Atelier::Panel::RaceMenuTabs
 		// the body scale and morph pages.
 		constexpr std::uint32_t kFlagRace = 2;
 		constexpr std::uint32_t kFlagFace = 16;
+			constexpr std::uint32_t kFlagExtra = 512;
 
 		// What each delegated control looks for: a category flag, or failing
 		// that a piece of the entry's label (lower case).
@@ -34,6 +36,7 @@ namespace Atelier::Panel::RaceMenuTabs
 		const Target kTargets[] = {
 			{ "race-sex", kFlagRace, {} },
 			{ "face-sliders", kFlagFace, {} },
+			{ "extra", kFlagExtra, {} },
 			{ "expressions", 0, { "express" } },
 			{ "paints", 0, { "paint", "overlay", "makeup" } },
 		};
@@ -339,7 +342,79 @@ namespace Atelier::Panel::RaceMenuTabs
 				ok ? "ok" : "failed", read ? fmt::format("{}", selected.GetNumber()) : std::string("unreadable"));
 		}
 
-		void ReportNow()
+		// What the category list looks like right now: label, flag and key of
+		// every entry. Empty when the list cannot be read.
+		std::string Signature()
+		{
+			auto*        ui = RE::UI::GetSingleton();
+			auto         menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto*        movie = menu ? menu->uiMovie.get() : nullptr;
+			RE::GFxValue list;
+			RE::GFxValue entries;
+			std::string  where;
+			if (!movie || !FindCategoryList(movie, list, where) || !Member(list, "entryList", entries) ||
+				!entries.IsArray()) {
+				return {};
+			}
+			std::string out;
+			const auto  n = entries.GetArraySize();
+			for (std::uint32_t i = 0; i < n; ++i) {
+				RE::GFxValue entry;
+				if (!entries.GetElement(i, &entry) || !entry.IsObject()) {
+					continue;
+				}
+				out += fmt::format("{}/{}/{};", Text(entry), Flag(entry), Key(entry));
+			}
+			return out;
+		}
+
+		// Set once the page has asked for the list; the watch below stays
+		// silent before that.
+		bool                  g_wanted = false;
+		std::string           g_signature;
+		std::chrono::steady_clock::time_point g_looked{};
+
+		void ReportNow(const char* a_why = "asked for");
+
+		// The category list is not final when the panel comes on screen: a mod
+		// adds its tabs from Papyrus after the menu opens (17 entries at the
+		// instant, 20 five seconds later - Docs\VERIFY.md V095, D091). One read
+		// at a moment we pick would hand the page a list with the mod tabs
+		// missing, and a check that every entry has a home would pass over 17 of
+		// 20. So the list is watched while the menu is open, and pushed again
+		// whenever it changes.
+		void OnTick()
+		{
+			if (!g_wanted) {
+				return;
+			}
+			if (!Edit::Session::MenuOpen()) {
+				g_signature.clear();
+				return;
+			}
+			const auto now = std::chrono::steady_clock::now();
+			if (now - g_looked < std::chrono::seconds(1)) {
+				return;
+			}
+			g_looked = now;
+			auto* tasks = SKSE::GetTaskInterface();
+			if (!tasks) {
+				return;
+			}
+			tasks->AddUITask([]() {
+				const auto signature = Signature();
+				if (signature.empty() || signature == g_signature) {
+					return;
+				}
+				const bool first = g_signature.empty();
+				g_signature = signature;
+				ReportNow(first ? "the film was read" : "the film changed");
+			});
+		}
+
+		void OnOpened() { g_signature.clear(); }
+
+		void ReportNow(const char* a_why)
 		{
 			auto         out = nlohmann::json::array();
 			bool         read = false;
@@ -366,7 +441,7 @@ namespace Atelier::Panel::RaceMenuTabs
 					out.push_back(
 						{ { "index", i }, { "text", Text(entry) }, { "flag", Flag(entry) }, { "key", Key(entry) } });
 				}
-				spdlog::info("[tabs] categories: sending {} of {} entries from {}", out.size(), n, where);
+				spdlog::info("[tabs] categories: sending {} of {} entries from {} ({})", out.size(), n, where, a_why);
 			}
 			// "ready" says the list was READ, not that it has entries. An empty
 			// list and an unreachable film are different answers, and a page
@@ -396,6 +471,26 @@ namespace Atelier::Panel::RaceMenuTabs
 			spdlog::warn("[tabs] categories: no task interface - the page gets no list");
 			return;
 		}
+		g_wanted = true;
 		tasks->AddUITask([]() { ReportNow(); });
+	}
+
+	void Install()
+	{
+		// The page's own check that every entry of the live list has a home,
+		// run by the page and only recorded here.
+		Bridge::On("categories-checked", [](const nlohmann::json& a_data) {
+			const auto total = a_data.value("total", 0);
+			std::string orphans;
+			if (a_data.contains("orphans") && a_data["orphans"].is_array()) {
+				for (const auto& o : a_data["orphans"]) {
+					orphans += fmt::format("{}'{}'", orphans.empty() ? "" : ", ", o.is_string() ? o.get<std::string>() : "?");
+				}
+			}
+			const auto n = a_data.contains("orphans") && a_data["orphans"].is_array() ? a_data["orphans"].size() : 0;
+			spdlog::info("[tabs] home check: {} entries, {} orphans{}{}", total, n, n ? ": " : "", orphans);
+		});
+		Edit::Session::OnTick(&OnTick);
+		Edit::Session::OnMenuOpened(&OnOpened);
 	}
 }

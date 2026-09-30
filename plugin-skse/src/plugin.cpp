@@ -31,6 +31,7 @@
 #include "Edit/Tints.h"
 #include "Edit/Undress.h"
 #include "Panel/Panel.h"
+#include "Panel/RaceMenuTabs.h"
 #include "Panel/Stage.h"
 #include "Panel/Switcher.h"
 #include "Preset/Guard.h"
@@ -123,6 +124,7 @@ namespace
 			Atelier::Edit::Appearance::Install();
 			Atelier::Edit::BodyScales::Install();
 			Atelier::Edit::BodyMorphs::Install();
+			Atelier::Panel::RaceMenuTabs::Install();
 			Atelier::Edit::Tints::Install();
 			Atelier::Edit::Overlays::Install();
 			Atelier::Edit::Light::Install();

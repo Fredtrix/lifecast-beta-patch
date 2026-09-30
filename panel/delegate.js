@@ -21,6 +21,7 @@
     ["race-sex", "Race & Sex", "Changing race or sex rebuilds every list here."],
     ["presets", "Face Presets", "The race's preset faces."],
     ["face-sliders", "Extended Face Sliders", "RaceMenu's own face sliders, beyond the game's."],
+    ["extra", "Extra Sliders", "The sliders RaceMenu files under its own Extra tab."],
     ["expressions", "Expressions", "The face expression sliders."],
     ["paints", "War Paint Catalog", "Every war paint installed. The Atelier offers the race's own."],
     ["sculpt", "Sculpt", "Free-form editing of the head mesh."],
@@ -60,6 +61,7 @@
   // those rows instead of stacking another copy of them under the fixed ones.
   function addRow(key, label, note, live) {
     const row = AtelierControls.el("div", "delegate");
+    row.dataset.door = key;
     if (live) {
       row.dataset.live = "1";
     }
@@ -81,6 +83,88 @@
   }
   AtelierControls.mount(section, "delegate");
 
+
+  // Where each category the page already covers is at home: a section key (a
+  // prefix ends in ":"), or a door row. The check below measures the DOM
+  // against this list and against the live category list, so a category with
+  // no home shows up as an orphan instead of passing over in silence.
+  // $ALL is the one entry that is not a category (it carries every bit).
+  const HOME = {
+    "RACE": { door: "race-sex" },
+    "BODY": { section: "look:Body" },
+    "HEAD": { section: "face:" }, "FACE": { section: "face:" }, "EYES": { section: "face:" },
+    "BROW": { section: "face:" }, "MOUTH": { section: "face:" },
+    "HAIR": { section: "look:Hair" },
+    "$EXTRA": { door: "extra" },
+    "$EXPRESSIONS": { door: "expressions" },
+    "$COLORS": { section: "tints" },
+    "$MAKEUP": { section: "tints" },
+    "$BODY PAINT": { section: "overlay:body" },
+    "$HAND PAINT": { section: "overlay:hand" },
+    "$FOOT PAINT": { section: "overlay:foot" },
+    "$FACE PAINT": { section: "face:paint" },
+    "$BODY SCALES": { section: "scales" },
+  };
+
+  function hasSection(prefix) {
+    for (const s of document.querySelectorAll("#sections > [data-key]")) {
+      const k = s.dataset.key;
+      if (prefix.endsWith(":") ? k.indexOf(prefix) === 0 : k === prefix) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function hasDoor(key) {
+    return !!section.body.querySelector('[data-door="' + key + '"]');
+  }
+
+  // Every entry of the LIVE list, and what stands for it. An entry with no
+  // home is an orphan. "Absent because the player has no overlay" is not one:
+  // the category is not in the list then, so it is never looked at.
+  let lastEntries = null;
+  function check() {
+    if (!lastEntries) {
+      return null;
+    }
+    const orphans = [];
+    for (const e of lastEntries) {
+      const label = e.text;
+      if (label === "$ALL") {
+        continue;
+      }
+      const home = HOME[label];
+      let ok;
+      if (home) {
+        ok = home.door ? hasDoor(home.door) : hasSection(home.section);
+      } else if (typeof e.key === "string" && e.key !== "") {
+        ok = hasSection("morph:" + e.key);
+      } else {
+        ok = hasDoor("category:" + label);
+      }
+      if (!ok) {
+        orphans.push(label);
+      }
+    }
+    return { total: lastEntries.length, orphans: orphans };
+  }
+
+  // The page settles a moment after the list arrives: the DLL's sections mount
+  // on its own time. Checking on arrival would call an unmounted section an
+  // orphan, so the check waits for two quiet seconds and reports the last one.
+  let checkTimer = 0;
+  function scheduleCheck() {
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(() => {
+      const r = check();
+      if (r) {
+        AtelierBridge.send("categories-checked", r);
+      }
+    }, 2000);
+  }
+  window.AtelierDelegate = { check };
+
   AtelierBridge.on("racemenu-categories", (data) => {
     // ready says the list was read. A false one is a bad read, not an empty
     // list, and the doors already on screen are better than none: leave them.
@@ -90,6 +174,8 @@
     for (const old of section.body.querySelectorAll("[data-live]")) {
       old.remove();
     }
+    lastEntries = data.entries;
+    scheduleCheck();
     for (const entry of data.entries) {
       if (typeof entry.text !== "string" || entry.text === "" || COVERED.indexOf(entry.text) >= 0) {
         continue;
