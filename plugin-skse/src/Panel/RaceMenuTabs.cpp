@@ -3,6 +3,8 @@
 
 #include "Panel/RaceMenuTabs.h"
 
+#include "Panel/Bridge.h"
+
 #include <thread>
 
 namespace Atelier::Panel::RaceMenuTabs
@@ -194,12 +196,23 @@ namespace Atelier::Panel::RaceMenuTabs
 			return Pressed::kYes;
 		}
 
+		// The page's way of reaching a category this build does not know by
+		// name: it read the live list through Report() and hands back a label.
+		constexpr std::string_view kByLabel = "category:";
+
 		void SelectNow(const std::string& a_for, bool a_modeChecked = false)
 		{
+			std::string wantLabel;
+			if (a_for.starts_with(kByLabel)) {
+				wantLabel = a_for.substr(kByLabel.size());
+			}
+
 			const Target* target = nullptr;
-			for (const auto& t : kTargets) {
-				if (a_for == t.key) {
-					target = &t;
+			if (wantLabel.empty()) {
+				for (const auto& t : kTargets) {
+					if (a_for == t.key) {
+						target = &t;
+					}
 				}
 			}
 			auto* ui = RE::UI::GetSingleton();
@@ -209,7 +222,7 @@ namespace Atelier::Panel::RaceMenuTabs
 				spdlog::warn("[tabs] {}: RaceMenu film not reachable", a_for);
 				return;
 			}
-			if (!target) {
+			if (!target && wantLabel.empty()) {
 				for (const auto& m : kModes) {
 					if (a_for == m.key) {
 						SelectMode(movie, a_for, m.word);
@@ -260,6 +273,18 @@ namespace Atelier::Panel::RaceMenuTabs
 				if (chosen >= 0) {
 					continue;
 				}
+				// By label, and exact: the label is the only identifier an
+				// entry carries - its members are enabled, flag, filterFlag,
+				// savedItemIndex, _sortFlag, itemIndex, clipIndex, bDontHide,
+				// priority, text, filteredIndex, type, with no category key
+				// among them. A substring would let one category's name match
+				// another that contains it.
+				if (!wantLabel.empty()) {
+					if (text == wantLabel) {
+						chosen = static_cast<int>(i);
+					}
+					continue;
+				}
 				// Exact flag: "$ALL" carries every category bit (2044 in the
 				// game) and matched FACE before FACE did.
 				if (target->flag != 0 && flag == target->flag) {
@@ -296,6 +321,44 @@ namespace Atelier::Panel::RaceMenuTabs
 			spdlog::info("[tabs] {}: pressed entry {} - invoke {}, selectedIndex now {}", a_for, chosen,
 				ok ? "ok" : "failed", read ? fmt::format("{}", selected.GetNumber()) : std::string("unreadable"));
 		}
+
+		void ReportNow()
+		{
+			auto         out = nlohmann::json::array();
+			bool         read = false;
+			auto*        ui = RE::UI::GetSingleton();
+			auto         menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto*        movie = menu ? menu->uiMovie.get() : nullptr;
+			RE::GFxValue list;
+			RE::GFxValue entries;
+			std::string  where;
+			if (!movie) {
+				spdlog::warn("[tabs] categories: RaceMenu film not reachable");
+			} else if (!FindCategoryList(movie, list, where)) {
+				spdlog::warn("[tabs] categories: no category list found (looked at {})", where);
+			} else if (!Member(list, "entryList", entries) || !entries.IsArray()) {
+				spdlog::warn("[tabs] categories: {} has no entryList array", where);
+			} else {
+				read = true;
+				const auto n = entries.GetArraySize();
+				for (std::uint32_t i = 0; i < n; ++i) {
+					RE::GFxValue entry;
+					if (!entries.GetElement(i, &entry) || !entry.IsObject()) {
+						continue;
+					}
+					out.push_back({ { "index", i }, { "text", Text(entry) }, { "flag", Flag(entry) } });
+				}
+				spdlog::info("[tabs] categories: sending {} of {} entries from {}", out.size(), n, where);
+			}
+			// "ready" says the list was READ, not that it has entries. An empty
+			// list and an unreachable film are different answers, and a page
+			// that cannot tell them apart would drop every door it should be
+			// putting up on a bad read.
+			//
+			// Logged whole: this line is the page's test case - a cut one does
+			// not parse.
+			Bridge::Send("racemenu-categories", { { "ready", read }, { "entries", std::move(out) } }, true);
+		}
 	}
 
 	void Select(const std::string& a_for)
@@ -306,5 +369,15 @@ namespace Atelier::Panel::RaceMenuTabs
 			return;
 		}
 		tasks->AddUITask([a_for]() { SelectNow(a_for); });
+	}
+
+	void Report()
+	{
+		auto* tasks = SKSE::GetTaskInterface();
+		if (!tasks) {
+			spdlog::warn("[tabs] categories: no task interface - the page gets no list");
+			return;
+		}
+		tasks->AddUITask([]() { ReportNow(); });
 	}
 }

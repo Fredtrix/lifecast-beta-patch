@@ -185,6 +185,15 @@ namespace Atelier::Panel::Switcher
 			}
 		}
 
+		// "racemenu-categories-get" with no data: the page asking what
+		// categories RaceMenu actually has on this install. The answer travels
+		// back as its own "racemenu-categories" message - the bridge is
+		// fire-and-forget both ways.
+		void OnPageCategories(const nlohmann::json&)
+		{
+			RaceMenuTabs::Report();
+		}
+
 		class MenuSink : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 		{
 		public:
@@ -288,6 +297,7 @@ namespace Atelier::Panel::Switcher
 		}
 
 		Bridge::On("show-racemenu", &OnPageShowRaceMenu);
+		Bridge::On("racemenu-categories-get", &OnPageCategories);
 
 		g_installed = true;
 		spdlog::info("[switch] installed - F4 swaps the Atelier and RaceMenu");
