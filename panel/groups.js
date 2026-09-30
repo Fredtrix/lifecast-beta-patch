@@ -15,7 +15,7 @@
 
 (() => {
   const GROUPS = [
-    { title: "Body", test: (key) => key === "look:Body" || key === "look:Hair" || key === "look:Features" || key === "obody" || key === "scales" || key === "tints" },
+    { title: "Body", test: (key) => key === "look:Body" || key === "look:Hair" || key === "look:Features" || key === "obody" || key === "scales" || key === "tints" || key.indexOf("overlay:") === 0 },
     { title: "Face", test: (key) => key.indexOf("face:") === 0 },
   ];
 
@@ -38,8 +38,16 @@
   // "last" happens to be when the DLL answers. Only OBody needed naming to
   // fix that; character, control and the Body group members are named too so
   // that naming OBody does not silently move any of them.
+  // The paint overlay sections mount on the DLL's own time, like OBody, so
+  // the three body ones are named here or they land wherever "last" happens
+  // to be. Face paint is deliberately NOT named: a rank puts a section ahead
+  // of every unranked one, which would tear the Face group in two - a
+  // heading above face paint and a second heading above the face sections
+  // that have no rank. Unranked, it falls last inside its own group, which
+  // is both stable and where it belongs.
   AtelierControls.setOrder([
     "character", "control",
     "look:Body", "look:Hair", "look:Features", "scales", "obody", "tints",
+    "overlay:body", "overlay:hand", "overlay:foot",
   ]);
 })();

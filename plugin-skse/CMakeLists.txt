@@ -59,6 +59,7 @@ add_commonlibsse_plugin(
         src/Edit/FaceSliders.cpp
         src/Edit/Finish.cpp
         src/Edit/Light.cpp
+        src/Edit/Overlays.cpp
         src/Edit/Session.cpp
         src/Edit/Tints.cpp
         src/Edit/Undress.cpp

@@ -23,6 +23,13 @@
 // other mods, applied by changing a mask's texture - and that catalog is not
 // reachable from a plugin; the page sends the player to RaceMenu for it.
 //
+// WRONG, on the last clause, and kept because it is the written reason war
+// paint was left a door: the catalog IS reachable. It is not on any SKEE
+// interface, which is what that sentence was reasoning from, but RaceMenu's
+// own film holds it, and Edit/Overlays reads it there for the four paint
+// overlays. Whether the war paint half is worth offering here is a separate
+// question, open and named in D084 - the claim of impossibility is not.
+//
 // Swatches are the race's own preset colours for that texture, when the race
 // has them; any colour can be set regardless.
 //

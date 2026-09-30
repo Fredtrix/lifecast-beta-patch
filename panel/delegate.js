@@ -22,13 +22,17 @@
     ["presets", "Face Presets", "The race's preset faces."],
     ["face-sliders", "Extended Face Sliders", "RaceMenu's own face sliders, beyond the game's."],
     ["expressions", "Expressions", "The face expression sliders."],
-    ["paints", "Overlays & Paints", "Body, hand, feet and face paint, and the full war paint catalog."],
+    ["paints", "War Paint Catalog", "Every war paint installed. The Atelier offers the race's own."],
     ["sculpt", "Sculpt", "Free-form editing of the head mesh."],
   ];
 
   // Categories that already have a home here, matched by the category's own
-  // label - and "a home" includes a fixed row above: $EXTRA and $EXPRESSIONS
-  // have their own, and the five paint categories share Overlays & Paints.
+  // label - and "a home" is a section OR a fixed row above. $EXTRA and
+  // $EXPRESSIONS have a row each. The four overlay categories have sections
+  // of their own (overlays.js). $MAKEUP is war paint, which is a tint mask
+  // and not an overlay: its home is the War Paint layer in Skin & Tints, and
+  // the row above is the door to the full catalog, which that layer does not
+  // carry (D084).
   //
   // Matched by label and never by flag. AddCategory registers a category by
   // text key and AddSliderEx defaults its section to 0, so 0 is a real value

@@ -26,6 +26,7 @@
 #include "Edit/Finish.h"
 #include "Edit/Session.h"
 #include "Edit/Light.h"
+#include "Edit/Overlays.h"
 #include "Edit/Tints.h"
 #include "Edit/Undress.h"
 #include "Panel/Panel.h"
@@ -121,6 +122,7 @@ namespace
 			Atelier::Edit::Appearance::Install();
 			Atelier::Edit::BodyScales::Install();
 			Atelier::Edit::Tints::Install();
+			Atelier::Edit::Overlays::Install();
 			Atelier::Edit::Light::Install();
 			Atelier::Edit::Undress::Install();
 
