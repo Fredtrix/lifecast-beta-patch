@@ -27,6 +27,7 @@
 #include "Edit/Session.h"
 #include "Edit/Light.h"
 #include "Edit/Tints.h"
+#include "Edit/Undress.h"
 #include "Panel/Panel.h"
 #include "Panel/Stage.h"
 #include "Panel/Switcher.h"
@@ -121,6 +122,7 @@ namespace
 			Atelier::Edit::BodyScales::Install();
 			Atelier::Edit::Tints::Install();
 			Atelier::Edit::Light::Install();
+			Atelier::Edit::Undress::Install();
 
 			// The body section, offered only while OBody answers.
 			Atelier::Edit::Body::Install();

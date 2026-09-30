@@ -61,6 +61,7 @@ add_commonlibsse_plugin(
         src/Edit/Light.cpp
         src/Edit/Session.cpp
         src/Edit/Tints.cpp
+        src/Edit/Undress.cpp
         src/Panel/Bridge.cpp
         src/Panel/Panel.cpp
         src/Panel/RaceMenuFilm.cpp
