@@ -16,6 +16,11 @@
 // toggle this section was written to receive: the button says what pressing
 // it does, and the label after a click is what the DLL confirms, not a
 // guess of what happened.
+//
+// Light (Fase 6.6, E4b): same shape again, and for the same reason as
+// Undress - the DLL never reads the stage light's state back (Edit/Light.h),
+// so a label that claimed state would be an inference dressed as a
+// measurement. Placement here is provisional (layout is Fase 7).
 "use strict";
 
 (() => {
@@ -63,4 +68,46 @@
   });
 
   render();
+
+  const lightButton = AtelierControls.el("button", "panel-button control-button", "Light Off");
+  lightButton.type = "button";
+  const lightNote = AtelierControls.el("span", "control-note", "");
+  section.body.appendChild(lightButton);
+  section.body.appendChild(lightNote);
+
+  let lightOn = true;   // this feature's own belief; the DLL's "light" reply is the truth
+  let lightBusy = false;
+
+  function renderLight() {
+    lightButton.textContent = lightOn ? "Light Off" : "Light On";
+    lightButton.disabled = lightBusy;
+  }
+
+  lightButton.addEventListener("click", () => {
+    if (lightBusy) {
+      return;
+    }
+    lightBusy = true;
+    lightNote.textContent = "";
+    renderLight();
+    if (!AtelierBridge.send("light-set", { on: !lightOn })) {
+      lightBusy = false;
+      lightNote.textContent = "No bridge to the game - nothing was done.";
+      renderLight();
+    }
+  });
+
+  AtelierBridge.on("light", (data) => {
+    lightOn = !!(data && data.on);
+    lightBusy = false;
+    renderLight();
+  });
+
+  AtelierBridge.whenAttached((ok) => {
+    if (ok) {
+      AtelierBridge.send("light-get");
+    }
+  });
+
+  renderLight();
 })();

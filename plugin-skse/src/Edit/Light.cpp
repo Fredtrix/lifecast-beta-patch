@@ -38,7 +38,14 @@ namespace Atelier::Edit::Light
 			PushLight("after light-set");
 		}
 
-		void OnOpened() { g_on = true; }
+		void OnOpened()
+		{
+			g_on = true;
+			// Pushed, not just reset: the page survives a menu close (measured
+			// on Undress, Fase 6.6 E5/D080), so it cannot be trusted to ask
+			// again on its own. Same defect, same fix, same reason.
+			PushLight("menu opened");
+		}
 
 		void OnClosed()
 		{
