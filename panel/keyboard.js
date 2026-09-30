@@ -5,11 +5,9 @@
 //   1. A dead key does not compose. The accent arrives as its own character
 //      and the next vowel as another: "~" then "a" gives "~a", not the
 //      composed letter. Here the pair is joined back into one character.
-//   2. Some key presses arrive twice, about 15 ms apart, both as fresh key
-//      presses (not auto-repeat). No person presses one key twice that fast,
-//      so a second identical insertion inside that window is dropped. A held
-//      key survives because Meridian repeats it slower than the window (see
-//      keyRepeating below), not because of a guard.
+//   2. Some key presses arrive twice as two whole presses. The duplicate is
+//      dropped by KEY STATE: a second keydown for a key that has not come up
+//      again, close behind the first, is not a person pressing twice.
 //
 // Everything happens in the page and applies to every text field in it.
 // Nothing here depends on the DLL. When Meridian delivers the keyboard
@@ -17,9 +15,38 @@
 "use strict";
 
 (() => {
-  // Two insertions of the same text closer than this are one key press.
-  // Measured: 15-16 ms between the doubled events.
-  const DOUBLE_WINDOW_MS = 30;
+  // --- The doubled press ---------------------------------------------------
+  //
+  // Measured on the round of 2026-09-26 (Atelier.log, page clock), five
+  // doubled presses, and every one of them has the same shape:
+  //
+  //     keydown, keydown, keyup, keyup
+  //
+  // The second keydown always arrives BEFORE any keyup. That is what is used
+  // here, and it is why the old guard - "same text again inside 30 ms" - let
+  // three of the five through: it compared the TEXT INSERTED, and a doubled
+  // "T" arrives as "T" then "t" because the Shift is already up. It also
+  // missed a pair 108 ms apart. Key state catches all five with no dependence
+  // on which character came out.
+  //
+  // The gap is measured against the FIRST keydown of the press, not the
+  // previous one, and the two populations do not overlap:
+  //
+  //     doubled press   15, 15, 54, 57, 108 ms   (5 of 5, round of 2026-09-26)
+  //     auto-repeat     520 ms to the second press, then 59-75 ms (round A4)
+  //
+  // 200 ms sits between them with room on both sides. Comparing against the
+  // previous keydown instead would flag auto-repeat from the third press on.
+  const DOUBLE_GAP_MS = 200;
+
+  // Keys down right now: code -> time of the first keydown of this press.
+  const heldSince = new Map();
+
+  // Set by keydown, read by the insertion that keydown produces. Measured
+  // ordering: keydown, then beforeinput, then input.
+  let dropNextInsertion = false;
+
+  // --- The dead key --------------------------------------------------------
 
   // Spacing accent, as the dead key inserts it -> combining mark.
   const ACCENTS = {
@@ -38,16 +65,6 @@
   let deadPressed = false; // a dead key went down; its accent is the next insertion
   let accent = null;       // { char, mark }: the accent now sitting before the caret
 
-  let lastData = null;
-  let lastTime = 0;
-
-  // INERT under Meridian, and not the defence of a held key. Measured in
-  // the game: Meridian delivers auto-repeat as fresh presses, repeat false,
-  // ~59 ms apart at the fastest (~74 ms steady). What keeps a held key from
-  // being eaten is that gap against DOUBLE_WINDOW_MS - and nothing promises
-  // it. This flag only matters for a route that does mark auto-repeat.
-  let keyRepeating = false;
-
   function isTextField(el) {
     if (!el) {
       return false;
@@ -59,7 +76,23 @@
   }
 
   document.addEventListener("keydown", (event) => {
-    keyRepeating = event.repeat;
+    const code = event.code;
+    const now = performance.now();
+
+    if (code) {
+      const since = heldSince.get(code);
+      if (since === undefined) {
+        heldSince.set(code, now);
+        dropNextInsertion = false;
+      } else {
+        // The key never came up. Auto-repeat that says so is always genuine;
+        // under Meridian it does not say so, which is what the gap is for.
+        dropNextInsertion = !event.repeat && (now - since) < DOUBLE_GAP_MS;
+      }
+    } else {
+      dropNextInsertion = false;
+    }
+
     if (event.key === "Dead") {
       deadPressed = true;
       return;
@@ -71,22 +104,27 @@
     }
   }, true);
 
+  document.addEventListener("keyup", (event) => {
+    if (event.code) {
+      heldSince.delete(event.code);
+    }
+  }, true);
+
   document.addEventListener("beforeinput", (event) => {
     const el = event.target;
     if (!isTextField(el) || event.inputType !== "insertText" || event.data === null) {
       return;
     }
 
-    const data = event.data;
-    const now = performance.now();
-
-    // 2. The doubled press.
-    if (!keyRepeating && data === lastData && now - lastTime < DOUBLE_WINDOW_MS) {
+    // 2. The doubled press. Decided by the keydown this insertion belongs to.
+    if (dropNextInsertion) {
+      dropNextInsertion = false;
       event.preventDefault();
       return;
     }
-    lastData = data;
-    lastTime = now;
+    dropNextInsertion = false;
+
+    const data = event.data;
 
     // 1a. The accent itself: let it show, remember where it is.
     if (deadPressed) {
