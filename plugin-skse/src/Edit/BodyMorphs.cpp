@@ -55,6 +55,18 @@ namespace Atelier::Edit::BodyMorphs
 		std::map<std::string, std::pair<Clock::time_point, int>> g_sent;
 		int                                                      g_sets = 0;
 
+		// The film's tab set as it was last seen, and when it was last looked
+		// at. See Signature(): the tabs arrive after the menu opens, so they
+		// are watched rather than read once.
+		std::string       g_signature;
+		Clock::time_point g_looked{};
+
+		// How often the film is looked at while the menu is open. The measured
+		// gap between the menu opening and the mod tabs appearing was under
+		// five seconds; a second is well inside that and costs twenty
+		// GetMember calls.
+		constexpr auto kLookGap = std::chrono::seconds(1);
+
 		std::string Str(const RE::GFxValue& a_obj, const char* a_name)
 		{
 			RE::GFxValue v;
@@ -134,6 +146,49 @@ namespace Atelier::Edit::BodyMorphs
 				a_out.value = a_out.min;
 			}
 			return true;
+		}
+
+		// What the film's tab set looks like right now, cheaply: the key of
+		// every mod category, plus the size of the slider list. Twenty
+		// GetMember calls, no slider is read, nothing is allocated per entry.
+		//
+		// This exists because the first measured run read ZERO mod tabs and
+		// the mechanism was fine: a mod registers its category from Papyrus
+		// when the menu opens, and that had not happened yet. Round 1, at the
+		// instant the panel came on screen, saw 17 categories and none of them
+		// a mod's; round 2, five seconds later, saw 20 (Dev\Medicoes\Fase-6.7).
+		// So the read cannot happen once, at a moment we pick - the film is
+		// still being built. It is watched instead, and re-read when it moves.
+		//
+		// The slider count is in the signature because the tab set alone does
+		// not move when a mod re-registers under the same key with a different
+		// slider list - which is what changing the character's sex does.
+		std::string Signature()
+		{
+			auto*        ui = RE::UI::GetSingleton();
+			auto         menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto*        movie = menu ? menu->uiMovie.get() : nullptr;
+			RE::GFxValue categories;
+			if (!movie || !Entries(movie, "categoryList", categories)) {
+				return {};
+			}
+			std::string out;
+			const auto  n = categories.GetArraySize();
+			for (std::uint32_t i = 0; i < n; ++i) {
+				RE::GFxValue entry;
+				if (!categories.GetElement(i, &entry) || !entry.IsObject()) {
+					continue;
+				}
+				const auto key = Str(entry, "textFilter");
+				if (!key.empty()) {
+					out += key + ",";
+				}
+			}
+			RE::GFxValue items;
+			if (Entries(movie, "itemList", items)) {
+				out += fmt::format("|{}", items.GetArraySize());
+			}
+			return out;
 		}
 
 		void Push(const char* a_why)
@@ -327,6 +382,41 @@ namespace Atelier::Edit::BodyMorphs
 
 		void OnShown() { Read("the panel came on screen"); }
 
+		// Watching the film, which is the whole reason the first run read no
+		// tabs at all. Cheap by construction: a signature a second, and the
+		// read that walks six hundred slider entries only when it moves.
+		//
+		// This also covers a case no round had reached yet - changing the
+		// character's sex makes a mod register a different slider list under
+		// the same key, and the signature carries the slider count for that
+		// reason.
+		void OnTick()
+		{
+			if (!Session::MenuOpen()) {
+				g_signature.clear();
+				return;
+			}
+			const auto now = Clock::now();
+			if (now - g_looked < kLookGap) {
+				return;
+			}
+			g_looked = now;
+			auto* tasks = SKSE::GetTaskInterface();
+			if (!tasks) {
+				return;
+			}
+			tasks->AddUITask([]() {
+				const auto signature = Signature();
+				if (signature == g_signature) {
+					return;
+				}
+				const bool first = g_signature.empty();
+				g_signature = signature;
+				ReadNow();
+				Push(first ? "the film was read" : "the film changed");
+			});
+		}
+
 		void OnOpened()
 		{
 			g_sets = 0;
@@ -334,6 +424,7 @@ namespace Atelier::Edit::BodyMorphs
 			// A new menu is a new film, and a mod registers its sliders again
 			// each time - under conditions that can have changed, sex among
 			// them.
+			g_signature.clear();
 			std::scoped_lock lock(g_lock);
 			g_categories.clear();
 			g_read = false;
@@ -351,6 +442,7 @@ namespace Atelier::Edit::BodyMorphs
 		}
 		Session::OnPanelShown(&OnShown);
 		Session::OnMenuOpened(&OnOpened);
+		Session::OnTick(&OnTick);
 		Session::OnMenuClosed(&OnClosed);
 		Panel::Bridge::On("body-morphs-get", &OnGet);
 		Panel::Bridge::On("body-morph-set", &OnSet);
