@@ -15,7 +15,7 @@
 
 (() => {
   const GROUPS = [
-    { title: "Body", test: (key) => key === "look:Body" || key === "look:Hair" || key === "look:Features" || key === "obody" || key === "scales" || key === "tints" || key.indexOf("overlay:") === 0 },
+    { title: "Body", test: (key) => key === "look:Body" || key === "look:Hair" || key === "look:Features" || key === "obody" || key === "scales" || key === "tints" || key.indexOf("overlay:") === 0 || key.indexOf("morph:") === 0 },
     { title: "Face", test: (key) => key.indexOf("face:") === 0 },
   ];
 
@@ -45,6 +45,17 @@
   // heading above face paint and a second heading above the face sections
   // that have no rank. Unranked, it falls last inside its own group, which
   // is both stable and where it belongs.
+  //
+  // That last sentence was WRONG when it was written and is true now: an
+  // unranked section used to sort past every group and open a second heading
+  // of its own down at the bottom - which is exactly the tearing the sentence
+  // says it avoids. controls.js rank() now lends an unranked section the
+  // place of its group. Measured on the bench, 2026-09-30.
+  //
+  // The sections a mod's tab produces (morph:<key>) are unranked for a second
+  // reason on top of that one: which of them exist is the player's mod order,
+  // so there is no order to declare that would survive a different machine.
+  // Unranked they fall last inside Body, in the order RaceMenu lists them.
   AtelierControls.setOrder([
     "character", "control",
     "look:Body", "look:Hair", "look:Features", "scales", "obody", "tints",

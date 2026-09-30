@@ -94,6 +94,15 @@
       if (typeof entry.text !== "string" || entry.text === "" || COVERED.indexOf(entry.text) >= 0) {
         continue;
       }
+      // A category a mod registered carries its own key, and morphs.js builds
+      // a section for every one of those - empty when the mod registered no
+      // sliders this time. So a keyed category already has a home and must
+      // not get a door as well. The film's own categories have no key and are
+      // covered by label above; the one keyed category the list above names is
+      // $BODY SCALES, which has a section of its own.
+      if (typeof entry.key === "string" && entry.key !== "") {
+        continue;
+      }
       // The label goes back as the key: Select() presses the entry whose label
       // is exactly this one, so no list of keys has to be kept on both sides.
       addRow("category:" + entry.text, entry.text, "RaceMenu has this tab; the Atelier does not build it.", true);

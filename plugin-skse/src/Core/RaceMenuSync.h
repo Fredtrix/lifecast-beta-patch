@@ -43,4 +43,14 @@ namespace Atelier::Core::RaceMenuSync
 	// "RSM_ToggleLight" with numArg 1.0/0.0: RaceMenu's own chargen light
 	// toggle, the same event its "L" hotkey sends.
 	void ToggleLight(bool a_on);
+
+	// "RSM_SliderChange" with a mod's own slider callback and the new value:
+	// the event RaceMenu's film sends when the player drags that slider. The
+	// script that registered it is listening for that callback name and
+	// applies the value itself - which is how a mod's tab is written to
+	// without this plugin knowing the key the mod stores under.
+	//
+	// a_log is false for the steps in the middle of a drag: the value moves
+	// twenty times a second and one line each would bury the log.
+	void SliderMoved(const std::string& a_callback, float a_value, bool a_log);
 }

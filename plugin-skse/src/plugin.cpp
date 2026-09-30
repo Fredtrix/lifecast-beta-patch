@@ -21,6 +21,7 @@
 #include "Core/SkeeLink.h"
 #include "Edit/Appearance.h"
 #include "Edit/Body.h"
+#include "Edit/BodyMorphs.h"
 #include "Edit/BodyScales.h"
 #include "Edit/FaceSliders.h"
 #include "Edit/Finish.h"
@@ -121,6 +122,7 @@ namespace
 			Atelier::Edit::FaceSliders::Install();
 			Atelier::Edit::Appearance::Install();
 			Atelier::Edit::BodyScales::Install();
+			Atelier::Edit::BodyMorphs::Install();
 			Atelier::Edit::Tints::Install();
 			Atelier::Edit::Overlays::Install();
 			Atelier::Edit::Light::Install();

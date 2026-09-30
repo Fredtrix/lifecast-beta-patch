@@ -10,7 +10,7 @@ namespace Atelier::Core::RaceMenuSync
 		constexpr RE::FormID kHairColorId = 0x801;
 		constexpr auto       kRaceMenuPlugin = "RaceMenu.esp"sv;
 
-		void Send(const char* a_event, const std::string& a_str, float a_num = 0.0F)
+		void Send(const char* a_event, const std::string& a_str, float a_num = 0.0F, bool a_log = true)
 		{
 			auto* source = SKSE::GetModCallbackEventSource();
 			if (!source) {
@@ -19,7 +19,9 @@ namespace Atelier::Core::RaceMenuSync
 			}
 			SKSE::ModCallbackEvent event{ a_event, a_str.c_str(), a_num, nullptr };
 			source->SendEvent(&event);
-			spdlog::info("[sync] sent {} \"{}\" {}", a_event, a_str, a_num);
+			if (a_log) {
+				spdlog::info("[sync] sent {} \"{}\" {}", a_event, a_str, a_num);
+			}
 		}
 	}
 
@@ -47,4 +49,9 @@ namespace Atelier::Core::RaceMenuSync
 	void PresetLoaded() { Send("RSM_RequestTintSave", ""); }
 
 	void ToggleLight(bool a_on) { Send("RSM_ToggleLight", "", a_on ? 1.0F : 0.0F); }
+
+	void SliderMoved(const std::string& a_callback, float a_value, bool a_log)
+	{
+		Send("RSM_SliderChange", a_callback, a_value, a_log);
+	}
 }

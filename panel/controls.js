@@ -137,10 +137,38 @@ const AtelierControls = (() => {
     // Headings are rebuilt every call, not patched - cheap at panel size, and
     // it means a heading can never survive its group becoming empty.
     host.querySelectorAll(":scope > .group-heading").forEach((h) => h.remove());
-    const sections = Array.prototype.slice.call(host.querySelectorAll(":scope > .section"))
+    const sorted = Array.prototype.slice.call(host.querySelectorAll(":scope > .section"))
       .sort((a, b) => rank(a) - rank(b) || Number(a.dataset.mountedAt) - Number(b.dataset.mountedAt));
+
+    // A group shows up ONCE, where its first section falls; every later
+    // section of that group joins it there instead of keeping its own place
+    // in the sort. Sorting alone is not enough, because a section mounted on
+    // the DLL's own time has no place in the declared order and lands past
+    // every group - and a heading is written whenever the group changes, so
+    // that section would open a second heading for its own group at the
+    // bottom of the page. Measured on the bench, 2026-09-30: two mod tabs and
+    // the face paint section each did exactly that.
+    //
+    // A section in no group keeps its own slot: there is nothing to join.
+    const buckets = [];
+    const byGroup = new Map();
+    sorted.forEach((s) => {
+      const g = groupOf(s.dataset.key);
+      if (!g) {
+        buckets.push([s]);
+        return;
+      }
+      let bucket = byGroup.get(g);
+      if (!bucket) {
+        bucket = [];
+        byGroup.set(g, bucket);
+        buckets.push(bucket);
+      }
+      bucket.push(s);
+    });
+
     let last;
-    sections.forEach((s) => {
+    [].concat.apply([], buckets).forEach((s) => {
       const g = groupOf(s.dataset.key);
       // Read by search.js to tell which heading a hidden section belongs to
       // without depending on DOM adjacency (an ungrouped section can sit

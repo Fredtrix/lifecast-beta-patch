@@ -55,6 +55,20 @@ namespace Atelier::Panel::RaceMenuTabs
 			return {};
 		}
 
+		// The key a mod registered its category under (AddCategory's keyName,
+		// which the film keeps as textFilter). Only a mod's category has one:
+		// the film builds its own categories in place and tells them apart by
+		// flag. So a non-empty key means "some mod added this tab", which is
+		// exactly the set Edit/BodyMorphs builds a section for.
+		std::string Key(const RE::GFxValue& a_entry)
+		{
+			RE::GFxValue key;
+			if (a_entry.GetMember("textFilter", &key) && key.IsString()) {
+				return key.GetString();
+			}
+			return {};
+		}
+
 		std::uint32_t Flag(const RE::GFxValue& a_entry)
 		{
 			RE::GFxValue flag;
@@ -273,12 +287,15 @@ namespace Atelier::Panel::RaceMenuTabs
 				if (chosen >= 0) {
 					continue;
 				}
-				// By label, and exact: the label is the only identifier an
-				// entry carries - its members are enabled, flag, filterFlag,
-				// savedItemIndex, _sortFlag, itemIndex, clipIndex, bDontHide,
-				// priority, text, filteredIndex, type, with no category key
-				// among them. A substring would let one category's name match
-				// another that contains it.
+				// By label, and exact. This comment used to say the label was
+				// the only identifier an entry carries, listing the members of
+				// entry 0 to prove it - but entry 0 is "$ALL", one of the
+				// film's own, and a category a MOD registered does carry its
+				// key as textFilter (measured 2026-09-30 by reading the film;
+				// Key() above reads it). The label stays the identifier here
+				// because it is the one thing every entry has, mod-made or
+				// not, and it is what the page hands back. A substring would
+				// let one category's name match another that contains it.
 				if (!wantLabel.empty()) {
 					if (text == wantLabel) {
 						chosen = static_cast<int>(i);
@@ -346,7 +363,8 @@ namespace Atelier::Panel::RaceMenuTabs
 					if (!entries.GetElement(i, &entry) || !entry.IsObject()) {
 						continue;
 					}
-					out.push_back({ { "index", i }, { "text", Text(entry) }, { "flag", Flag(entry) } });
+					out.push_back(
+						{ { "index", i }, { "text", Text(entry) }, { "flag", Flag(entry) }, { "key", Key(entry) } });
 				}
 				spdlog::info("[tabs] categories: sending {} of {} entries from {}", out.size(), n, where);
 			}
