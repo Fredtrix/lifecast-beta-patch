@@ -17,8 +17,16 @@
 //   drag, right button    move the camera, up/down and left/right
 //   drag, Ctrl held       tilt the camera (when the DLL can)
 //   wheel                 closer and farther
-// The same moves are on the buttons under the frame, so none of them depends
-// on knowing a mouse gesture.
+// The buttons under the frame repeat the turn, the distance, the height and
+// the tilt, so none of THOSE depends on knowing a mouse gesture.
+//
+// SIDEWAYS IS THE EXCEPTION, and it is a gap rather than a decision: the pan
+// axis has no button, so moving the camera left and right is reachable only by
+// the right-button drag. This comment used to claim every move had a button,
+// and it was true when it was written - the pan axis did not exist yet. It
+// arrived later, on the drag, without a button, and the sentence above it
+// stayed. A reader who trusted it would conclude the keyboard and the buttons
+// cover the whole view, and they do not.
 //
 // When the DLL says the view is not ready, the frame shows why and the
 // controls go away; nothing else in the panel changes.
