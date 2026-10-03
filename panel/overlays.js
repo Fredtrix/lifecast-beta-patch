@@ -1,5 +1,5 @@
 // overlays.js
-// Atelier - the paint overlays: body, hand, foot and face.
+// Lifecast - the paint overlays: body, hand, foot and face.
 //
 // One section per area, each holding the layers SKEE gives that area - six
 // on the body and three elsewhere, by the player's own skee64.ini, so the
@@ -36,16 +36,16 @@
   }
 
   function send(areaKey, index, fields, final) {
-    AtelierBridge.send("overlay-set", Object.assign({ k: areaKey, i: index, final: final }, fields));
+    LifecastBridge.send("overlay-set", Object.assign({ k: areaKey, i: index, final: final }, fields));
   }
 
   // A colour chip that opens the picker, next to the layer's name.
   function chip(title, get, put) {
-    const button = AtelierControls.el("button", "swatch-chip picker-chip");
+    const button = LifecastControls.el("button", "swatch-chip picker-chip");
     button.type = "button";
     button.tabIndex = -1;
     button.title = title;
-    const picker = AtelierPicker.create({ label: title, get: get, send: put });
+    const picker = LifecastPicker.create({ label: title, get: get, send: put });
     button.addEventListener("click", () => {
       if (!button.disabled) {
         picker.toggle();
@@ -57,8 +57,8 @@
   function buildLayer(areaKey, area, index) {
     const entry = { color: "#FFFFFF", glow: "#FFFFFF", painted: false, textures: [], current: "" };
 
-    const head = AtelierControls.el("div", "tint-head");
-    const name = AtelierControls.el("span", "slider-name", "Layer " + String(index + 1));
+    const head = LifecastControls.el("div", "tint-head");
+    const name = LifecastControls.el("span", "slider-name", "Layer " + String(index + 1));
     entry.colorChip = chip("Paint colour", () => entry.color, (hex, final) => {
       entry.color = hex;
       entry.colorChip.button.style.background = hex;
@@ -81,7 +81,7 @@
     // RaceMenu - also reads as -1, and its own name is shown instead of
     // "None" so it is not mistaken for an empty layer. Moving the row off it
     // clears it, which is what "None" means.
-    entry.texture = AtelierControls.row({
+    entry.texture = LifecastControls.row({
       label: "Texture",
       min: -1,
       max: 0,
@@ -98,7 +98,7 @@
         send(areaKey, index, { texture: picked }, final);
       },
     });
-    entry.alpha = AtelierControls.row({
+    entry.alpha = LifecastControls.row({
       label: "Intensity",
       min: 0,
       max: 100,
@@ -107,7 +107,7 @@
       format: (v) => String(Math.round(v)) + "%",
       send: (v, final) => send(areaKey, index, { alpha: v / 100 }, final),
     });
-    entry.glowAlpha = AtelierControls.row({
+    entry.glowAlpha = LifecastControls.row({
       label: "Glow",
       min: 0,
       max: 100,
@@ -123,11 +123,11 @@
   }
 
   function build(areaData) {
-    const area = { section: AtelierControls.section(areaData.label), layers: new Map() };
+    const area = { section: LifecastControls.section(areaData.label), layers: new Map() };
     for (const layer of areaData.layers) {
       area.layers.set(layer.i, buildLayer(areaData.k, area, layer.i));
     }
-    AtelierControls.mount(area.section, SECTION_KEY[areaData.k] || "overlay:" + areaData.k);
+    LifecastControls.mount(area.section, SECTION_KEY[areaData.k] || "overlay:" + areaData.k);
     return area;
   }
 
@@ -179,7 +179,7 @@
     }
   }
 
-  AtelierBridge.on("overlays", (data) => {
+  LifecastBridge.on("overlays", (data) => {
     const list = data && data.ready && Array.isArray(data.areas) ? data.areas : [];
     for (const areaData of list) {
       if (!areaData || typeof areaData.k !== "string" || !Array.isArray(areaData.layers)) {
@@ -203,9 +203,9 @@
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("overlays-get");
+      LifecastBridge.send("overlays-get");
     }
   });
 })();

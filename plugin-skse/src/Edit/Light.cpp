@@ -1,5 +1,5 @@
 // Light.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Light.h"
 
@@ -7,7 +7,7 @@
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
-namespace Atelier::Edit::Light
+namespace Lifecast::Edit::Light
 {
 	namespace
 	{

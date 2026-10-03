@@ -1,5 +1,5 @@
 // Save.cpp
-// Atelier
+// Lifecast
 
 #include "Preset/Save.h"
 
@@ -16,7 +16,7 @@
 #include <sstream>
 #include <thread>
 
-namespace Atelier::Preset::Save
+namespace Lifecast::Preset::Save
 {
 	namespace
 	{
@@ -426,7 +426,7 @@ namespace Atelier::Preset::Save
 				return;
 			}
 			if (FileName::Same(name, Library::kPreviewName)) {
-				Reply(name, false, "this name is reserved by the Atelier", false);
+				Reply(name, false, "this name is reserved by the Lifecast", false);
 				return;
 			}
 			if (g_pending) {

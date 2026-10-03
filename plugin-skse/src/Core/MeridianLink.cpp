@@ -1,11 +1,11 @@
 // MeridianLink.cpp
-// Atelier
+// Lifecast
 
 #include "MeridianLink.h"
 
 #include "MeridianUIAPI/SKSELoader.h"
 
-namespace Atelier::Core::MeridianLink
+namespace Lifecast::Core::MeridianLink
 {
 	namespace
 	{
@@ -18,11 +18,11 @@ namespace Atelier::Core::MeridianLink
 		MUI::RenderLayer::IRenderLayerAPI* g_renderLayer = nullptr;
 
 		// The consumer name Meridian sees, and the mod:// host the panel is
-		// addressed by. Data/MeridianUI/Atelier/ is the folder, so
-		// mod://Atelier/index.html is the URL and ViewCreateInfo.ownerName
+		// addressed by. Data/MeridianUI/Lifecast/ is the folder, so
+		// mod://Lifecast/index.html is the URL and ViewCreateInfo.ownerName
 		// has to match that host - Meridian pins native bindings to the
 		// initial trusted origin and rejects a mismatch.
-		constexpr auto kConsumerName = "Atelier";
+		constexpr auto kConsumerName = "Lifecast";
 
 		// One Settings for the whole plugin. It must outlive the
 		// ProcessSKSEMessage call that dispatches it, and the extension

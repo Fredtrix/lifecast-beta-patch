@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 # ---------------------------------------------------------------------------
-# Atelier - a modern interface for RaceMenu.
+# Lifecast - a modern interface for RaceMenu.
 #
 # The plugin proves the build chain compiles and that the two handshakes this
 # project depends on answer at runtime - Meridian UI, which is the only panel
@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.21)
 # ---------------------------------------------------------------------------
 
 project(
-    Atelier
+    Lifecast
     VERSION 0.1.0
     LANGUAGES CXX
 )
@@ -33,14 +33,14 @@ configure_file(
 # decision. It also avoids needing the nested openvr submodule, which is not
 # initialized here.
 set(BUILD_TESTS OFF CACHE BOOL "Disable CommonLibSSE-NG tests in consumer" FORCE)
-set(ENABLE_SKYRIM_VR OFF CACHE BOOL "Atelier does not target VR" FORCE)
+set(ENABLE_SKYRIM_VR OFF CACHE BOOL "Lifecast does not target VR" FORCE)
 add_subdirectory(extern/commonlibsse-ng EXCLUDE_FROM_ALL)
 
 include(extern/commonlibsse-ng/cmake/CommonLibSSE.cmake)
 
 # add_commonlibsse_plugin creates the DLL target, wires up CommonLibSSE
 # linkage, and auto-generates the SKSE version boilerplate.
-# Output file will be Atelier.dll.
+# Output file will be Lifecast.dll.
 add_commonlibsse_plugin(
     ${PROJECT_NAME}
     AUTHOR "Awrawra"
@@ -112,16 +112,16 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
 # ---------------------------------------------------------------------------
 # Copies the DLL to this project's own SKSE/Plugins/ after each build.
 #
-# The Atelier deploys to itself: the mod folder that MO2 reads mirrors Data/,
+# The Lifecast deploys to itself: the mod folder that MO2 reads mirrors Data/,
 # and it is two levels above this file - this source tree is nested one level
 # deeper inside it, so the deploy path climbs two levels rather than one.
 #
-# ATELIER_OUTPUT_FOLDER is overridable: pass -DATELIER_OUTPUT_FOLDER=... on
+# LIFECAST_OUTPUT_FOLDER is overridable: pass -DLIFECAST_OUTPUT_FOLDER=... on
 # the CMake command line, or set it in the environment. Set it to an empty
 # string to skip deploy entirely.
 # ---------------------------------------------------------------------------
-if(NOT DEFINED ATELIER_OUTPUT_FOLDER AND DEFINED ENV{ATELIER_OUTPUT_FOLDER})
-    set(ATELIER_OUTPUT_FOLDER "$ENV{ATELIER_OUTPUT_FOLDER}")
+if(NOT DEFINED LIFECAST_OUTPUT_FOLDER AND DEFINED ENV{LIFECAST_OUTPUT_FOLDER})
+    set(LIFECAST_OUTPUT_FOLDER "$ENV{LIFECAST_OUTPUT_FOLDER}")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -152,18 +152,18 @@ if(MSVC)
     target_link_options(${PROJECT_NAME} PRIVATE "/Brepro")
 endif()
 
-if(NOT DEFINED ATELIER_OUTPUT_FOLDER)
-    set(ATELIER_OUTPUT_FOLDER "${CMAKE_CURRENT_SOURCE_DIR}/../../SKSE/Plugins")
+if(NOT DEFINED LIFECAST_OUTPUT_FOLDER)
+    set(LIFECAST_OUTPUT_FOLDER "${CMAKE_CURRENT_SOURCE_DIR}/../../SKSE/Plugins")
 endif()
 
-if(ATELIER_OUTPUT_FOLDER)
-    message(STATUS "DLL deploy folder: ${ATELIER_OUTPUT_FOLDER}")
+if(LIFECAST_OUTPUT_FOLDER)
+    message(STATUS "DLL deploy folder: ${LIFECAST_OUTPUT_FOLDER}")
     add_custom_command(
         TARGET ${PROJECT_NAME}
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${ATELIER_OUTPUT_FOLDER}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LIFECAST_OUTPUT_FOLDER}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:${PROJECT_NAME}>" "${ATELIER_OUTPUT_FOLDER}"
+            "$<TARGET_FILE:${PROJECT_NAME}>" "${LIFECAST_OUTPUT_FOLDER}"
         VERBATIM
     )
     # A Debug build deployed here links the debug CRT (ucrtbased.dll,
@@ -175,7 +175,7 @@ if(ATELIER_OUTPUT_FOLDER)
         TARGET ${PROJECT_NAME}
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo
-            "*** Atelier.dll deploy: config=$<CONFIG> -> ${ATELIER_OUTPUT_FOLDER} -- if config is Debug, this build links the debug CRT and must NEVER be packaged for release. ***"
+            "*** Lifecast.dll deploy: config=$<CONFIG> -> ${LIFECAST_OUTPUT_FOLDER} -- if config is Debug, this build links the debug CRT and must NEVER be packaged for release. ***"
         VERBATIM
     )
 endif()

@@ -1,5 +1,5 @@
 // stage.js
-// Atelier - the character view: a frame to the right of the panel, and the
+// Lifecast - the character view: a frame to the right of the panel, and the
 // controls that move the character inside it.
 //
 // The page draws nothing of the character. It is transparent here, and the
@@ -62,7 +62,7 @@
         pending[key] = 0;
       }
     }
-    AtelierBridge.send("stage-move", data);
+    LifecastBridge.send("stage-move", data);
   }
 
   function move(key, amount) {
@@ -83,7 +83,7 @@
   const buttons = [];
 
   function button(label, title, onClick, isAtLimit) {
-    const b = AtelierControls.el("button", "panel-button stage-button", label);
+    const b = LifecastControls.el("button", "panel-button stage-button", label);
     b.type = "button";
     b.title = title;
     b.addEventListener("click", onClick);
@@ -92,8 +92,8 @@
   }
 
   function group(title, items) {
-    const g = AtelierControls.el("div", "stage-group");
-    g.appendChild(AtelierControls.el("span", "stage-group-title", title));
+    const g = LifecastControls.el("div", "stage-group");
+    g.appendChild(LifecastControls.el("span", "stage-group-title", title));
     items.forEach((i) => g.appendChild(i));
     bar.appendChild(g);
     return g;
@@ -122,12 +122,12 @@
     button("\u25BC", "Tilt the other way", () => move("tilt", -TILT_STEP),
       (s) => s.tiltDeg <= -s.limits.tiltMax + near),
   ]);
-  const reframe = AtelierControls.el("button", "panel-button stage-reframe", "Reframe");
+  const reframe = LifecastControls.el("button", "panel-button stage-reframe", "Reframe");
   reframe.type = "button";
   reframe.title = "Back to the view the menu opened with";
   reframe.addEventListener("click", () => {
     pending.turn = pending.distance = pending.lift = pending.pan = pending.tilt = 0;
-    AtelierBridge.send("stage-reset");
+    LifecastBridge.send("stage-reset");
   });
   bar.appendChild(reframe);
 
@@ -213,21 +213,21 @@
       (state.tilt ? "  |  tilt " + Math.round(state.tiltDeg) + " deg" : "");
   }
 
-  AtelierBridge.on("stage", (data) => {
+  LifecastBridge.on("stage", (data) => {
     state = data && typeof data === "object" ? data : null;
     render();
   });
 
   // The DLL can hide the frame without touching anything else: the view
   // underneath stays exactly where it is.
-  AtelierBridge.on("stage-visible", (data) => {
+  LifecastBridge.on("stage-visible", (data) => {
     stage.hidden = !(data && data.on);
   });
 
   render();
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("stage-get");
+      LifecastBridge.send("stage-get");
     }
   });
 })();

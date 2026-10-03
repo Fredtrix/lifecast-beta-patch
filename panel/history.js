@@ -1,5 +1,5 @@
 // history.js
-// Atelier - undo and redo over the values the player changed.
+// Lifecast - undo and redo over the values the player changed.
 //
 // An entry is one FINISHED gesture on one control: the value it held before
 // the hand touched it, the value it ended on, and how to put either one
@@ -23,7 +23,7 @@
 // is the DLL's own message, sent from Panel::SetVisible.
 "use strict";
 
-const AtelierHistory = (() => {
+const LifecastHistory = (() => {
   // Entries kept. Well past a single sitting at the panel; the cap is only
   // here so a long session cannot grow the list without bound.
   const LIMIT = 100;
@@ -161,7 +161,7 @@ const AtelierHistory = (() => {
 
   // The panel was hidden: the switcher went back to RaceMenu, or the menu
   // closed. See the head of this file for why this is not optional.
-  AtelierBridge.on("visibility", (data) => {
+  LifecastBridge.on("visibility", (data) => {
     if (data && data.visible === false) {
       clear("the panel was hidden");
     }

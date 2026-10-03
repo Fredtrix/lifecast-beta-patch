@@ -1,5 +1,5 @@
 // controls.js
-// Atelier - the slider row every section builds on.
+// Lifecast - the slider row every section builds on.
 //
 // A row is a label, the current value, a range input and a pair of step
 // buttons. The row does not know what it edits: it calls a_opts.send(value,
@@ -11,7 +11,7 @@
 // button sends one final value.
 "use strict";
 
-const AtelierControls = (() => {
+const LifecastControls = (() => {
   const SEND_GAP_MS = 50;
 
   function el(tag, cls, text) {
@@ -67,10 +67,10 @@ const AtelierControls = (() => {
   // already in the DOM, not something mount() can do for a section that
   // does not exist yet at that instant.
   function saveOpen(a_key, a_open) {
-    const current = AtelierSettings.get("sectionsOpen");
+    const current = LifecastSettings.get("sectionsOpen");
     const next = current && typeof current === "object" ? Object.assign({}, current) : {};
     next[a_key] = a_open;
-    AtelierSettings.set("sectionsOpen", next);
+    LifecastSettings.set("sectionsOpen", next);
   }
 
   // The DLL echoes "settings" on every settings-set, from wherever it came
@@ -85,8 +85,8 @@ const AtelierControls = (() => {
   // whatever else tomorrow) survives an echo that was never about it.
   let lastSeen = null;
 
-  AtelierSettings.onChange(() => {
-    const saved = AtelierSettings.get("sectionsOpen");
+  LifecastSettings.onChange(() => {
+    const saved = LifecastSettings.get("sectionsOpen");
     if (!saved || typeof saved !== "object") {
       return;
     }
@@ -271,7 +271,7 @@ const AtelierControls = (() => {
       if (typeof before !== "number") {
         return;
       }
-      AtelierHistory.record({
+      LifecastHistory.record({
         label: a_opts.label,
         before: before,
         after: a_v,

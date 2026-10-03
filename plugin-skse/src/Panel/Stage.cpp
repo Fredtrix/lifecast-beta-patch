@@ -1,5 +1,5 @@
 // Stage.cpp
-// Atelier
+// Lifecast
 
 #include "Panel/Stage.h"
 
@@ -12,7 +12,7 @@
 #include <cmath>
 #include <mutex>
 
-namespace Atelier::Panel::Stage
+namespace Lifecast::Panel::Stage
 {
 	namespace
 	{

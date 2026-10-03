@@ -1,5 +1,5 @@
 // BodyScales.h
-// Atelier
+// Lifecast
 //
 // The body scale sliders: height, head, breasts, glutes, biceps and the
 // weapon nodes, each a scale on one skeleton node.
@@ -32,7 +32,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::BodyScales
+namespace Lifecast::Edit::BodyScales
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

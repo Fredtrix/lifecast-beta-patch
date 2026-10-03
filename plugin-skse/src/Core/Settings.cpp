@@ -1,5 +1,5 @@
 // Settings.cpp
-// Atelier
+// Lifecast
 
 #include "Core/Settings.h"
 
@@ -8,7 +8,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace Atelier::Core::Settings
+namespace Lifecast::Core::Settings
 {
 	namespace
 	{

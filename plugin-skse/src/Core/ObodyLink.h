@@ -1,5 +1,5 @@
 // ObodyLink.h
-// Atelier
+// Lifecast
 //
 // Whether OBody NG answers, and its plugin interface once it does.
 //
@@ -36,7 +36,7 @@ namespace OBody::API
 	class IPluginInterface;
 }
 
-namespace Atelier::Core::ObodyLink
+namespace Lifecast::Core::ObodyLink
 {
 	// Asks OBody for its interface. Call once, at kPostPostLoad. Safe to call
 	// twice (the second call does nothing).

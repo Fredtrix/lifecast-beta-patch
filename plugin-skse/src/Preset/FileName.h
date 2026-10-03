@@ -1,7 +1,7 @@
 #pragma once
 
 // FileName.h
-// Atelier
+// Lifecast
 //
 // The rule for a preset's file name, as the player types it. Pure logic, no
 // engine includes, so it is compiled into the plugin and into an offline
@@ -21,7 +21,7 @@
 #include <string>
 #include <string_view>
 
-namespace Atelier::Preset::FileName
+namespace Lifecast::Preset::FileName
 {
 	inline constexpr std::size_t kMaxLength = 64;
 

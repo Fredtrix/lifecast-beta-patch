@@ -1,5 +1,5 @@
 // keyboard.js
-// Atelier - two corrections to the keyboard as Meridian UI delivers it to
+// Lifecast - two corrections to the keyboard as Meridian UI delivers it to
 // text fields. Both measured in the game, ABNT2 layout:
 //
 //   1. A dead key does not compose. The accent arrives as its own character
@@ -17,7 +17,7 @@
 (() => {
   // --- The doubled press ---------------------------------------------------
   //
-  // Measured on the round of 2026-09-26 (Atelier.log, page clock), five
+  // Measured on the round of 2026-09-26 (Lifecast.log, page clock), five
   // doubled presses, and every one of them has the same shape:
   //
   //     keydown, keydown, keyup, keyup

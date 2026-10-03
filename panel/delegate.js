@@ -1,5 +1,5 @@
 // delegate.js
-// Atelier - the "In RaceMenu" section: what this panel hands back to RaceMenu.
+// Lifecast - the "In RaceMenu" section: what this panel hands back to RaceMenu.
 //
 // Two kinds of row live here, and they arrive from opposite directions.
 //
@@ -12,7 +12,7 @@
 // player, not to us: mods inject categories into it, so which ones exist is
 // not knowable from here. The DLL reads the live list and hands it over
 // (D082), and every entry this build does not cover gets a door - which is
-// what makes "if RaceMenu has a tab, it shows up in the Atelier" true on a
+// what makes "if RaceMenu has a tab, it shows up in the Lifecast" true on a
 // machine this project has never seen.
 "use strict";
 
@@ -23,7 +23,7 @@
     ["face-sliders", "Extended Face Sliders", "RaceMenu's own face sliders, beyond the game's."],
     ["extra", "Extra Sliders", "The sliders RaceMenu files under its own Extra tab."],
     ["expressions", "Expressions", "The face expression sliders."],
-    ["paints", "War Paint Catalog", "Every war paint installed. The Atelier offers the race's own."],
+    ["paints", "War Paint Catalog", "Every war paint installed. The Lifecast offers the race's own."],
     ["sculpt", "Sculpt", "Free-form editing of the head mesh."],
   ];
 
@@ -55,24 +55,24 @@
     "$BODY SCALES",
   ];
 
-  const section = AtelierControls.section("In RaceMenu");
+  const section = LifecastControls.section("In RaceMenu");
 
   // live marks a row built from the category list, so a second list replaces
   // those rows instead of stacking another copy of them under the fixed ones.
   function addRow(key, label, note, live) {
-    const row = AtelierControls.el("div", "delegate");
+    const row = LifecastControls.el("div", "delegate");
     row.dataset.door = key;
     if (live) {
       row.dataset.live = "1";
     }
-    const text = AtelierControls.el("div", "delegate-text");
-    text.appendChild(AtelierControls.el("span", "slider-name", label));
-    text.appendChild(AtelierControls.el("span", "delegate-note", note));
-    const go = AtelierControls.el("button", "panel-button", "Open");
+    const text = LifecastControls.el("div", "delegate-text");
+    text.appendChild(LifecastControls.el("span", "slider-name", label));
+    text.appendChild(LifecastControls.el("span", "delegate-note", note));
+    const go = LifecastControls.el("button", "panel-button", "Open");
     go.type = "button";
     go.tabIndex = -1;
     go.title = "Opens RaceMenu (F4 comes back)";
-    go.addEventListener("click", () => AtelierBridge.send("show-racemenu", { for: key }));
+    go.addEventListener("click", () => LifecastBridge.send("show-racemenu", { for: key }));
     row.appendChild(text);
     row.appendChild(go);
     section.body.appendChild(row);
@@ -81,7 +81,7 @@
   for (const [key, label, note] of ENTRIES) {
     addRow(key, label, note, false);
   }
-  AtelierControls.mount(section, "delegate");
+  LifecastControls.mount(section, "delegate");
 
 
   // Where each category the page already covers is at home: a section key (a
@@ -159,13 +159,13 @@
     checkTimer = setTimeout(() => {
       const r = check();
       if (r) {
-        AtelierBridge.send("categories-checked", r);
+        LifecastBridge.send("categories-checked", r);
       }
     }, 2000);
   }
-  window.AtelierDelegate = { check };
+  window.LifecastDelegate = { check };
 
-  AtelierBridge.on("racemenu-categories", (data) => {
+  LifecastBridge.on("racemenu-categories", (data) => {
     // ready says the list was read. A false one is a bad read, not an empty
     // list, and the doors already on screen are better than none: leave them.
     if (!data || !data.ready || !Array.isArray(data.entries)) {
@@ -191,13 +191,13 @@
       }
       // The label goes back as the key: Select() presses the entry whose label
       // is exactly this one, so no list of keys has to be kept on both sides.
-      addRow("category:" + entry.text, entry.text, "RaceMenu has this tab; the Atelier does not build it.", true);
+      addRow("category:" + entry.text, entry.text, "RaceMenu has this tab; the Lifecast does not build it.", true);
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("racemenu-categories-get");
+      LifecastBridge.send("racemenu-categories-get");
     }
   });
 })();

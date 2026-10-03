@@ -1,5 +1,5 @@
 // Overlays.h
-// Atelier
+// Lifecast
 //
 // The paint overlays: body, hand, foot and face. Four of RaceMenu's five
 // paint categories - the fifth, $MAKEUP, is a tint mask and lives in
@@ -60,7 +60,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::Overlays
+namespace Lifecast::Edit::Overlays
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

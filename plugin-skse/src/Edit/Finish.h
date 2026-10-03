@@ -1,5 +1,5 @@
 // Finish.h
-// Atelier
+// Lifecast
 //
 // The character's name, and the button that ends the RaceSex Menu.
 //
@@ -84,7 +84,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::Finish
+namespace Lifecast::Edit::Finish
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

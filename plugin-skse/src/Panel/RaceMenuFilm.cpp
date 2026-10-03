@@ -1,9 +1,9 @@
 // RaceMenuFilm.cpp
-// Atelier
+// Lifecast
 
 #include "Panel/RaceMenuFilm.h"
 
-namespace Atelier::Panel::RaceMenuFilm
+namespace Lifecast::Panel::RaceMenuFilm
 {
 	namespace
 	{

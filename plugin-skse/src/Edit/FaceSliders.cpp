@@ -1,5 +1,5 @@
 // FaceSliders.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/FaceSliders.h"
 
@@ -8,7 +8,7 @@
 #include "Panel/Panel.h"
 #include "Panel/RaceMenuFilm.h"
 
-namespace Atelier::Edit::FaceSliders
+namespace Lifecast::Edit::FaceSliders
 {
 	namespace
 	{

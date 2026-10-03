@@ -1,5 +1,5 @@
 // panel.js
-// Atelier - the panel frame: says hello to the DLL and shows whether the
+// Lifecast - the panel frame: says hello to the DLL and shows whether the
 // bridge is up.
 "use strict";
 
@@ -32,7 +32,7 @@
     statusEl.className = "status status-" + kind;
   }
 
-  AtelierBridge.on("hello", (data) => {
+  LifecastBridge.on("hello", (data) => {
     answered = true;
     versionsEl.textContent = "page " + PAGE_VERSION + " / dll " + data.dll + " / protocol " + data.protocol;
     if (data.compatible) {
@@ -42,20 +42,20 @@
     }
   });
 
-  AtelierBridge.on("error", (data) => {
+  LifecastBridge.on("error", (data) => {
     console.warn("[panel] the DLL reported an error", data);
   });
 
   // Back to RaceMenu from inside the page. The DLL hides this page, which
   // also releases Meridian's focus, and shows RaceMenu's film again.
   function toRaceMenu() {
-    if (!AtelierBridge.send("show-racemenu")) {
+    if (!LifecastBridge.send("show-racemenu")) {
       setStatus("no bridge", "bad");
     }
   }
 
   // The button is the page's only way back. Esc is deliberately NOT one: it
-  // only ever went one way (nothing brings the Atelier back on Esc), and a
+  // only ever went one way (nothing brings the Lifecast back on Esc), and a
   // key that means "leave" here would fight any text field the page grows.
   // F4 is the key, and it works in both directions.
   toRaceMenuEl.addEventListener("click", toRaceMenu);
@@ -81,11 +81,11 @@
 
   document.getElementById("scale-down").addEventListener("click", () => {
     stepScale(-1);
-    AtelierSettings.set("panelScale", scale);
+    LifecastSettings.set("panelScale", scale);
   });
   document.getElementById("scale-up").addEventListener("click", () => {
     stepScale(1);
-    AtelierSettings.set("panelScale", scale);
+    LifecastSettings.set("panelScale", scale);
   });
   showScale();
 
@@ -93,20 +93,20 @@
   // default (1) - settings.js's own doc explains why nothing here can wait
   // for it. Only a number inside the authored bounds is taken; anything
   // else leaves the default in place, same as presets.js's sort order.
-  AtelierSettings.onChange(() => {
-    const saved = AtelierSettings.get("panelScale");
+  LifecastSettings.onChange(() => {
+    const saved = LifecastSettings.get("panelScale");
     if (typeof saved === "number" && saved >= SCALE_MIN && saved <= SCALE_MAX) {
       scale = saved;
       showScale();
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (!ok) {
       setStatus("no bridge", "bad");
       return;
     }
-    AtelierBridge.send("hello", { page: PAGE_VERSION, protocol: AtelierBridge.PROTOCOL });
+    LifecastBridge.send("hello", { page: PAGE_VERSION, protocol: LifecastBridge.PROTOCOL });
     setTimeout(() => {
       if (!answered) {
         setStatus("no answer", "warn");

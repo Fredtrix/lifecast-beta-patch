@@ -1,5 +1,5 @@
 // RaceMenuSync.h
-// Atelier - telling RaceMenu's own script what the panel changed.
+// Lifecast - telling RaceMenu's own script what the panel changed.
 //
 // RaceMenu keeps a copy of the hair colour and of the tint masks in its
 // script, refreshes its sliders from that copy, and writes the copy back on
@@ -12,7 +12,7 @@
 
 #pragma once
 
-namespace Atelier::Core::RaceMenuSync
+namespace Lifecast::Core::RaceMenuSync
 {
 	// RaceMenu's own hair colour form, RaceMenuHairColor (000801:RaceMenu.esp).
 	// Null when RaceMenu.esp is not loaded.

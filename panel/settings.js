@@ -1,5 +1,5 @@
 // settings.js
-// Atelier - the panel's preferences, kept by the DLL across games.
+// Lifecast - the panel's preferences, kept by the DLL across games.
 //
 // There is no MCM: what the player sets for the panel is set in the panel,
 // where it is used, and the DLL keeps it in a file of its own. This module is
@@ -12,11 +12,11 @@
 // always ends showing what is on disk.
 "use strict";
 
-const AtelierSettings = (() => {
+const LifecastSettings = (() => {
   let values = {};
   const listeners = [];
 
-  AtelierBridge.on("settings", (data) => {
+  LifecastBridge.on("settings", (data) => {
     values = data && typeof data === "object" ? data : {};
     for (const fn of listeners) {
       try {
@@ -27,9 +27,9 @@ const AtelierSettings = (() => {
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("settings-get");
+      LifecastBridge.send("settings-get");
     }
   });
 
@@ -39,7 +39,7 @@ const AtelierSettings = (() => {
     },
     set(key, value) {
       values[key] = value;
-      AtelierBridge.send("settings-set", { key: key, value: value });
+      LifecastBridge.send("settings-set", { key: key, value: value });
     },
     onChange(fn) {
       listeners.push(fn);

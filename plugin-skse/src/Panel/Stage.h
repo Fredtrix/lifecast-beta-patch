@@ -1,5 +1,5 @@
 // Stage.h
-// Atelier - the character view: a frame in the page, and the camera and body
+// Lifecast - the character view: a frame in the page, and the camera and body
 // moves that put the character in it.
 //
 // Nothing is drawn here. The page is transparent outside the panel and the
@@ -91,7 +91,7 @@
 
 #pragma once
 
-namespace Atelier::Panel::Stage
+namespace Lifecast::Panel::Stage
 {
 	inline constexpr double kMinDistance = 33.56;   // camera to player, ground plane
 	inline constexpr double kMaxDistance = 320.0;

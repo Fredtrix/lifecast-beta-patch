@@ -1,5 +1,5 @@
 // Body.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Body.h"
 
@@ -10,7 +10,7 @@
 #include "Panel/Bridge.h"
 #include "Panel/Panel.h"
 
-namespace Atelier::Edit::Body
+namespace Lifecast::Edit::Body
 {
 	namespace
 	{
@@ -68,7 +68,7 @@ namespace Atelier::Edit::Body
 				return;
 			}
 			// Which list: OBody's own IsFemale, not the actor base. OBody is
-			// the one that knows bodies - the Atelier delegates body work to
+			// the one that knows bodies - the Lifecast delegates body work to
 			// whoever owns it - and its header sets the bit whether or not a
 			// preset is assigned. The actor base sex is logged beside it: a
 			// disagreement between the two is a finding.

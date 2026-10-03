@@ -1,5 +1,5 @@
 // Switcher.cpp
-// Atelier
+// Lifecast
 
 #include "Panel/Switcher.h"
 
@@ -9,7 +9,7 @@
 #include "Panel/RaceMenuTabs.h"
 #include "Panel/Stage.h"
 
-namespace Atelier::Panel::Switcher
+namespace Lifecast::Panel::Switcher
 {
 	namespace
 	{
@@ -30,7 +30,7 @@ namespace Atelier::Panel::Switcher
 		enum class Mode
 		{
 			kClosed,    // the RaceSex Menu is not open
-			kAtelier,   // the panel is on screen and owns (or is getting) focus
+			kLifecast,   // the panel is on screen and owns (or is getting) focus
 			kRaceMenu,  // RaceMenu's film is on screen, the panel is hidden
 		};
 
@@ -49,8 +49,8 @@ namespace Atelier::Panel::Switcher
 			switch (a_mode) {
 			case Mode::kClosed:
 				return "closed";
-			case Mode::kAtelier:
-				return "atelier";
+			case Mode::kLifecast:
+				return "lifecast";
 			case Mode::kRaceMenu:
 				return "racemenu";
 			default:
@@ -80,7 +80,7 @@ namespace Atelier::Panel::Switcher
 		// RaceMenu is usually opened from the console (showracemenu), which
 		// stays open underneath. Once the panel owns the keyboard, the key
 		// that would close the console never reaches the game, and the
-		// console sits over the Atelier until the player goes back to
+		// console sits over the Lifecast until the player goes back to
 		// RaceMenu. So it is closed before the panel asks for focus.
 		void CloseConsole()
 		{
@@ -109,7 +109,7 @@ namespace Atelier::Panel::Switcher
 		// screen but no longer owns focus, or never got it.
 		void Watch()
 		{
-			if (g_mode != Mode::kAtelier) {
+			if (g_mode != Mode::kLifecast) {
 				return;
 			}
 
@@ -145,13 +145,13 @@ namespace Atelier::Panel::Switcher
 
 			if (!Panel::Ensure()) {
 				// No panel this time. RaceMenu stays exactly as it was, and
-				// the player loses nothing but the Atelier.
+				// the player loses nothing but the Lifecast.
 				SetMode(Mode::kRaceMenu);
 				return;
 			}
 
 			SetMode(Mode::kRaceMenu);
-			ShowAtelier();
+			ShowLifecast();
 		}
 
 		void OnMenuClosed()
@@ -245,7 +245,7 @@ namespace Atelier::Panel::Switcher
 				Stage::Tick();
 
 				if (!a_event || g_mode != Mode::kRaceMenu) {
-					// With the Atelier on screen, F4 never gets here: it is
+					// With the Lifecast on screen, F4 never gets here: it is
 					// the panel's focus chord and Meridian consumes it.
 					return RE::BSEventNotifyControl::kContinue;
 				}
@@ -258,7 +258,7 @@ namespace Atelier::Panel::Switcher
 					const auto* button = event->AsButtonEvent();
 					if (button && button->IsDown() && button->GetIDCode() == kSwapKey) {
 						spdlog::info("[switch] F4 from the game");
-						ShowAtelier();
+						ShowLifecast();
 						break;
 					}
 				}
@@ -281,7 +281,7 @@ namespace Atelier::Panel::Switcher
 
 		auto* ui = RE::UI::GetSingleton();
 		if (!ui) {
-			spdlog::error("[switch] no UI singleton - the Atelier will never open");
+			spdlog::error("[switch] no UI singleton - the Lifecast will never open");
 			return;
 		}
 		ui->AddEventSink<RE::MenuOpenCloseEvent>(MenuSink::GetSingleton());
@@ -300,17 +300,17 @@ namespace Atelier::Panel::Switcher
 		Bridge::On("racemenu-categories-get", &OnPageCategories);
 
 		g_installed = true;
-		spdlog::info("[switch] installed - F4 swaps the Atelier and RaceMenu");
+		spdlog::info("[switch] installed - F4 swaps the Lifecast and RaceMenu");
 	}
 
-	void ShowAtelier()
+	void ShowLifecast()
 	{
 		if (g_mode != Mode::kRaceMenu || !Panel::Browser()) {
 			return;
 		}
 
 		++g_swaps;
-		spdlog::info("[switch] show the Atelier (swap #{})", g_swaps);
+		spdlog::info("[switch] show the Lifecast (swap #{})", g_swaps);
 
 		// The order is the point. The way out exists before the panel can
 		// take the keyboard; focus is the very last thing asked for.
@@ -321,14 +321,14 @@ namespace Atelier::Panel::Switcher
 
 		g_focusSeen = false;
 		g_shownAt = Clock::now();
-		SetMode(Mode::kAtelier);
+		SetMode(Mode::kLifecast);
 
 		Panel::RequestFocus();
 	}
 
 	void ShowRaceMenu()
 	{
-		if (g_mode != Mode::kAtelier) {
+		if (g_mode != Mode::kLifecast) {
 			return;
 		}
 
@@ -336,7 +336,7 @@ namespace Atelier::Panel::Switcher
 		spdlog::info("[switch] show RaceMenu (swap #{})", g_swaps);
 
 		// Hiding the browser releases its focus. The chord comes off with it,
-		// so F4 reaches the game again and brings the Atelier back.
+		// so F4 reaches the game again and brings the Lifecast back.
 		Panel::SetVisible(false);
 		Panel::DisarmFocusChord();
 		SetFilmVisible(true);

@@ -1,5 +1,5 @@
 // RaceMenuTabs.h
-// Atelier - opening RaceMenu on the category a delegated control lives in.
+// Lifecast - opening RaceMenu on the category a delegated control lives in.
 //
 // The panel's "Open" buttons hand a control back to RaceMenu. Without this
 // RaceMenu comes back on whatever category it was on, which after a fresh
@@ -14,7 +14,7 @@
 
 #pragma once
 
-namespace Atelier::Panel::RaceMenuTabs
+namespace Lifecast::Panel::RaceMenuTabs
 {
 	// a_for is the key the page sends with "show-racemenu". Queued on the
 	// UI thread; returns at once.

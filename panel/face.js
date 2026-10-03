@@ -1,5 +1,5 @@
 // face.js
-// Atelier - the face morph sliders.
+// Lifecast - the face morph sliders.
 //
 // The DLL owns the values (the player's face morphs) and redraws the face;
 // this page only shows sliders and sends what the player sets. Indices are
@@ -25,24 +25,24 @@
   }
 
   for (const group of GROUPS) {
-    const section = AtelierControls.section(group.title);
+    const section = LifecastControls.section(group.title);
     for (const [index, label] of group.sliders) {
-      const row = AtelierControls.row({
+      const row = LifecastControls.row({
         label: label,
         min: -1,
         max: 1,
         step: 0.01,
         button: 0.05,
         format: format,
-        send: (v, final) => AtelierBridge.send("face-set", { i: index, v: v, final: final }),
+        send: (v, final) => LifecastBridge.send("face-set", { i: index, v: v, final: final }),
       });
       rows.set(index, row);
       section.body.appendChild(row.el);
     }
-    AtelierControls.mount(section, "face:" + group.title);
+    LifecastControls.mount(section, "face:" + group.title);
   }
 
-  AtelierBridge.on("face", (data) => {
+  LifecastBridge.on("face", (data) => {
     const morphs = data && Array.isArray(data.morphs) ? data.morphs : [];
     for (const [index, row] of rows) {
       if (!row.dragging()) {
@@ -51,9 +51,9 @@
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("face-get");
+      LifecastBridge.send("face-get");
     }
   });
 })();

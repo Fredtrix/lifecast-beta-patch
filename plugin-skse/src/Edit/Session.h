@@ -1,5 +1,5 @@
 // Session.h
-// Atelier
+// Lifecast
 //
 // What every editing section shares while the RaceSex Menu is open: whether
 // the menu is open, a tick that runs about once a frame, the moment the panel
@@ -25,7 +25,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::Session
+namespace Lifecast::Edit::Session
 {
 	using Callback = void (*)();
 

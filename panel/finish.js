@@ -1,5 +1,5 @@
 // finish.js
-// Atelier - the character's name, and the button that ends the menu.
+// Lifecast - the character's name, and the button that ends the menu.
 //
 // One click finishes, however the menu was opened: there is no confirmation
 // step on this page. The DLL does the same thing either way (it gives the name
@@ -28,13 +28,13 @@
   // header is a way out the player has to find first.
   const host = document.getElementById("finish");
   if (host) {
-    const s = AtelierControls.section("Character", { open: true });
+    const s = LifecastControls.section("Character", { open: true });
     while (host.firstChild) {
       s.body.appendChild(host.firstChild);
     }
     host.remove();
-    AtelierControls.mount(s, "character");
-    AtelierControls.setOrder(["character"]);
+    LifecastControls.mount(s, "character");
+    LifecastControls.setOrder(["character"]);
   }
 
   const field = document.getElementById("finish-name");
@@ -92,14 +92,14 @@
     sent = true;
     say(newGame ? "Finishing..." : "Closing...");
     render();
-    if (!AtelierBridge.send("finish", { name: name })) {
+    if (!LifecastBridge.send("finish", { name: name })) {
       sent = false;
       say("No bridge to the game - nothing was done.", "bad");
       render();
     }
   });
 
-  AtelierBridge.on("name", (data) => {
+  LifecastBridge.on("name", (data) => {
     const incoming = data && data.session !== undefined ? data.session : null;
     newGame = !!(data && data.newGame);
     // Missing counts as not read: the page and the DLL ship together.
@@ -122,7 +122,7 @@
     render();
   });
 
-  AtelierBridge.on("finish-result", (data) => {
+  LifecastBridge.on("finish-result", (data) => {
     if (data && data.ok) {
       say(newGame ? "Finished." : "Closed.", "ok");
     } else {
@@ -132,9 +132,9 @@
     render();
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("name-get");
+      LifecastBridge.send("name-get");
     }
   });
 

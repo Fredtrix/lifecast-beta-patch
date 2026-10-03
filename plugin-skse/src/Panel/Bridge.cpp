@@ -1,5 +1,5 @@
 // Bridge.cpp
-// Atelier
+// Lifecast
 
 #include "Panel/Bridge.h"
 
@@ -9,7 +9,7 @@
 #include <chrono>
 #include <thread>
 
-namespace Atelier::Panel::Bridge
+namespace Lifecast::Panel::Bridge
 {
 	namespace
 	{

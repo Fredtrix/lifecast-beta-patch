@@ -1,5 +1,5 @@
 // Log.cpp
-// Atelier
+// Lifecast
 
 #include "Log.h"
 
@@ -10,7 +10,7 @@
 #include <filesystem>
 #include <format>
 
-namespace Atelier::Core::Log
+namespace Lifecast::Core::Log
 {
 	bool Init()
 	{

@@ -1,5 +1,5 @@
 // Tints.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Tints.h"
 
@@ -8,7 +8,7 @@
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
-namespace Atelier::Edit::Tints
+namespace Lifecast::Edit::Tints
 {
 	namespace
 	{

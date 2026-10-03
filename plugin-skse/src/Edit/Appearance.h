@@ -1,5 +1,5 @@
 // Appearance.h
-// Atelier
+// Lifecast
 //
 // Everything on the head and body that is not a face morph and is chosen
 // from a list the game already has, plus weight:
@@ -40,7 +40,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::Appearance
+namespace Lifecast::Edit::Appearance
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

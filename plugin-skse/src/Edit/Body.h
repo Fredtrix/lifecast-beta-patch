@@ -1,10 +1,10 @@
 // Body.h
-// Atelier
+// Lifecast
 //
 // The body section: the player picks one of OBody's body presets and sees it
 // applied at once.
 //
-// The Atelier delegates here literally. OBody knows the presets, which one
+// The Lifecast delegates here literally. OBody knows the presets, which one
 // the player carries and how to apply one; this module asks and relays. It
 // holds no list of its own between messages and never decides what a body
 // is - every message to the page is read from OBody at that moment.
@@ -65,7 +65,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace Atelier::Edit::Body
+namespace Lifecast::Edit::Body
 {
 	// Registers the bridge handlers, the session callbacks and the OBody
 	// readiness callback. Call once, at kDataLoaded, after Session::Install.

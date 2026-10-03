@@ -1,5 +1,5 @@
 // morphs.js
-// Atelier - the slider tabs a mod injects into RaceMenu, body morphs among them.
+// Lifecast - the slider tabs a mod injects into RaceMenu, body morphs among them.
 //
 // Nothing here knows a mod's name. The DLL reads RaceMenu's own film and
 // hands over every category some mod registered, with the sliders hanging off
@@ -13,7 +13,7 @@
 // A tab with no sliders is not a mistake and is not hidden: a mod may add its
 // category unconditionally and its sliders only for one sex, so the tab is
 // really there and really empty. RaceMenu shows it empty too. Hiding it would
-// break the rule this phase exists for - if RaceMenu has a tab, the Atelier
+// break the rule this phase exists for - if RaceMenu has a tab, the Lifecast
 // shows it - in the one case where the tab is easiest to lose.
 "use strict";
 
@@ -30,11 +30,11 @@
   }
 
   function create(cat, sliders) {
-    const section = AtelierControls.section(cat.label);
+    const section = LifecastControls.section(cat.label);
     const rows = new Map();
     if (sliders.length === 0) {
       section.body.appendChild(
-        AtelierControls.el(
+        LifecastControls.el(
           "div",
           "delegate-note",
           "RaceMenu has this tab and it holds nothing right now. What goes in it is the mod's own decision - some add theirs for one sex only."
@@ -51,23 +51,23 @@
       // those the arrow moves one interval, so no single press can cross the
       // range and fire it.
       const steps = (s.max - s.min) / s.step;
-      const row = AtelierControls.row({
+      const row = LifecastControls.row({
         label: s.label,
         min: s.min,
         max: s.max,
         step: s.step,
         button: steps > 10 ? s.step * 5 : s.step,
         format: (v) => v.toFixed(dp),
-        send: (v, final) => AtelierBridge.send("body-morph-set", { c: s.c, v: v, final: final }),
+        send: (v, final) => LifecastBridge.send("body-morph-set", { c: s.c, v: v, final: final }),
       });
       rows.set(s.c, row);
       section.body.appendChild(row.el);
     }
-    AtelierControls.mount(section, "morph:" + cat.key);
+    LifecastControls.mount(section, "morph:" + cat.key);
     return { key: cat.key, el: section, rows: rows };
   }
 
-  AtelierBridge.on("body-morphs", (data) => {
+  LifecastBridge.on("body-morphs", (data) => {
     // ready says the film was read. A false one is a bad read and not an
     // empty machine: what is on screen is better than nothing, so leave it.
     if (!data || !data.ready || !Array.isArray(data.categories)) {
@@ -107,9 +107,9 @@
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("body-morphs-get");
+      LifecastBridge.send("body-morphs-get");
     }
   });
 })();

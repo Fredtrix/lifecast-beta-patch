@@ -1,11 +1,11 @@
 // Session.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Session.h"
 
 #include "Panel/Panel.h"
 
-namespace Atelier::Edit::Session
+namespace Lifecast::Edit::Session
 {
 	namespace
 	{

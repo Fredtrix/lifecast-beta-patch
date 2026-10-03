@@ -1,5 +1,5 @@
 // RaceMenuFilm.h
-// Atelier - showing in RaceMenu's sliders what the panel changed.
+// Lifecast - showing in RaceMenu's sliders what the panel changed.
 //
 // RaceMenu's film draws its sliders from its own list of entries, and each
 // entry keeps the value it last showed in "position". An edit made in the
@@ -24,7 +24,7 @@
 //     face detail sets.
 //   - the weight (ChangeWeight), which that slider shows from 0 to 1.
 // Hair colour and tint masks are not here: RaceMenu re-reads those itself
-// on the mod events the Atelier sends (Core/RaceMenuSync).
+// on the mod events the Lifecast sends (Core/RaceMenuSync).
 //
 // Labels are the English ones RaceMenu shows. An entry whose label is not
 // known is left alone.
@@ -38,7 +38,7 @@
 
 #pragma once
 
-namespace Atelier::Panel::RaceMenuFilm
+namespace Lifecast::Panel::RaceMenuFilm
 {
 	// Queued on the UI thread; returns at once. Call right after RaceMenu's
 	// film is made visible again.

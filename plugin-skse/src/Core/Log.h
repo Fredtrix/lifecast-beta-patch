@@ -1,17 +1,17 @@
 // Log.h
-// Atelier
+// Lifecast
 //
 // Owns the plugin's spdlog setup, so every module logs the same way to the
 // same file without knowing the details.
 //
-// Log file: Documents/My Games/Skyrim Special Edition/SKSE/Atelier.log
+// Log file: Documents/My Games/Skyrim Special Edition/SKSE/Lifecast.log
 //
 // Usage from any module (spdlog is pulled in by PCH.h):
 //     spdlog::info("something happened: {}", value);
 
 #pragma once
 
-namespace Atelier::Core::Log
+namespace Lifecast::Core::Log
 {
 	// Initializes the plugin log file and installs it as the default logger.
 	// Must be called once, first thing in SKSEPluginLoad, before any spdlog::

@@ -1,5 +1,5 @@
 // FaceSliders.h
-// Atelier
+// Lifecast
 //
 // The face morph sliders: the page drags, this module writes the value into
 // the player's face data and has the engine redraw it, with the RaceSex Menu
@@ -28,7 +28,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::FaceSliders
+namespace Lifecast::Edit::FaceSliders
 {
 	// Morphs [0, kUsableMorphs) are sliders; the entry after them is not.
 	// Measured in the game: 18 plausible values, then FLT_MAX.

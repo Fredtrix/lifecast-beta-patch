@@ -1,5 +1,5 @@
 // body.js
-// Atelier - the body section: OBody's body presets, one click to apply.
+// Lifecast - the body section: OBody's body presets, one click to apply.
 //
 // The section exists only while OBody answers. Without OBody the DLL says
 // "not ready" and nothing is built: no empty section, no disabled one, no
@@ -25,12 +25,12 @@
   let pending = null;  // the name asked for, until the next "body" message
 
   function build() {
-    section = AtelierControls.section("OBody");
-    status = AtelierControls.el("div", "preset-status", "--");
-    list = AtelierControls.el("ul", "preset-list");
+    section = LifecastControls.section("OBody");
+    status = LifecastControls.el("div", "preset-status", "--");
+    list = LifecastControls.el("ul", "preset-list");
     section.body.appendChild(status);
     section.body.appendChild(list);
-    AtelierControls.mount(section, "obody");
+    LifecastControls.mount(section, "obody");
   }
 
   function remove() {
@@ -51,8 +51,8 @@
     status.textContent = current ? "Current: " + current : "Current: none";
     list.replaceChildren();
     for (const name of names) {
-      const li = AtelierControls.el("li", "preset-row");
-      li.appendChild(AtelierControls.el("span", "preset-name", name));
+      const li = LifecastControls.el("li", "preset-row");
+      li.appendChild(LifecastControls.el("span", "preset-name", name));
       if (name === current) {
         li.classList.add("is-selected");
       }
@@ -62,13 +62,13 @@
         }
         pending = name;
         status.textContent = "Applying " + name + "...";
-        AtelierBridge.send("body-set", { name: name });
+        LifecastBridge.send("body-set", { name: name });
       });
       list.appendChild(li);
     }
   }
 
-  AtelierBridge.on("body", (data) => {
+  LifecastBridge.on("body", (data) => {
     pending = null;
     const ready = data && data.ready === true && Array.isArray(data.presets) && data.presets.length > 0;
     if (!ready) {
@@ -81,9 +81,9 @@
     render(data);
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("body-get");
+      LifecastBridge.send("body-get");
     }
   });
 })();

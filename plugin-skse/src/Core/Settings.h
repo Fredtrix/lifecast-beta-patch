@@ -1,13 +1,13 @@
 // Settings.h
-// Atelier
+// Lifecast
 //
 // The panel's preferences, kept across games in a file of their own.
 //
 // There is no MCM: what the player sets for the panel is set in the panel.
 // This module keeps those values on disk, and is the only place in the
-// Atelier that writes a state of its own to disk.
+// Lifecast that writes a state of its own to disk.
 //
-// WHERE. Data\SKSE\Plugins\Atelier\settings.json, written by the game at the
+// WHERE. Data\SKSE\Plugins\Lifecast\settings.json, written by the game at the
 // moment the player changes something - never shipped with the mod. A file
 // in the package would be replaced by every update of the mod, taking the
 // player's choices with it; and a file the game rewrites cannot live in a
@@ -56,9 +56,9 @@
 
 #pragma once
 
-namespace Atelier::Core::Settings
+namespace Lifecast::Core::Settings
 {
-	inline constexpr auto kFolder = "Data\\SKSE\\Plugins\\Atelier";
+	inline constexpr auto kFolder = "Data\\SKSE\\Plugins\\Lifecast";
 	inline constexpr auto kFile = "settings.json";
 
 	// Reads the file and registers the bridge handlers. Call once, at

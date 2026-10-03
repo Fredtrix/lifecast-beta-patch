@@ -1,5 +1,5 @@
 // BodyMorphs.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/BodyMorphs.h"
 
@@ -7,7 +7,7 @@
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
-namespace Atelier::Edit::BodyMorphs
+namespace Lifecast::Edit::BodyMorphs
 {
 	namespace
 	{
@@ -15,7 +15,7 @@ namespace Atelier::Edit::BodyMorphs
 
 		constexpr auto kPanels = "_root.RaceSexMenuBaseInstance.RaceSexPanelsInstance";
 
-		// The tab the Atelier already builds from its own node table. See the
+		// The tab the Lifecast already builds from its own node table. See the
 		// header: reporting it here would stack a second body-scales section
 		// on the one Edit/BodyScales draws.
 		constexpr auto kBodyScales = "rsm_body_scale";

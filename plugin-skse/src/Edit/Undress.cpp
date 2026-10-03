@@ -1,12 +1,12 @@
 // Undress.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Undress.h"
 
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
-namespace Atelier::Edit::Undress
+namespace Lifecast::Edit::Undress
 {
 	namespace
 	{

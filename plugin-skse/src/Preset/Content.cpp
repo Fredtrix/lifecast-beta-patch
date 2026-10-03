@@ -1,5 +1,5 @@
 // Content.cpp
-// Atelier
+// Lifecast
 
 #include "Preset/Content.h"
 
@@ -9,7 +9,7 @@
 #include <cmath>
 #include <map>
 
-namespace Atelier::Preset::Content
+namespace Lifecast::Preset::Content
 {
 	namespace
 	{

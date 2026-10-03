@@ -1,11 +1,11 @@
 // SkeeLink.cpp
-// Atelier
+// Lifecast
 
 #include "SkeeLink.h"
 
 #include <array>
 
-namespace Atelier::Core::SkeeLink
+namespace Lifecast::Core::SkeeLink
 {
 	namespace
 	{
@@ -73,7 +73,7 @@ namespace Atelier::Core::SkeeLink
 			spdlog::error(
 				"[skee] [{}] no interface map - SKEE did not answer the "
 				"exchange. Either RaceMenu/skee64 is not installed, or it "
-				"loads after the Atelier in the plugin order.",
+				"loads after the Lifecast in the plugin order.",
 				a_moment);
 			return;
 		}

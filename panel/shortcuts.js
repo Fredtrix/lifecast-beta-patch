@@ -1,5 +1,5 @@
 // shortcuts.js
-// Atelier - the always-present top bar (E2 item 8): one click from anywhere
+// Lifecast - the always-present top bar (E2 item 8): one click from anywhere
 // in the scrolled list to Presets or Body, and to RaceMenu's own Sculpt.
 //
 // These are jumps, not a second navigation structure: Presets and Body
@@ -16,23 +16,23 @@
 
   if (presetsButton) {
     presetsButton.addEventListener("click", () => {
-      AtelierControls.reveal("presets");
+      LifecastControls.reveal("presets");
     });
   }
 
   if (obodyButton) {
     obodyButton.addEventListener("click", () => {
-      AtelierControls.reveal("obody");
+      LifecastControls.reveal("obody");
     });
   }
 
   if (sculptButton) {
     sculptButton.addEventListener("click", () => {
-      AtelierBridge.send("show-racemenu", { for: "sculpt" });
+      LifecastBridge.send("show-racemenu", { for: "sculpt" });
     });
   }
 
-  // AtelierBridge.on() holds one handler per message type (bridge.js), and
+  // LifecastBridge.on() holds one handler per message type (bridge.js), and
   // body.js already owns "body" - a second listener here would replace
   // its handler, not add to it. The section's own presence in the DOM is
   // the fact this button tracks, so it watches that directly instead.

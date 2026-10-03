@@ -1,5 +1,5 @@
 // Skee.h
-// Atelier
+// Lifecast
 //
 // Wraps the vendored SKEE ModderResource header so the rest of the project
 // can use it without the vendored file being edited.

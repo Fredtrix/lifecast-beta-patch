@@ -1,5 +1,5 @@
 // scales.js
-// Atelier - the body scale sliders.
+// Lifecast - the body scale sliders.
 //
 // Which sliders exist is the DLL's answer, not this page's: it depends on
 // the player's sex and on which nodes their skeleton has, and RaceMenu can
@@ -9,10 +9,10 @@
 "use strict";
 
 (() => {
-  const section = AtelierControls.section("Body Scales");
-  const body = AtelierControls.el("div");
+  const section = LifecastControls.section("Body Scales");
+  const body = LifecastControls.el("div");
   section.body.appendChild(body);
-  AtelierControls.mount(section, "scales");
+  LifecastControls.mount(section, "scales");
 
   let rows = new Map(); // key -> row
   let keys = "";
@@ -21,21 +21,21 @@
     rows = new Map();
     body.replaceChildren();
     for (const n of nodes) {
-      const row = AtelierControls.row({
+      const row = LifecastControls.row({
         label: n.label,
         min: n.min,
         max: n.max,
         step: 0.01,
         button: 0.05,
         format: (v) => v.toFixed(2),
-        send: (v, final) => AtelierBridge.send("scales-set", { k: n.k, v: v, final: final }),
+        send: (v, final) => LifecastBridge.send("scales-set", { k: n.k, v: v, final: final }),
       });
       rows.set(n.k, row);
       body.appendChild(row.el);
     }
   }
 
-  AtelierBridge.on("scales", (data) => {
+  LifecastBridge.on("scales", (data) => {
     const nodes = data && data.ready && Array.isArray(data.nodes) ? data.nodes : [];
     const next = nodes.map((n) => n.k).join();
     if (next !== keys) {
@@ -51,9 +51,9 @@
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("scales-get");
+      LifecastBridge.send("scales-get");
     }
   });
 })();

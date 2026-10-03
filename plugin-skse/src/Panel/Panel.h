@@ -1,5 +1,5 @@
 // Panel.h
-// Atelier
+// Lifecast
 //
 // The panel's browser: created through Meridian UI's platform API
 // (IUIPlatformAPI::AddOrGetBrowser), not through the Meridian.View extension.
@@ -18,12 +18,12 @@
 
 #include "MeridianUIAPI/IBrowser.h"
 
-namespace Atelier::Panel
+namespace Lifecast::Panel
 {
 	// The mod:// host is the folder under Data/MeridianUI/, and the browser
 	// name is a process-wide key shared with every other Meridian consumer.
-	inline constexpr auto kBrowserName = "Atelier.Panel";
-	inline constexpr auto kStartUrl = "mod://Atelier/index.html";
+	inline constexpr auto kBrowserName = "Lifecast.Panel";
+	inline constexpr auto kStartUrl = "mod://Lifecast/index.html";
 
 	// Registers the panel's own bridge handlers. Call once from
 	// SKSEPluginLoad; creates nothing.

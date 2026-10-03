@@ -1,5 +1,5 @@
 // ObodyApi.h
-// Atelier
+// Lifecast
 //
 // Wraps the vendored OBody plugin-API header so the rest of the project can
 // use it without the vendored file being edited.

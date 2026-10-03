@@ -1,5 +1,5 @@
 // Guard.cpp
-// Atelier
+// Lifecast
 
 #include "Preset/Guard.h"
 
@@ -11,7 +11,7 @@
 #include <sstream>
 #include <vector>
 
-namespace Atelier::Preset::Guard
+namespace Lifecast::Preset::Guard
 {
 	namespace
 	{

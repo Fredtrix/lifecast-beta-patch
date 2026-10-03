@@ -1,5 +1,5 @@
 // Library.cpp
-// Atelier
+// Lifecast
 
 #include "Preset/Library.h"
 
@@ -13,7 +13,7 @@
 #include <sstream>
 #include <thread>
 
-namespace Atelier::Preset::Library
+namespace Lifecast::Preset::Library
 {
 	namespace
 	{

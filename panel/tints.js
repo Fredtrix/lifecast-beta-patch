@@ -1,5 +1,5 @@
 // tints.js
-// Atelier - the tint masks: colour and intensity per layer, and which
+// Lifecast - the tint masks: colour and intensity per layer, and which
 // texture shows for war paint, dirt and markings.
 //
 // The layers come from the DLL, for the player's race and sex. Colour is set
@@ -10,10 +10,10 @@
 "use strict";
 
 (() => {
-  const section = AtelierControls.section("Skin & Tints");
-  const body = AtelierControls.el("div");
+  const section = LifecastControls.section("Skin & Tints");
+  const body = LifecastControls.el("div");
   section.body.appendChild(body);
-  AtelierControls.mount(section, "tints");
+  LifecastControls.mount(section, "tints");
 
   let layers = new Map(); // key -> { pick, r, g, b, alpha, chip, picker, grid, swatches, none }
   let keys = "";
@@ -27,7 +27,7 @@
   }
 
   function send(key, fields, final) {
-    AtelierBridge.send("tint-set", Object.assign({ k: key, final: final }, fields));
+    LifecastBridge.send("tint-set", Object.assign({ k: key, final: final }, fields));
   }
 
   function paint(entry) {
@@ -44,7 +44,7 @@
   }
 
   function colorRow(key, entry, label) {
-    return AtelierControls.row({
+    return LifecastControls.row({
       label: label,
       min: 0,
       max: 255,
@@ -63,16 +63,16 @@
     body.replaceChildren();
     for (const l of list) {
       const entry = { pick: null, swatches: null, none: false };
-      const head = AtelierControls.el("div", "tint-head");
-      const name = AtelierControls.el("span", "slider-name", l.label);
-      entry.chip = AtelierControls.el("button", "swatch-chip picker-chip");
+      const head = LifecastControls.el("div", "tint-head");
+      const name = LifecastControls.el("span", "slider-name", l.label);
+      entry.chip = LifecastControls.el("button", "swatch-chip picker-chip");
       entry.chip.type = "button";
       entry.chip.tabIndex = -1;
       entry.chip.title = "Pick any colour";
       name.appendChild(entry.chip);
       head.appendChild(name);
       body.appendChild(head);
-      entry.picker = AtelierPicker.create({
+      entry.picker = LifecastPicker.create({
         label: l.label,
         get: () => colorOf(entry),
         send: (hex, final) => {
@@ -88,7 +88,7 @@
       body.appendChild(entry.picker.el);
 
       if (l.kind === "pick") {
-        entry.pick = AtelierControls.row({
+        entry.pick = LifecastControls.row({
           label: "Texture",
           min: -1,
           max: 0,
@@ -102,7 +102,7 @@
       entry.r = colorRow(l.k, entry, "Red");
       entry.g = colorRow(l.k, entry, "Green");
       entry.b = colorRow(l.k, entry, "Blue");
-      entry.alpha = AtelierControls.row({
+      entry.alpha = LifecastControls.row({
         label: "Intensity",
         min: 0,
         max: 100,
@@ -114,7 +114,7 @@
       for (const row of [entry.r, entry.g, entry.b, entry.alpha]) {
         body.appendChild(row.el);
       }
-      entry.grid = AtelierControls.el("div", "swatch-grid");
+      entry.grid = LifecastControls.el("div", "swatch-grid");
       body.appendChild(entry.grid);
       layers.set(l.k, entry);
     }
@@ -129,7 +129,7 @@
     }
     entry.grid.replaceChildren();
     for (const color of swatches) {
-      const b = AtelierControls.el("button", "swatch");
+      const b = LifecastControls.el("button", "swatch");
       b.type = "button";
       b.tabIndex = -1;
       b.style.background = color;
@@ -146,13 +146,13 @@
         // colorOf() is always upper case; a swatch from the DLL need not be,
         // and the same colour in two spellings would be an entry that undoes
         // to itself.
-        AtelierHistory.record({ label: label, before: before, after: color.toUpperCase(), apply: pick });
+        LifecastHistory.record({ label: label, before: before, after: color.toUpperCase(), apply: pick });
       });
       entry.grid.appendChild(b);
     }
   }
 
-  AtelierBridge.on("tints", (data) => {
+  LifecastBridge.on("tints", (data) => {
     const list = data && data.ready && Array.isArray(data.layers) ? data.layers : [];
     const next = list.map((l) => l.k + ":" + l.kind).join();
     if (next !== keys) {
@@ -194,9 +194,9 @@
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("tints-get");
+      LifecastBridge.send("tints-get");
     }
   });
 })();

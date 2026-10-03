@@ -1,5 +1,5 @@
 // BodyScales.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/BodyScales.h"
 
@@ -7,7 +7,7 @@
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
-namespace Atelier::Edit::BodyScales
+namespace Lifecast::Edit::BodyScales
 {
 	namespace
 	{

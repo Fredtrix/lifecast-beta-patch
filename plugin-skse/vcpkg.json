@@ -1,7 +1,7 @@
 {
-    "name": "atelier",
+    "name": "lifecast",
     "version-string": "0.1.0",
-    "description": "Atelier - a modern interface for RaceMenu",
+    "description": "Lifecast - a modern interface for RaceMenu",
     "builtin-baseline": "fc3f61366102c1f0d4547c06d03c523bb18c13a7",
     "dependencies": [
         "directxtk",

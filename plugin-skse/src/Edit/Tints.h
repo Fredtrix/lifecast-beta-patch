@@ -1,5 +1,5 @@
 // Tints.h
-// Atelier
+// Lifecast
 //
 // The tint masks: skin tone, lips, cheeks, eye sockets, eyeliner, the other
 // face tints, and the two picked ones - war paint and dirt.
@@ -54,7 +54,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::Tints
+namespace Lifecast::Edit::Tints
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

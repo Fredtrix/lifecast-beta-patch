@@ -1,4 +1,4 @@
-# Atelier - line endings
+# Lifecast - line endings
 #
 # Without this file, a clone's working copy would depend on the cloning
 # machine's core.autocrlf setting instead of on the project's convention.

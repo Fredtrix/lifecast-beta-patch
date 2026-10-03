@@ -1,5 +1,5 @@
 // Overlays.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Overlays.h"
 
@@ -8,7 +8,7 @@
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
-namespace Atelier::Edit::Overlays
+namespace Lifecast::Edit::Overlays
 {
 	namespace
 	{

@@ -1,11 +1,11 @@
 #pragma once
 
 // Jslot.h
-// Atelier
+// Lifecast
 //
 // Origin: copied from the author's own earlier plugin code - file
 // src/Core/Jslot.h at commit cb5eb7b. Changed on copy: the namespace (now
-// Atelier::Jslot), and comments that pointed to that project's documents,
+// Lifecast::Jslot), and comments that pointed to that project's documents,
 // test fixtures and phase numbers, reworded to say the fact instead. The
 // logic is unchanged.
 
@@ -28,7 +28,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace Atelier::Jslot
+namespace Lifecast::Jslot
 {
     using Json = nlohmann::json;
 

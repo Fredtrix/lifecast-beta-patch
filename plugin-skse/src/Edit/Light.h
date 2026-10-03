@@ -1,5 +1,5 @@
 // Light.h
-// Atelier - the stage light RaceMenu already creates.
+// Lifecast - the stage light RaceMenu already creates.
 //
 // RaceMenu creates and lights its own chargen light when the menu opens, and
 // toggles it with "RSM_ToggleLight" (RaceMenu.as:1389-1398, racemenu.psc:67,
@@ -22,7 +22,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::Light
+namespace Lifecast::Edit::Light
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

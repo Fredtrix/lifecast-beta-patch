@@ -1,5 +1,5 @@
 // Content.h
-// Atelier
+// Lifecast
 //
 // What one preset file carries that another does not, compared by CONTENT.
 //
@@ -59,7 +59,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace Atelier::Preset::Content
+namespace Lifecast::Preset::Content
 {
 	struct SectionDiff
 	{

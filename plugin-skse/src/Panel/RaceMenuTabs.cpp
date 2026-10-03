@@ -1,5 +1,5 @@
 // RaceMenuTabs.cpp
-// Atelier
+// Lifecast
 
 #include "Panel/RaceMenuTabs.h"
 
@@ -8,7 +8,7 @@
 
 #include <thread>
 
-namespace Atelier::Panel::RaceMenuTabs
+namespace Lifecast::Panel::RaceMenuTabs
 {
 	namespace
 	{

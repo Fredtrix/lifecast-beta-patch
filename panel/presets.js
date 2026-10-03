@@ -1,5 +1,5 @@
 // presets.js
-// Atelier - the presets section: the presets on disk, searched and sorted
+// Lifecast - the presets section: the presets on disk, searched and sorted
 // here, a preset to load, and a name to save the current character under.
 //
 // The DLL sends the whole list once (and again when the panel comes back on
@@ -45,63 +45,63 @@
   let notice = "";         // the last outcome, kept across re-renders
   let loading = false;     // a load was asked and has not answered yet
 
-  const section = AtelierControls.section("Presets");
+  const section = LifecastControls.section("Presets");
 
-  const field = AtelierControls.el("input", "preset-field");
+  const field = LifecastControls.el("input", "preset-field");
   field.type = "search";
   field.placeholder = "Search, or a name to save as";
   field.spellcheck = false;
   field.autocomplete = "off";
 
-  const bar = AtelierControls.el("div", "preset-bar");
-  const byName = AtelierControls.el("button", "panel-button", "A-Z");
-  const byTime = AtelierControls.el("button", "panel-button", "Newest");
-  const load = AtelierControls.el("button", "panel-button preset-load", "Load");
+  const bar = LifecastControls.el("div", "preset-bar");
+  const byName = LifecastControls.el("button", "panel-button", "A-Z");
+  const byTime = LifecastControls.el("button", "panel-button", "Newest");
+  const load = LifecastControls.el("button", "panel-button preset-load", "Load");
   load.title = "Applies the selected preset";
-  const save = AtelierControls.el("button", "panel-button preset-save", "Save");
+  const save = LifecastControls.el("button", "panel-button preset-save", "Save");
   for (const b of [byName, byTime, load, save]) {
     b.type = "button";
     b.tabIndex = -1;
     bar.appendChild(b);
   }
 
-  const status = AtelierControls.el("div", "preset-status", "--");
+  const status = LifecastControls.el("div", "preset-status", "--");
 
   // Shown only when RaceMenu did not save or load at the panel's request (an
   // older RaceMenu, or the call failing): its own Presets page does both, one
   // click away. The list, search and sort stay here either way.
-  const fallback = AtelierControls.el("div", "delegate preset-fallback");
-  const fallbackText = AtelierControls.el("div", "delegate-text");
-  const fallbackTitle = AtelierControls.el("span", "slider-name", "");
-  const fallbackNote = AtelierControls.el("span", "delegate-note", "");
+  const fallback = LifecastControls.el("div", "delegate preset-fallback");
+  const fallbackText = LifecastControls.el("div", "delegate-text");
+  const fallbackTitle = LifecastControls.el("span", "slider-name", "");
+  const fallbackNote = LifecastControls.el("span", "delegate-note", "");
   fallbackText.appendChild(fallbackTitle);
   fallbackText.appendChild(fallbackNote);
-  const fallbackGo = AtelierControls.el("button", "panel-button", "Open");
+  const fallbackGo = LifecastControls.el("button", "panel-button", "Open");
   fallbackGo.type = "button";
   fallbackGo.tabIndex = -1;
   fallbackGo.title = "Opens RaceMenu (F4 comes back)";
-  fallbackGo.addEventListener("click", () => AtelierBridge.send("show-racemenu", { for: "presets" }));
+  fallbackGo.addEventListener("click", () => LifecastBridge.send("show-racemenu", { for: "presets" }));
   fallback.appendChild(fallbackText);
   fallback.appendChild(fallbackGo);
   fallback.hidden = true;
 
   // Shown when the DLL refused to save over an existing preset: what the
   // overwrite would have destroyed, and the two ways on.
-  const guard = AtelierControls.el("div", "delegate preset-guard");
-  const guardText = AtelierControls.el("div", "delegate-text");
-  const guardTitle = AtelierControls.el("span", "slider-name", "");
-  const guardNote = AtelierControls.el("span", "delegate-note", "");
+  const guard = LifecastControls.el("div", "delegate preset-guard");
+  const guardText = LifecastControls.el("div", "delegate-text");
+  const guardTitle = LifecastControls.el("span", "slider-name", "");
+  const guardNote = LifecastControls.el("span", "delegate-note", "");
   guardText.appendChild(guardTitle);
   guardText.appendChild(guardNote);
-  const guardRename = AtelierControls.el("button", "panel-button", "New name");
+  const guardRename = LifecastControls.el("button", "panel-button", "New name");
   guardRename.title = "Keeps the existing preset and saves under a free name";
-  const guardRaceMenu = AtelierControls.el("button", "panel-button", "RaceMenu");
+  const guardRaceMenu = LifecastControls.el("button", "panel-button", "RaceMenu");
   guardRaceMenu.title = "Opens RaceMenu, whose own save replaces the file (F4 comes back)";
   for (const b of [guardRename, guardRaceMenu]) {
     b.type = "button";
     b.tabIndex = -1;
   }
-  guardRaceMenu.addEventListener("click", () => AtelierBridge.send("show-racemenu", { for: "presets" }));
+  guardRaceMenu.addEventListener("click", () => LifecastBridge.send("show-racemenu", { for: "presets" }));
   guard.appendChild(guardText);
   guard.appendChild(guardRename);
   guard.appendChild(guardRaceMenu);
@@ -109,26 +109,26 @@
 
   // Shown when an overwrite would change what the existing file holds: what it
   // would gain and what it would lose, compared entry by entry by the DLL.
-  const preview = AtelierControls.el("div", "delegate preset-preview");
-  const previewText = AtelierControls.el("div", "delegate-text");
-  const previewTitle = AtelierControls.el("span", "slider-name", "");
-  const previewGain = AtelierControls.el("span", "delegate-note", "");
-  const previewLoss = AtelierControls.el("span", "delegate-note", "");
+  const preview = LifecastControls.el("div", "delegate preset-preview");
+  const previewText = LifecastControls.el("div", "delegate-text");
+  const previewTitle = LifecastControls.el("span", "slider-name", "");
+  const previewGain = LifecastControls.el("span", "delegate-note", "");
+  const previewLoss = LifecastControls.el("span", "delegate-note", "");
   // What the panel wrote itself in this menu session - a body chosen in the
   // Body section. Listed apart from the gains, never mixed into them: a gain
   // is what the player did not do here.
-  const previewChosen = AtelierControls.el("span", "delegate-note", "");
+  const previewChosen = LifecastControls.el("span", "delegate-note", "");
   // What the two lists cover, said in the box: a list the player reads as
   // complete is worse than no list.
-  const previewScope = AtelierControls.el("span", "delegate-note", "");
+  const previewScope = LifecastControls.el("span", "delegate-note", "");
   previewText.appendChild(previewTitle);
   previewText.appendChild(previewGain);
   previewText.appendChild(previewLoss);
   previewText.appendChild(previewChosen);
   previewText.appendChild(previewScope);
-  const previewSave = AtelierControls.el("button", "panel-button", "Save anyway");
+  const previewSave = LifecastControls.el("button", "panel-button", "Save anyway");
   previewSave.title = "Writes the preset exactly as compared here";
-  const previewCancel = AtelierControls.el("button", "panel-button", "Cancel");
+  const previewCancel = LifecastControls.el("button", "panel-button", "Cancel");
   previewCancel.title = "Keeps the existing preset as it is";
   for (const b of [previewSave, previewCancel]) {
     b.type = "button";
@@ -141,7 +141,7 @@
   let previewName = null;  // the name the shown preview is for
   let reveal = null;       // a box just shown, brought into view by the next render
 
-  const list = AtelierControls.el("ul", "preset-list");
+  const list = LifecastControls.el("ul", "preset-list");
 
   section.body.appendChild(field);
   section.body.appendChild(bar);
@@ -150,7 +150,7 @@
   section.body.appendChild(guard);
   section.body.appendChild(preview);
   section.body.appendChild(list);
-  AtelierControls.mount(section, "presets");
+  LifecastControls.mount(section, "presets");
 
   function same(a, b) {
     return a.toLowerCase() === b.toLowerCase();
@@ -214,7 +214,7 @@
 
   function hidePreview(cancel) {
     if (cancel && previewName !== null) {
-      AtelierBridge.send("preset-save-cancel", { name: previewName });
+      LifecastBridge.send("preset-save-cancel", { name: previewName });
     }
     previewName = null;
     preview.hidden = true;
@@ -328,9 +328,9 @@
 
     list.textContent = "";
     for (const it of shown) {
-      const li = AtelierControls.el("li", "preset-row");
-      li.appendChild(AtelierControls.el("span", "preset-name", it.name));
-      li.appendChild(AtelierControls.el("span", "preset-date", it.bad ? "unreadable" : dateText(it.time)));
+      const li = LifecastControls.el("li", "preset-row");
+      li.appendChild(LifecastControls.el("span", "preset-name", it.name));
+      li.appendChild(LifecastControls.el("span", "preset-date", it.bad ? "unreadable" : dateText(it.time)));
       if (it.bad) {
         li.classList.add("preset-bad");
         li.title = it.bad;
@@ -375,18 +375,18 @@
   });
   byName.addEventListener("click", () => {
     sortBy = "name";
-    AtelierSettings.set("presetsSort", sortBy);
+    LifecastSettings.set("presetsSort", sortBy);
     render();
   });
   byTime.addEventListener("click", () => {
     sortBy = "time";
-    AtelierSettings.set("presetsSort", sortBy);
+    LifecastSettings.set("presetsSort", sortBy);
     render();
   });
 
   // The saved order arrives from the DLL; until then the list sorts by name.
-  AtelierSettings.onChange(() => {
-    const saved = AtelierSettings.get("presetsSort");
+  LifecastSettings.onChange(() => {
+    const saved = LifecastSettings.get("presetsSort");
     if (saved === "name" || saved === "time") {
       sortBy = saved;
       render();
@@ -402,7 +402,7 @@
     fallback.hidden = true;
     notice = "loading " + selected + "...";
     render();
-    AtelierBridge.send("preset-load", { name: selected });
+    LifecastBridge.send("preset-load", { name: selected });
   });
 
   guardRename.addEventListener("click", () => {
@@ -432,7 +432,7 @@
     fallback.hidden = true;
     notice = "saving " + name + "...";
     render();
-    AtelierBridge.send("preset-save", { name: name, overwrite: exists });
+    LifecastBridge.send("preset-save", { name: name, overwrite: exists });
   });
 
   previewSave.addEventListener("click", () => {
@@ -443,7 +443,7 @@
     hidePreview(false);
     notice = "saving " + name + "...";
     render();
-    AtelierBridge.send("preset-save", { name: name, overwrite: true, confirm: true });
+    LifecastBridge.send("preset-save", { name: name, overwrite: true, confirm: true });
   });
 
   previewCancel.addEventListener("click", () => {
@@ -452,7 +452,7 @@
     render();
   });
 
-  AtelierBridge.on("preset-save-preview", (data) => {
+  LifecastBridge.on("preset-save-preview", (data) => {
     const diff = data && Array.isArray(data.diff) ? data.diff : [];
     const gain = entryText(diff, "gained");
     const loss = entryText(diff, "lost");
@@ -479,7 +479,7 @@
   // shows - the DLL holds one preview at most, and a box it does not hold
   // must not be clickable. The notice changes only when a box was showing:
   // a drop the page caused itself (Cancel, a new save) already said why.
-  AtelierBridge.on("preset-save-preview-dropped", (data) => {
+  LifecastBridge.on("preset-save-preview-dropped", (data) => {
     const showing = previewName !== null;
     hidePreview(false);
     if (showing) {
@@ -489,13 +489,13 @@
     render();
   });
 
-  AtelierBridge.on("presets", (data) => {
+  LifecastBridge.on("presets", (data) => {
     const incoming = data && Array.isArray(data.items) ? data.items : [];
     items = incoming.map((it) => ({ name: String(it.name), time: Number(it.time) || 0, size: it.size, bad: null }));
     render();
   });
 
-  AtelierBridge.on("presets-checked", (data) => {
+  LifecastBridge.on("presets-checked", (data) => {
     const bad = data && Array.isArray(data.bad) ? data.bad : [];
     for (const b of bad) {
       const it = items.find((x) => x.name === b.name);
@@ -509,7 +509,7 @@
   // The menu closed: what this section showed during that menu session ends
   // with it - the DLL has already let go of what those boxes stood for. F4
   // does not send this; the boxes stay for the player who comes back.
-  AtelierBridge.on("menu-closed", () => {
+  LifecastBridge.on("menu-closed", () => {
     guard.hidden = true;
     fallback.hidden = true;
     hidePreview(false);
@@ -523,7 +523,7 @@
   // shows ends the box: an answer about another name says nothing about the
   // preview the DLL still holds, and hiding its box would leave that preview
   // pending with nothing on screen to agree or cancel.
-  AtelierBridge.on("preset-saved", (data) => {
+  LifecastBridge.on("preset-saved", (data) => {
     if (previewName !== null && data && same(String(data.name), previewName)) {
       hidePreview(false);
     }
@@ -548,7 +548,7 @@
     render();
   });
 
-  AtelierBridge.on("preset-loaded", (data) => {
+  LifecastBridge.on("preset-loaded", (data) => {
     loading = false;
     if (data && data.ok) {
       // A late answer overrides the "not loaded" shown at the timeout.
@@ -558,7 +558,7 @@
       // A preset replaces the whole character at once. Undoing one slider
       // back to what it held before the preset would mix two characters,
       // and nothing on screen would say so - so the history starts over.
-      AtelierHistory.clear("a preset was loaded");
+      LifecastHistory.clear("a preset was loaded");
     } else {
       notice = "not loaded: " + (data && data.why ? data.why : "unknown reason");
       if (data && data.fallback) {
@@ -568,9 +568,9 @@
     render();
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("presets-get");
+      LifecastBridge.send("presets-get");
     }
   });
 

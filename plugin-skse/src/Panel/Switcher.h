@@ -1,16 +1,16 @@
 // Switcher.h
-// Atelier
+// Lifecast
 //
 // Which of the two editors the player is looking at while the RaceSex Menu is
-// open: the Atelier panel or RaceMenu's own film. Only one is on screen at a
+// open: the Lifecast panel or RaceMenu's own film. Only one is on screen at a
 // time, and F4 swaps them.
 //
-//   RaceSex Menu opens   -> the Atelier, every time, whatever opened the menu
-//   F4, Atelier showing  -> RaceMenu
-//   F4, RaceMenu showing -> the Atelier
+//   RaceSex Menu opens   -> the Lifecast, every time, whatever opened the menu
+//   F4, Lifecast showing  -> RaceMenu
+//   F4, RaceMenu showing -> the Lifecast
 //   RaceSex Menu closes  -> the panel is hidden, never destroyed
 //
-// Showing the Atelier means taking Meridian's focus, because an unfocused
+// Showing the Lifecast means taking Meridian's focus, because an unfocused
 // browser receives no input at all. A focused browser swallows every key and
 // mouse event, this plugin's own included - so the ways back are armed BEFORE
 // focus is asked for, every single time:
@@ -32,13 +32,13 @@
 
 #pragma once
 
-namespace Atelier::Panel::Switcher
+namespace Lifecast::Panel::Switcher
 {
 	// Registers the menu and input sinks and the page's "show-racemenu"
 	// message. Call once, at kDataLoaded. Safe to call twice.
 	void Install();
 
 	// The two directions. Both do nothing while the RaceSex Menu is closed.
-	void ShowAtelier();
+	void ShowLifecast();
 	void ShowRaceMenu();
 }

@@ -1,5 +1,5 @@
 // Guard.h
-// Atelier
+// Lifecast
 //
 // Whether saving over an existing preset would destroy something.
 //
@@ -37,7 +37,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace Atelier::Preset::Guard
+namespace Lifecast::Preset::Guard
 {
 	struct Verdict
 	{

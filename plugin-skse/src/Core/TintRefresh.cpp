@@ -1,11 +1,11 @@
 // TintRefresh.cpp
-// Atelier
+// Lifecast
 
 #include "Core/TintRefresh.h"
 
 #include "Core/RaceMenuSync.h"
 
-namespace Atelier::Core::TintRefresh
+namespace Lifecast::Core::TintRefresh
 {
 	namespace
 	{

@@ -1,5 +1,5 @@
 // search.js
-// Atelier - the toolbar: search by slider name, the "changed" filter, and
+// Lifecast - the toolbar: search by slider name, the "changed" filter, and
 // the counter (E2 items 3, 4, 5).
 //
 // Both filters and the counter are read straight off the DOM that the

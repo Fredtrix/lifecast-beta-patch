@@ -1,5 +1,5 @@
 // control.js
-// Atelier - Character Control: the things a player DOES to the character
+// Lifecast - Character Control: the things a player DOES to the character
 // while editing, as opposed to the sliders that describe what it looks like.
 //
 // It stands where the Index section used to. The Index was a grid of tiles
@@ -24,12 +24,12 @@
 "use strict";
 
 (() => {
-  const section = AtelierControls.section("Character Control");
-  AtelierControls.mount(section, "control");
+  const section = LifecastControls.section("Character Control");
+  LifecastControls.mount(section, "control");
 
-  const button = AtelierControls.el("button", "panel-button control-button", "Undress");
+  const button = LifecastControls.el("button", "panel-button control-button", "Undress");
   button.type = "button";
-  const note = AtelierControls.el("span", "control-note", "");
+  const note = LifecastControls.el("span", "control-note", "");
   section.body.appendChild(button);
   section.body.appendChild(note);
 
@@ -48,30 +48,30 @@
     busy = true;
     note.textContent = "";
     render();
-    if (!AtelierBridge.send("undress-set", { on: !on })) {
+    if (!LifecastBridge.send("undress-set", { on: !on })) {
       busy = false;
       note.textContent = "No bridge to the game - nothing was done.";
       render();
     }
   });
 
-  AtelierBridge.on("undress", (data) => {
+  LifecastBridge.on("undress", (data) => {
     on = !!(data && data.on);
     busy = false;
     render();
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("undress-get");
+      LifecastBridge.send("undress-get");
     }
   });
 
   render();
 
-  const lightButton = AtelierControls.el("button", "panel-button control-button", "Light Off");
+  const lightButton = LifecastControls.el("button", "panel-button control-button", "Light Off");
   lightButton.type = "button";
-  const lightNote = AtelierControls.el("span", "control-note", "");
+  const lightNote = LifecastControls.el("span", "control-note", "");
   section.body.appendChild(lightButton);
   section.body.appendChild(lightNote);
 
@@ -90,22 +90,22 @@
     lightBusy = true;
     lightNote.textContent = "";
     renderLight();
-    if (!AtelierBridge.send("light-set", { on: !lightOn })) {
+    if (!LifecastBridge.send("light-set", { on: !lightOn })) {
       lightBusy = false;
       lightNote.textContent = "No bridge to the game - nothing was done.";
       renderLight();
     }
   });
 
-  AtelierBridge.on("light", (data) => {
+  LifecastBridge.on("light", (data) => {
     lightOn = !!(data && data.on);
     lightBusy = false;
     renderLight();
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("light-get");
+      LifecastBridge.send("light-get");
     }
   });
 

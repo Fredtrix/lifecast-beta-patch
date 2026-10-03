@@ -1,5 +1,5 @@
 // Undress.h
-// Atelier - toggle to see the body while editing, Fase 6.6 E5.
+// Lifecast - toggle to see the body while editing, Fase 6.6 E5.
 //
 // SO DESEQUIPAR (fixed by the author, "Despido ate vestir de novo"): every
 // worn item this feature takes off is unequipped in place and never leaves
@@ -23,7 +23,7 @@
 // bypasses that hook - which is the one case this feature does not cover,
 // by design - and cannot leave a save with the character undressed, which is
 // why "what if the game is force-closed undressed" was cancelled as a test
-// (EMENDA de 2026-09-29, _Steward\Projetos\Atelier\Fase-6.6-o-controle-de-personagem.md):
+// (EMENDA de 2026-09-29, _Steward\Projetos\Lifecast\Fase-6.6-o-controle-de-personagem.md):
 // there is no path that reaches that state to begin with.
 //
 // The button label is FIXED, not a state readout (author's decision, same
@@ -43,7 +43,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::Undress
+namespace Lifecast::Edit::Undress
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

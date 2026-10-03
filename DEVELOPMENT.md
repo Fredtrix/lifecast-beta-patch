@@ -1,4 +1,4 @@
-# Building Atelier
+# Building Lifecast
 
 This repository holds source only. Building it produces the files a release
 archive carries; it does not produce an installed mod on its own.
@@ -33,7 +33,7 @@ If the mod depends on another framework's scripts, that framework's
 
 ## The SKSE plugin (C++)
 
-`plugin-skse/` builds `Atelier.dll`, which goes to `Data/SKSE/Plugins/`.
+`plugin-skse/` builds `Lifecast.dll`, which goes to `Data/SKSE/Plugins/`.
 
 Requirements:
 
@@ -55,11 +55,11 @@ not have installed, and SKSE then refuses to load the DLL with error `0000007E`
 (`ERROR_MOD_NOT_FOUND`). The build prints which configuration it just deployed
 for exactly this reason.
 
-**`ENABLE_SKYRIM_VR` is forced `OFF`.** Atelier does not target VR, and the VR
+**`ENABLE_SKYRIM_VR` is forced `OFF`.** Lifecast does not target VR, and the VR
 build would additionally need CommonLibSSE-NG's nested `openvr` submodule.
 
 After a successful build, CMake copies the DLL next to the repository, into
-`../../SKSE/Plugins/`. Override that with `-DATELIER_OUTPUT_FOLDER=<path>`, or
+`../../SKSE/Plugins/`. Override that with `-DLIFECAST_OUTPUT_FOLDER=<path>`, or
 pass an empty string to skip the copy.
 
 ### Vendored third-party headers
@@ -70,7 +70,7 @@ when, under which licence, and how to verify the copy is unchanged.
 
 | Folder | What |
 |---|---|
-| `commonlibsse-ng/` | git submodule, GPL-3.0-or-later. This is what makes Atelier's own source GPL-3.0-or-later |
+| `commonlibsse-ng/` | git submodule, GPL-3.0-or-later. This is what makes Lifecast's own source GPL-3.0-or-later |
 | `MeridianUIAPI/` | Meridian UI's public API headers, MIT (`LICENSE-MIT` included) |
 | `skee-modderresource/` | RaceMenu's SKEE modder resource header. No licence is declared upstream - see its `ORIGEM.md` |
 
@@ -82,10 +82,10 @@ required dependencies the player installs.
 `panel/` is the page Meridian UI draws over the character editor. It has no
 build step: the files are written by hand, and installing them is a copy.
 
-Copy the **contents** of `panel/` to `Data/MeridianUI/Atelier/`, so that
-`index.html` ends up at `Data/MeridianUI/Atelier/index.html`. The DLL opens it
-as `mod://Atelier/index.html` - the host of that URL is the folder name under
-`Data/MeridianUI/`, so the folder has to be called exactly `Atelier`.
+Copy the **contents** of `panel/` to `Data/MeridianUI/Lifecast/`, so that
+`index.html` ends up at `Data/MeridianUI/Lifecast/index.html`. The DLL opens it
+as `mod://Lifecast/index.html` - the host of that URL is the folder name under
+`Data/MeridianUI/`, so the folder has to be called exactly `Lifecast`.
 
 A copy does not delete: a file removed from `panel/` stays in the destination
 until you remove it there too.

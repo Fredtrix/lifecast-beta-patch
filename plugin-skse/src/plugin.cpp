@@ -1,5 +1,5 @@
 // plugin.cpp
-// Atelier - a modern interface for RaceMenu.
+// Lifecast - a modern interface for RaceMenu.
 //
 // It puts its panel on screen every time the RaceSex Menu opens, swaps it with
 // RaceMenu's own film on F4, owns the message bridge to the page (Panel/), and
@@ -12,7 +12,7 @@
 // There is no console test here and there cannot be one - the Skyrim console
 // does not call a global function of a plugin. What calls the code below is
 // the engine, through SKSE lifecycle messages, and the only output is
-// Documents/My Games/Skyrim Special Edition/SKSE/Atelier.log.
+// Documents/My Games/Skyrim Special Edition/SKSE/Lifecast.log.
 
 #include "Core/Log.h"
 #include "Core/MeridianLink.h"
@@ -52,7 +52,7 @@
 // preprocessing. Nothing here has to be remembered or undone before a commit.
 #if __has_include("_local/Local.h")
 #	include "_local/Local.h"
-#	define ATELIER_HAS_LOCAL 1
+#	define LIFECAST_HAS_LOCAL 1
 #endif
 
 namespace
@@ -64,12 +64,12 @@ namespace
 		// Forward first, then do our own work for the same message, so the
 		// platform is asked to initialize before anything asks it for an
 		// extension.
-		Atelier::Core::MeridianLink::ForwardSKSEMessage(a_msg);
+		Lifecast::Core::MeridianLink::ForwardSKSEMessage(a_msg);
 
-#ifdef ATELIER_HAS_LOCAL
+#ifdef LIFECAST_HAS_LOCAL
 		// Every lifecycle message, unfiltered: local instrumentation picks its
 		// own moment, and this file must not have to know which one.
-		Atelier::Local::OnSKSEMessage(a_msg);
+		Lifecast::Local::OnSKSEMessage(a_msg);
 #endif
 
 		switch (a_msg->type) {
@@ -82,7 +82,7 @@ namespace
 			// the OBodyIsReady event has arrived - measured at 3min50s after
 			// the pointer in one boot and 63 s in another, so the wait is an
 			// event and never a timer. See Core/ObodyLink.h.
-			Atelier::Core::ObodyLink::Request();
+			Lifecast::Core::ObodyLink::Request();
 			break;
 
 		case SKSE::MessagingInterface::kInputLoaded:
@@ -90,7 +90,7 @@ namespace
 			// extension is acquired: the platform initializes CEF on its own
 			// application thread and rejects a first API request coming from
 			// a later worker-thread message such as kDataLoaded.
-			Atelier::Core::MeridianLink::QueryExtensions("kInputLoaded");
+			Lifecast::Core::MeridianLink::QueryExtensions("kInputLoaded");
 			break;
 
 		case SKSE::MessagingInterface::kDataLoaded:
@@ -98,58 +98,58 @@ namespace
 			// back null the first time. Two answers with their moments
 			// written down separate "the extension is not there" from "it
 			// was not there yet", which one round at one moment cannot.
-			Atelier::Core::MeridianLink::QueryExtensions("kDataLoaded");
+			Lifecast::Core::MeridianLink::QueryExtensions("kDataLoaded");
 
 			// Forms are loaded, so SKEE has had every chance to register.
 			// This is the moment earlier measurements used, with the RaceSex
 			// Menu closed - the same moment, so the answers are comparable.
 			// Asking again with the menu OPEN is a separate round and does
 			// not belong here.
-			Atelier::Core::SkeeLink::ReportInterfaces("kDataLoaded");
+			Lifecast::Core::SkeeLink::ReportInterfaces("kDataLoaded");
 
 			// OBody's files, for the log only: they separate "not installed"
 			// from "installed and did not answer", and decide nothing.
-			Atelier::Core::ObodyLink::ReportFiles();
+			Lifecast::Core::ObodyLink::ReportFiles();
 
 			// The menu and input sinks need the UI and the input manager,
 			// which exist from here on. The browser itself is not created
 			// now: it is born the first time the RaceSex Menu opens.
-			Atelier::Panel::Switcher::Install();
+			Lifecast::Panel::Switcher::Install();
 
 			// The editing sections write the player's data from the page;
 			// the session they share owns the menu and input sinks and the
 			// redraw, so it goes first.
-			Atelier::Edit::Session::Install();
-			Atelier::Edit::FaceSliders::Install();
-			Atelier::Edit::Appearance::Install();
-			Atelier::Edit::BodyScales::Install();
-			Atelier::Edit::BodyMorphs::Install();
-			Atelier::Panel::RaceMenuTabs::Install();
-			Atelier::Edit::Tints::Install();
-			Atelier::Edit::Overlays::Install();
-			Atelier::Edit::Light::Install();
-			Atelier::Edit::Undress::Install();
+			Lifecast::Edit::Session::Install();
+			Lifecast::Edit::FaceSliders::Install();
+			Lifecast::Edit::Appearance::Install();
+			Lifecast::Edit::BodyScales::Install();
+			Lifecast::Edit::BodyMorphs::Install();
+			Lifecast::Panel::RaceMenuTabs::Install();
+			Lifecast::Edit::Tints::Install();
+			Lifecast::Edit::Overlays::Install();
+			Lifecast::Edit::Light::Install();
+			Lifecast::Edit::Undress::Install();
 
 			// The body section, offered only while OBody answers.
-			Atelier::Edit::Body::Install();
+			Lifecast::Edit::Body::Install();
 
 			// The character's name and the button that ends the menu.
-			Atelier::Edit::Finish::Install();
+			Lifecast::Edit::Finish::Install();
 
 			// The character view: the frame in the page and the camera moves
 			// that put the character in it.
-			Atelier::Panel::Stage::Install();
+			Lifecast::Panel::Stage::Install();
 
 			// The panel's own preferences, kept across games.
-			Atelier::Core::Settings::Install();
+			Lifecast::Core::Settings::Install();
 
 			// The presets on disk, listed for the panel; saving and loading
 			// one, which RaceMenu does at the panel's request; and the guard
 			// that keeps a save from overwriting what was not loaded here.
-			Atelier::Preset::Library::Install();
-			Atelier::Preset::Guard::Install();
-			Atelier::Preset::Save::Install();
-			Atelier::Preset::Load::Install();
+			Lifecast::Preset::Library::Install();
+			Lifecast::Preset::Guard::Install();
+			Lifecast::Preset::Save::Install();
+			Lifecast::Preset::Load::Install();
 			break;
 
 		default:
@@ -163,7 +163,7 @@ namespace
 // add_commonlibsse_plugin.
 SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 {
-	if (!Atelier::Core::Log::Init()) {
+	if (!Lifecast::Core::Log::Init()) {
 		SKSE::stl::report_and_fail("SKSE log directory not provided.");
 	}
 
@@ -174,10 +174,10 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 	SKSE::Init(a_skse, false);
 
 	spdlog::info("{} v{} loaded.",
-		Atelier::Version::kProjectName, Atelier::Version::kString);
+		Lifecast::Version::kProjectName, Lifecast::Version::kString);
 
-	Atelier::Core::MeridianLink::Init();
-	Atelier::Panel::Init();
+	Lifecast::Core::MeridianLink::Init();
+	Lifecast::Panel::Init();
 
 	if (!SKSE::GetMessagingInterface()->RegisterListener(OnMessage)) {
 		spdlog::error("Failed to register the SKSE message listener.");

@@ -1,5 +1,5 @@
 // picker.js
-// Atelier - a free colour picker: a saturation/value square and a hue bar.
+// Lifecast - a free colour picker: a saturation/value square and a hue bar.
 //
 // Any control that offers a colour gets one, next to its swatches: the
 // swatches are the race's presets, the picker is everything else. It opens
@@ -12,7 +12,7 @@
 // the final colour marked as such, like a slider row does.
 "use strict";
 
-const AtelierPicker = (() => {
+const LifecastPicker = (() => {
   const SEND_GAP_MS = 50;
 
   function clamp01(v) {
@@ -55,11 +55,11 @@ const AtelierPicker = (() => {
   // Returns { el, toggle(), refresh() }. el goes where the picker should
   // open; it is hidden until toggled.
   function create(a_opts) {
-    const wrap = AtelierControls.el("div", "picker");
+    const wrap = LifecastControls.el("div", "picker");
     wrap.hidden = true;
-    const square = AtelierControls.el("canvas", "picker-square");
-    const hue = AtelierControls.el("canvas", "picker-hue");
-    const hexLabel = AtelierControls.el("span", "picker-hex", "");
+    const square = LifecastControls.el("canvas", "picker-square");
+    const hue = LifecastControls.el("canvas", "picker-hue");
+    const hexLabel = LifecastControls.el("span", "picker-hex", "");
     wrap.appendChild(square);
     wrap.appendChild(hue);
     wrap.appendChild(hexLabel);
@@ -81,7 +81,7 @@ const AtelierPicker = (() => {
       if (typeof before !== "string") {
         return;
       }
-      AtelierHistory.record({
+      LifecastHistory.record({
         label: a_opts.label || "Colour",
         before: before,
         after: a_hex,

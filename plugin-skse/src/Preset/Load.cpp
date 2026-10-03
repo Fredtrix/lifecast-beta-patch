@@ -1,5 +1,5 @@
 // Load.cpp
-// Atelier
+// Lifecast
 
 #include "Preset/Load.h"
 
@@ -13,7 +13,7 @@
 #include <map>
 #include <thread>
 
-namespace Atelier::Preset::Load
+namespace Lifecast::Preset::Load
 {
 	namespace
 	{

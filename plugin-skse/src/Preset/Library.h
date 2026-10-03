@@ -1,5 +1,5 @@
 // Library.h
-// Atelier
+// Lifecast
 //
 // The presets on disk: RaceMenu's preset folder, listed for the panel.
 //
@@ -27,7 +27,7 @@
 
 #include <filesystem>
 
-namespace Atelier::Preset::Library
+namespace Lifecast::Preset::Library
 {
 	// Relative to the game's working directory, which is the game folder.
 	// Under Mod Organizer the virtual file system merges every mod's copy
@@ -37,7 +37,7 @@ namespace Atelier::Preset::Library
 
 	// The file RaceMenu writes a save preview into before an overwrite
 	// (Save.h). Never listed, and refused as a name for a preset.
-	inline constexpr auto kPreviewName = "zz Atelier - save preview";
+	inline constexpr auto kPreviewName = "zz Lifecast - save preview";
 
 	std::filesystem::path Folder();
 

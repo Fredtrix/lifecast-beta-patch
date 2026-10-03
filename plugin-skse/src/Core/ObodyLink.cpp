@@ -1,11 +1,11 @@
 // ObodyLink.cpp
-// Atelier
+// Lifecast
 
 #include "Core/ObodyLink.h"
 
 #include "Core/ObodyApi.h"
 
-namespace Atelier::Core::ObodyLink
+namespace Lifecast::Core::ObodyLink
 {
 	namespace
 	{

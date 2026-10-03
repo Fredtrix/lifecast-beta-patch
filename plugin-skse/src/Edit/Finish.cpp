@@ -1,5 +1,5 @@
 // Finish.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Finish.h"
 
@@ -8,7 +8,7 @@
 #include "Preset/Load.h"
 #include "Preset/Save.h"
 
-namespace Atelier::Edit::Finish
+namespace Lifecast::Edit::Finish
 {
 	namespace
 	{

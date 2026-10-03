@@ -1,5 +1,5 @@
 // Appearance.cpp
-// Atelier
+// Lifecast
 
 #include "Edit/Appearance.h"
 
@@ -8,7 +8,7 @@
 #include "Panel/Bridge.h"
 #include "Panel/RaceMenuFilm.h"
 
-namespace Atelier::Edit::Appearance
+namespace Lifecast::Edit::Appearance
 {
 	namespace
 	{

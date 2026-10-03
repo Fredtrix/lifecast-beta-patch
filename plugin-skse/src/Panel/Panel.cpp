@@ -1,5 +1,5 @@
 // Panel.cpp
-// Atelier
+// Lifecast
 
 #include "Panel/Panel.h"
 
@@ -7,7 +7,7 @@
 #include "Panel/Bridge.h"
 #include "Version.h"
 
-namespace Atelier::Panel
+namespace Lifecast::Panel
 {
 	namespace
 	{

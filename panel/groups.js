@@ -1,5 +1,5 @@
 // groups.js
-// Atelier - a level above the section (E2 item 1 - D074: read second-hand off
+// Lifecast - a level above the section (E2 item 1 - D074: read second-hand off
 // the author's Prisma captures, origin in the phase document, not copied).
 //
 // controls.js knows how to draw a group heading and how to reveal a section
@@ -30,7 +30,7 @@
     return hit ? hit.title : null;
   }
 
-  AtelierControls.setGroups(groupOf);
+  LifecastControls.setGroups(groupOf);
 
   // The explicit order this page had by accident, from the <script> tags,
   // before OBody's section started mounting on the DLL's own time (E2 item
@@ -56,7 +56,7 @@
   // reason on top of that one: which of them exist is the player's mod order,
   // so there is no order to declare that would survive a different machine.
   // Unranked they fall last inside Body, in the order RaceMenu lists them.
-  AtelierControls.setOrder([
+  LifecastControls.setOrder([
     "character", "control",
     "look:Body", "look:Hair", "look:Features", "scales", "obody", "tints",
     "overlay:body", "overlay:hand", "overlay:foot",

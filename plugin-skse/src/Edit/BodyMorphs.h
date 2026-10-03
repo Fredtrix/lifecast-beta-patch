@@ -1,5 +1,5 @@
 // BodyMorphs.h
-// Atelier - the slider tabs a mod injects into RaceMenu, body morphs among them.
+// Lifecast - the slider tabs a mod injects into RaceMenu, body morphs among them.
 //
 // RaceMenu lets a mod add a whole tab of its own: AddCategory registers it
 // under a text key, and AddSliderEx hangs sliders on that key. On this
@@ -24,7 +24,7 @@
 // flag. A category WITH a key is therefore exactly "a tab some mod added",
 // and that is the whole population this module reports.
 //
-// One key is left out: the body scale tab. The Atelier builds that one from a
+// One key is left out: the body scale tab. The Lifecast builds that one from a
 // node table of its own (Edit/BodyScales), and a second section over the same
 // sliders is the duplicate D082 was written to avoid.
 //
@@ -39,7 +39,7 @@
 // event "RSM_SliderChange", with the slider's callback name and its value.
 // The script that registered the slider is listening for exactly that, and it
 // applies the change with its own key and redraws the body the way it always
-// does. The Atelier delegates and does not reimplement (project rule 1).
+// does. The Lifecast delegates and does not reimplement (project rule 1).
 //
 // The value is also written back onto the film's own entry, which is what the
 // film does when the player drags the slider there. Without it RaceMenu would
@@ -69,7 +69,7 @@
 
 #pragma once
 
-namespace Atelier::Edit::BodyMorphs
+namespace Lifecast::Edit::BodyMorphs
 {
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.

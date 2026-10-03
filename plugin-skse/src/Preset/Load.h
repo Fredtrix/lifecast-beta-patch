@@ -1,7 +1,7 @@
 // Load.h
-// Atelier
+// Lifecast
 //
-// Loading a whole preset: RaceMenu applies the file, the Atelier asks it to.
+// Loading a whole preset: RaceMenu applies the file, the Lifecast asks it to.
 //
 // The call is RaceMenu's own Papyrus native CharGen.LoadCharacterPresetEx
 // (Actor, string, ColorForm hairColor, int flags), dispatched through the
@@ -20,7 +20,7 @@
 // Editing one value at a time stays the panel's own (Edit/); a whole preset
 // is RaceMenu's, the same way saving one is (Save.h).
 //
-// After it returns true, the Atelier does what RaceMenu's own LoadPreset does
+// After it returns true, the Lifecast does what RaceMenu's own LoadPreset does
 // next - it asks RaceMenu's script to take a fresh copy of the hair colour and
 // tint masks - and then tells every editing section the character was
 // replaced, so the page shows the loaded values. The file it loaded is kept,
@@ -47,7 +47,7 @@
 
 #pragma once
 
-namespace Atelier::Preset::Load
+namespace Lifecast::Preset::Load
 {
 	// The flags passed to LoadCharacterPresetEx: every bit (0xFFFFFFFF, which
 	// Papyrus's 32-bit int holds as -1). That is the native's own declared

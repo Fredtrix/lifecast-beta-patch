@@ -1,5 +1,5 @@
 // MeridianLink.h
-// Atelier
+// Lifecast
 //
 // The handshake with Meridian UI, which is the only panel backend of this
 // project. Two separate things happen here and they are easy to confuse:
@@ -28,7 +28,7 @@
 #include "MeridianUIAPI/RenderLayerDllLoader.h"
 #include "MeridianUIAPI/ViewDllLoader.h"
 
-namespace Atelier::Core::MeridianLink
+namespace Lifecast::Core::MeridianLink
 {
 	// Registers the listener for Meridian's own messages and stores the
 	// ready-callback. Call once from SKSEPluginLoad.

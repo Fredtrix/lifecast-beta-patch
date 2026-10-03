@@ -1,12 +1,12 @@
 // bridge.js
-// Atelier - the page side of the message channel to the DLL.
+// Lifecast - the page side of the message channel to the DLL.
 //
 // Message shape, both directions:
 //     { v: <protocol version>, type: "<name>", data: <any JSON> }
 //
-// Page to DLL goes through window.Atelier.send(message), a fire-and-forget
+// Page to DLL goes through window.Lifecast.send(message), a fire-and-forget
 // native: it returns at once and never blocks the page. DLL to page arrives
-// as JSON text through window.Atelier.on("message", fn).
+// as JSON text through window.Lifecast.on("message", fn).
 //
 // The message is passed to send() as an OBJECT, not as JSON.stringify(...):
 // the native side receives every argument as a JSON document, so an object
@@ -14,7 +14,7 @@
 // second decode.
 "use strict";
 
-const AtelierBridge = (() => {
+const LifecastBridge = (() => {
   const PROTOCOL = 1;
   const EVENT_NAME = "message";
 
@@ -29,7 +29,7 @@ const AtelierBridge = (() => {
   const onAttach = [];
 
   function native() {
-    const a = window.Atelier;
+    const a = window.Lifecast;
     return a && typeof a.send === "function" && typeof a.on === "function" ? a : null;
   }
 

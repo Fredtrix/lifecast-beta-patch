@@ -1,5 +1,5 @@
 // look.js
-// Atelier - the list controls (head parts, feature types, hair colour,
+// Lifecast - the list controls (head parts, feature types, hair colour,
 // complexion) and weight.
 //
 // Every list comes from the DLL, for the player's race and sex, in the
@@ -43,12 +43,12 @@
   const rows = new Map(); // key -> { row, kind, count, chip, picker, color, grid, swatches }
 
   function send(key, v, final) {
-    AtelierBridge.send("look-set", { k: key, v: v, final: final });
+    LifecastBridge.send("look-set", { k: key, v: v, final: final });
   }
 
   function buildRow(key, label) {
     const entry = { kind: key === "weight" ? "range" : "list", count: 0, chip: null, grid: null };
-    entry.row = AtelierControls.row({
+    entry.row = LifecastControls.row({
       label: label,
       min: 0,
       max: key === "weight" ? 100 : 0,
@@ -61,7 +61,7 @@
     if (PART_KEYS.has(key)) {
       // The part the player wears, as RaceMenu names it: the DLL sends the
       // name and the plugin; while dragging, the index moves ahead of them.
-      entry.nameEl = AtelierControls.el("div", "part-name");
+      entry.nameEl = LifecastControls.el("div", "part-name");
       entry.row.el.appendChild(entry.nameEl);
       entry.row.input.addEventListener("input", () => {
         entry.nameEl.textContent = "...";
@@ -70,22 +70,22 @@
     }
 
     if (key === "hair-color") {
-      entry.chip = AtelierControls.el("button", "swatch-chip picker-chip");
+      entry.chip = LifecastControls.el("button", "swatch-chip picker-chip");
       entry.chip.type = "button";
       entry.chip.tabIndex = -1;
       entry.chip.title = "Pick any colour";
       entry.row.el.firstChild.appendChild(entry.chip);
-      entry.picker = AtelierPicker.create({
+      entry.picker = LifecastPicker.create({
         label: "Hair Color",
         get: () => entry.color || "#000000",
         send: (hex, final) => {
           entry.color = hex;
           entry.chip.style.background = hex;
-          AtelierBridge.send("look-set", { k: "hair-rgb", v: hex, final: final });
+          LifecastBridge.send("look-set", { k: "hair-rgb", v: hex, final: final });
         },
       });
       entry.chip.addEventListener("click", () => entry.picker.toggle());
-      entry.grid = AtelierControls.el("div", "swatch-grid");
+      entry.grid = LifecastControls.el("div", "swatch-grid");
       entry.row.el.appendChild(entry.grid);
       entry.row.el.appendChild(entry.picker.el);
       entry.row.input.addEventListener("input", () => {
@@ -114,7 +114,7 @@
     }
     entry.grid.replaceChildren();
     swatches.forEach((color, i) => {
-      const b = AtelierControls.el("button", "swatch");
+      const b = LifecastControls.el("button", "swatch");
       b.type = "button";
       b.tabIndex = -1;
       b.dataset.index = String(i);
@@ -131,21 +131,21 @@
       b.addEventListener("click", () => {
         const before = Number(entry.row.input.value);
         pick(i);
-        AtelierHistory.record({ label: "Hair Color", before: before, after: i, apply: pick });
+        LifecastHistory.record({ label: "Hair Color", before: before, after: i, apply: pick });
       });
       entry.grid.appendChild(b);
     });
   }
 
   for (const s of SECTIONS) {
-    const section = AtelierControls.section(s.title);
+    const section = LifecastControls.section(s.title);
     for (const [key, label] of s.controls) {
       section.body.appendChild(buildRow(key, label));
     }
-    AtelierControls.mount(section, "look:" + s.title);
+    LifecastControls.mount(section, "look:" + s.title);
   }
 
-  AtelierBridge.on("look", (data) => {
+  LifecastBridge.on("look", (data) => {
     const controls = data && data.ready && data.controls ? data.controls : {};
     for (const [key, entry] of rows) {
       const c = controls[key];
@@ -197,9 +197,9 @@
     }
   });
 
-  AtelierBridge.whenAttached((ok) => {
+  LifecastBridge.whenAttached((ok) => {
     if (ok) {
-      AtelierBridge.send("look-get");
+      LifecastBridge.send("look-get");
     }
   });
 })();

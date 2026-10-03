@@ -1,7 +1,7 @@
 // Save.h
-// Atelier
+// Lifecast
 //
-// Saving a preset: RaceMenu writes the file, the Atelier asks it to.
+// Saving a preset: RaceMenu writes the file, the Lifecast asks it to.
 //
 // The call is RaceMenu's own Papyrus native CharGen.SaveCharacterPreset
 // (Actor, string), dispatched through the Papyrus VM. RaceMenu writes every
@@ -10,7 +10,7 @@
 // Data\SKSE\Plugins\CharGen\Presets\<name>.jslot. A preset written by anyone
 // else would look like a RaceMenu preset and silently lose those.
 //
-// The Atelier never writes a preset file itself, and never rewrites one it
+// The Lifecast never writes a preset file itself, and never rewrites one it
 // has read: rewriting what the model does not fully describe truncates it.
 //
 // The call returns nothing useful, so success is not taken from it: after it
@@ -62,7 +62,7 @@
 
 #pragma once
 
-namespace Atelier::Preset::Save
+namespace Lifecast::Preset::Save
 {
 	// Registers the bridge handler. Call once, after kDataLoaded.
 	void Install();

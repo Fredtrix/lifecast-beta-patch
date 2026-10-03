@@ -1,5 +1,5 @@
 // Bridge.h
-// Atelier
+// Lifecast
 //
 // The message channel between the panel page and this DLL, in both
 // directions. Every section of the panel talks through here, so the shape of
@@ -7,11 +7,11 @@
 //
 //     { "v": <protocol version>, "type": "<name>", "data": <any JSON> }
 //
-// Page to DLL: the page calls window.Atelier.send(message) - a fire-and-forget
+// Page to DLL: the page calls window.Lifecast.send(message) - a fire-and-forget
 // binding. It returns undefined at once; the page never waits on the DLL.
 //
 // DLL to page: Send() below pushes the same shape through a Meridian event
-// function. The page subscribes once with window.Atelier.on("message", fn)
+// function. The page subscribes once with window.Lifecast.on("message", fn)
 // and receives the message as JSON text.
 //
 // Why fire-and-forget both ways and no promise natives: a request that
@@ -29,7 +29,7 @@
 
 #include <nlohmann/json.hpp>
 
-namespace Atelier::Panel::Bridge
+namespace Lifecast::Panel::Bridge
 {
 	// Bumped when the message shape or the meaning of an existing type
 	// changes. The page carries its own copy and says which one it speaks in
@@ -38,7 +38,7 @@ namespace Atelier::Panel::Bridge
 	inline constexpr std::uint32_t kProtocolVersion = 1;
 
 	// window.<kObjectName>.send(...) and window.<kObjectName>.on(...).
-	inline constexpr auto kObjectName = "Atelier";
+	inline constexpr auto kObjectName = "Lifecast";
 	inline constexpr auto kSendFunction = "send";
 	inline constexpr auto kEventFunction = "on";
 

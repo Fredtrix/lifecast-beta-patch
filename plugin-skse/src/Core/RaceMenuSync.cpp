@@ -1,9 +1,9 @@
 // RaceMenuSync.cpp
-// Atelier
+// Lifecast
 
 #include "Core/RaceMenuSync.h"
 
-namespace Atelier::Core::RaceMenuSync
+namespace Lifecast::Core::RaceMenuSync
 {
 	namespace
 	{

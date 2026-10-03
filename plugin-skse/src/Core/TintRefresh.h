@@ -1,5 +1,5 @@
 // TintRefresh.h
-// Atelier - showing a tint mask change without rebuilding the actor.
+// Lifecast - showing a tint mask change without rebuilding the actor.
 //
 // A tint mask edit used to show only after Actor::DoReset3D(true), and every
 // reset leaves HDT-SMP hair physics nodes behind (about 210 per reset,
@@ -16,7 +16,7 @@
 
 #pragma once
 
-namespace Atelier::Core::TintRefresh
+namespace Lifecast::Core::TintRefresh
 {
 	// Asks for a refresh. a_final marks the last write of a drag; it only
 	// changes what is logged.

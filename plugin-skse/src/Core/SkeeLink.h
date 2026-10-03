@@ -1,7 +1,7 @@
 // SkeeLink.h
-// Atelier
+// Lifecast
 //
-// The handshake with SKEE, the plugin half of RaceMenu. The Atelier dresses
+// The handshake with SKEE, the plugin half of RaceMenu. The Lifecast dresses
 // the RaceMenu chargen editor and hands the expensive work back to it, so
 // what SKEE does and does not expose to an outside plugin is a load-bearing
 // fact of the design, not a detail.
@@ -13,7 +13,7 @@
 
 #include "Skee.h"
 
-namespace Atelier::Core::SkeeLink
+namespace Lifecast::Core::SkeeLink
 {
 	// Dispatches InterfaceExchangeMessage to "skee" and caches the map.
 	// Idempotent: only dispatches while it has no map.
