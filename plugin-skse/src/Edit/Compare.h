@@ -28,10 +28,13 @@
 //             clothes is therefore explicit work, and it is below.
 //   boot 92   the twin takes no pose from the behavior graph: idles are
 //             accepted and nothing moves, with the AI enabled and the player
-//             moving to the same calls in the same seconds. She stands in a
-//             bind pose. NOT this module's to fix (D103 lost its object by
-//             that route) - stated here so that nobody reads the still figure
-//             as a defect of this file.
+//             moving to the same calls in the same seconds. She stands and
+//             does not animate. WHAT SHAPE she rests in was never measured,
+//             and a still frame of a standing figure does not settle it - an
+//             earlier reading of this comment said bind pose, which was an
+//             inference and was withdrawn. NOT this module's to fix (D103
+//             lost its object by that route) - stated here so that nobody
+//             reads the still figure as a defect of this file.
 //
 // WHAT COSTS, AND WHEN. Culled, the root node is not drawn and the subgraph
 // is not walked - animation, skinning and SMP all stop there (D104). The
