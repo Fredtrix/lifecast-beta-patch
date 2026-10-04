@@ -18,6 +18,27 @@ project(
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ---------------------------------------------------------------------------
+# Live tuning of the character view's six numbers (Panel/Stage.h).
+#
+# OFF by default, and the default is the point. Those numbers are part of the
+# view's design, not settings: a shipped build must not be able to change them,
+# and "remember to turn it off before packaging" is not a gate - it is a thing
+# to forget. With OFF the handler and the readout are not compiled at all, so
+# forgetting produces a DLL with no tuning in it rather than one with tuning
+# left on.
+#
+# Turn it on deliberately, for a development build the author is going to turn
+# knobs in:
+#
+#   cmake --preset vs2022-windows -S . -DLIFECAST_TUNING=ON
+#
+# One build buys every value: the six are then changed from the panel, in the
+# same boot, as many times as he likes. What this option removes is the build
+# PER VALUE, which is what made trying one expensive.
+# ---------------------------------------------------------------------------
+option(LIFECAST_TUNING "Let the panel retune the character view's six numbers at run time" OFF)
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Version.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/Version.h"
@@ -80,6 +101,15 @@ add_commonlibsse_plugin(
 )
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+
+if(LIFECAST_TUNING)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LIFECAST_TUNING)
+    message(WARNING
+        "LIFECAST_TUNING is ON: the panel can retune the character view's six numbers at run time. "
+        "This is a development build. Do NOT package it - reconfigure with -DLIFECAST_TUNING=OFF.")
+else()
+    message(STATUS "LIFECAST_TUNING is OFF - the view's numbers are compile-time constants.")
+endif()
 
 # The panel bridge parses and writes the JSON messages the page exchanges
 # with the DLL. nlohmann-json is already a manifest dependency.

@@ -652,6 +652,42 @@ body {
   white-space: nowrap;
 }
 
+/* The tuning knobs of a development build. Top right, because the readout
+   sits top centre and the control bar bottom centre, and this must not cover
+   either - nor the character, which is the thing being judged while a knob
+   turns. A release DLL never sends "tuning", so none of this is ever built. */
+.stage-tuning {
+  position: absolute;
+  top: var(--gap);
+  right: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+.stage-tuning-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-tuning-input {
+  width: 72px;
+  padding: 1px 4px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--field-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+}
+
 .stage-bar {
   position: absolute;
   bottom: var(--gap);

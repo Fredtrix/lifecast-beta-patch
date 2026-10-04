@@ -34,7 +34,13 @@ namespace Lifecast::Panel::Stage
 		//
 		// The snap epsilons are in the units each grandeza is measured in:
 		// game units for distance and height, degrees for turn and tilt.
-		constexpr double kEase = 0.25;
+		//
+		// kEase is one of the six the panel can retune (Stage.h); it stays in
+		// this file rather than moving to the header because nothing outside
+		// reads it, and LIFECAST_TUNABLE works just as well on a name with
+		// internal linkage. The two snap epsilons are NOT tunable: they decide
+		// when a slide has ARRIVED, which is correctness and not taste.
+		LIFECAST_TUNABLE kEase = 0.25;
 		constexpr double kSnapUnits = 0.05;
 		constexpr double kSnapDegrees = 0.05;
 
@@ -620,12 +626,20 @@ namespace Lifecast::Panel::Stage
 			if (!g_frame.have) {
 				return { { "ready", false }, { "why", g_why.empty() ? std::string("not measured yet") : g_why } };
 			}
-			return { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
+			json state = { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
 				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_target.pan },
 				{ "tiltDeg", g_target.tilt },
 				{ "limits", { { "minDistance", DistanceMin() }, { "maxDistance", kMaxDistance }, { "liftMin", LiftMin() },
 								{ "liftMax", kLiftUp }, { "panMin", -kPanMax }, { "panMax", kPanMax },
 								{ "tiltMax", kTiltMax } } } };
+#ifdef LIFECAST_TUNING
+			// Deliberately NOT folded into "limits" - see the note in Stage.h.
+			// Three of these are bounds a button stops at and three are not,
+			// and the page reads "limits" to decide what to disable.
+			state["tuning"] = { { "maxDistance", kMaxDistance }, { "liftUp", kLiftUp }, { "panMax", kPanMax },
+				{ "pairApart", kPairApart }, { "pairSpan", kPairSpan }, { "ease", kEase } };
+#endif
+			return state;
 		}
 
 		void Answer(json a_state)
@@ -872,6 +886,80 @@ namespace Lifecast::Panel::Stage
 			Reset();
 		}
 
+#ifdef LIFECAST_TUNING
+		// Reads one tunable, and ABSENT is not zero: the page sends the single
+		// field the author just typed, so every number it leaves out has to
+		// stay where it is. Number() above cannot be used for this - it answers
+		// 0.0 for a missing key, which here would mean "set it to zero".
+		//
+		// A value that is not finite is dropped rather than clamped: there is
+		// no sane bound to clamp a tuning knob to, and silently substituting a
+		// number the author did not type is worse than ignoring him.
+		bool Tuned(const json& a_data, const char* a_key, double& a_out)
+		{
+			if (!a_data.is_object() || !a_data.contains(a_key) || !a_data[a_key].is_number()) {
+				return false;
+			}
+			const double v = a_data[a_key].get<double>();
+			if (!std::isfinite(v)) {
+				spdlog::warn("[stage] tune: \"{}\" is not a finite number - ignored", a_key);
+				return false;
+			}
+			spdlog::info("[stage] tune: {} {:.4f} -> {:.4f}", a_key, a_out, v);
+			a_out = v;
+			return true;
+		}
+
+		// The page asked for a different number. UI thread, because these are
+		// read by the slide and by the framing rule, which both run there.
+		//
+		// Lowering a limit can leave the TARGET outside it. The target is then
+		// re-clamped by the same ClampSaid every move uses - this changes WHAT
+		// the limit is, never WHERE it is applied, which is the rule the design
+		// note at the top of Stage.h sets out. The slide carries the camera in.
+		void OnTune(const json& a_data)
+		{
+			auto* tasks = SKSE::GetTaskInterface();
+			if (!tasks) {
+				return;
+			}
+			const json data = a_data;
+			tasks->AddUITask([data]() {
+				bool any = Tuned(data, "maxDistance", kMaxDistance);
+				any = Tuned(data, "liftUp", kLiftUp) || any;
+				any = Tuned(data, "panMax", kPanMax) || any;
+				any = Tuned(data, "pairApart", kPairApart) || any;
+				any = Tuned(data, "pairSpan", kPairSpan) || any;
+				any = Tuned(data, "ease", kEase) || any;
+				if (!any) {
+					spdlog::warn("[stage] tune: no usable number in the message - nothing changed");
+					return;
+				}
+				if (g_frame.have) {
+					g_target.distance = ClampSaid(g_target.distance, DistanceMin(), kMaxDistance, "distance");
+					g_target.lift = ClampSaid(g_target.lift, LiftMin(), kLiftUp, "height");
+					g_target.pan = ClampSaid(g_target.pan, -kPanMax, kPanMax, "pan");
+					// A pairing already on the screen was solved with the OLD
+					// numbers, so it is solved again. The twin herself does not
+					// move: Edit/Compare placed her at the old kPairApart and
+					// only a fresh placement puts her anywhere else, which is
+					// why the author is told to toggle the comparison off and
+					// on. Said here so the log shows the gap rather than
+					// leaving the rule aiming at a figure that is not there.
+					if (g_pairOn) {
+						spdlog::info("[stage] tune: the pair is on - solving again. The twin standing in the "
+									 "world was placed at the previous separation and does NOT move; toggle "
+									 "the comparison off and on to place her at the new one");
+						g_pairSolves = 0;
+						g_pairOn = SolvePair("after tune");
+					}
+				}
+				g_moving.store(true, std::memory_order_relaxed);
+				Queue(Asked());
+			});
+		}
+#endif
+
 		void OnShown()
 		{
 			Queue(Asked());
@@ -966,7 +1054,15 @@ namespace Lifecast::Panel::Stage
 		Panel::Bridge::On("stage-get", &OnGet);
 		Panel::Bridge::On("stage-move", &OnMove);
 		Panel::Bridge::On("stage-reset", &OnReset);
+#ifdef LIFECAST_TUNING
+		Panel::Bridge::On("stage-tune", &OnTune);
+#endif
 		g_installed = true;
+#ifdef LIFECAST_TUNING
+		spdlog::warn("[stage] installed WITH LIVE TUNING - this is a development build, and the six numbers "
+					 "of the view can be changed from the panel. A release build has none of this");
+#else
 		spdlog::info("[stage] installed");
+#endif
 	}
 }

@@ -30,6 +30,14 @@
 //
 // When the DLL says the view is not ready, the frame shows why and the
 // controls go away; nothing else in the panel changes.
+//
+// A development build of the DLL also sends "tuning", and then a section of
+// number boxes appears under the readout: the six numbers of the view the
+// author retunes at OLHO DO AUTOR. A release DLL never sends that key, so the
+// section is never built - there is no flag here to set, and nothing to
+// remember to turn off. Said here because the comment above this one was once
+// left behind by a feature that arrived later (the pan axis), and a reader who
+// trusts a stale header concludes the wrong thing about what this file draws.
 "use strict";
 
 (() => {
@@ -198,6 +206,79 @@
     e.preventDefault();
   }, { passive: false });
 
+  // ----- the tuning knobs (development builds only) ---------------------------
+
+  // These exist only when the DLL was built with LIFECAST_TUNING. There is no
+  // preprocessor here to gate them with, and none is needed: a release DLL
+  // never sends "tuning", so the section is never built and never shown. The
+  // gate is the DLL's, which is the only place it can be enforced anyway.
+  //
+  // The six are read from "tuning" and NOT from "limits". Three of them are in
+  // both, and taking them from "limits" would quietly make this section stop
+  // working the day a fourth number joins it that is not a bound.
+  const TUNABLES = [
+    ["maxDistance", "Max distance", "The farthest the camera can pull back", 1],
+    ["liftUp", "Max height", "The highest it rises above where the menu opened", 1],
+    ["panMax", "Max sideways", "How far it travels left and right", 1],
+    ["pairApart", "Pair separation", "World distance between you and the second figure", 1],
+    ["pairSpan", "Frame share", "How much of the view the pair spans, 0.5 being half", 0.01],
+    ["ease", "Easing", "Share of the remaining gap covered per frame; 1 is no easing", 0.01],
+  ];
+
+  let tuningBox = null;
+  const tuningInputs = new Map();
+
+  function buildTuning() {
+    tuningBox = LifecastControls.el("div", "stage-tuning");
+    tuningBox.appendChild(
+      LifecastControls.el("span", "stage-group-title", "Tuning (development build)"));
+    for (const [key, label, title, step] of TUNABLES) {
+      const row = LifecastControls.el("label", "stage-tuning-row");
+      row.title = title;
+      row.appendChild(LifecastControls.el("span", "stage-tuning-label", label));
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = step;
+      input.className = "stage-tuning-input";
+      // "change" and not "input": committing on every keystroke sends a
+      // message per digit, and typing "120" would pass through 1 and 12 -
+      // each one a real camera move, and 1 is outside every sane bound.
+      input.addEventListener("change", () => {
+        const v = parseFloat(input.value);
+        if (!isFinite(v)) {
+          return;
+        }
+        LifecastBridge.send("stage-tune", { [key]: v });
+      });
+      tuningInputs.set(key, input);
+      row.appendChild(input);
+      tuningBox.appendChild(row);
+    }
+    bar.parentNode.insertBefore(tuningBox, readout.nextSibling);
+  }
+
+  function renderTuning() {
+    const t = state && state.tuning;
+    if (!t) {
+      if (tuningBox) {
+        tuningBox.hidden = true;
+      }
+      return;
+    }
+    if (!tuningBox) {
+      buildTuning();
+    }
+    tuningBox.hidden = false;
+    for (const [key] of TUNABLES) {
+      const input = tuningInputs.get(key);
+      // Never overwrite the box he is typing in. The DLL echoes the whole set
+      // on every answer, and a tick answers while a value is half-typed.
+      if (input && document.activeElement !== input && typeof t[key] === "number") {
+        input.value = String(t[key]);
+      }
+    }
+  }
+
   // ----- what the DLL says ----------------------------------------------------
 
   function render() {
@@ -205,6 +286,9 @@
     bar.hidden = !ready;
     readout.hidden = !ready;
     stage.classList.toggle("is-ready", ready);
+    // Before the early return: a refused view carries no "tuning" either, and
+    // the knobs have to go away with the rest of the controls.
+    renderTuning();
     if (!ready) {
       note.hidden = false;
       note.textContent = "Character view unavailable" + (state && state.why ? ": " + state.why : "");

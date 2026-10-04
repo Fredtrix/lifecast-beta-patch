@@ -19,7 +19,26 @@ namespace Lifecast::Panel::Bridge
 		// The whole text is logged up to this length and cut after it, with
 		// the full length stated, so a long message is visible as long
 		// rather than silently shortened.
-		constexpr std::size_t kLogCap = 400;
+		//
+		// 400 cut the "type" off every long message, and that is not obvious
+		// from reading the cap: nlohmann sorts an object's keys, so the dump
+		// is {"data":...,"type":...,"v":...} and the only field that says WHAT
+		// a message is sits AFTER the big one. Nine payload sizes in the boot
+		// 93 and 94 logs ran 406 to 2695 - presets, preset folder, controls,
+		// nodes, paint areas and layers - and all nine lost it.
+		//
+		// 4096 uncovers all nine for about 68 KB a boot, measured by summing
+		// min(size, 4096) - 400 over the 41 clipped lines of boot 93. It does
+		// NOT add a byte to the drag traffic the note above is about: a
+		// stage-move carries five numbers in roughly 100 characters and never
+		// reached 400, so the cap never applied to it. The cap only ever bit
+		// the catalogues, which go once per panel opening.
+		//
+		// One payload stays clipped on purpose: the RaceMenu slider catalogue
+		// at 31530 chars, five times in boot 93. Raising the cap to cover it
+		// would cost another 152 KB a boot for one message; a_logWhole at its
+		// own send site is the lever if anyone needs it whole.
+		constexpr std::size_t kLogCap = 4096;
 
 		std::string Clip(std::string_view a_text)
 		{
@@ -248,14 +267,20 @@ namespace Lifecast::Panel::Bridge
 		};
 		const auto text = message.dump();
 
+		// The type is named OUTSIDE the payload on purpose, and it is the half
+		// of this fix that survives: a bigger cap stops the current messages
+		// from losing their "type", but any payload that outgrows the cap
+		// later would lose it again. Naming it here cannot be outgrown.
 		auto* browser = Panel::Browser();
 		if (!browser) {
-			spdlog::warn("[bridge] dll->page DROPPED, no browser: {}", a_logWhole ? text : Clip(text));
+			spdlog::warn("[bridge] dll->page \"{}\" DROPPED, no browser: {}", a_type,
+				a_logWhole ? text : Clip(text));
 			return;
 		}
 
 		if (!g_held.empty() || !browser->IsPageLoaded()) {
-			spdlog::info("[bridge] dll->page HELD until the page loads: {}", a_logWhole ? text : Clip(text));
+			spdlog::info("[bridge] dll->page \"{}\" HELD until the page loads: {}", a_type,
+				a_logWhole ? text : Clip(text));
 			g_held.push_back({ std::string(a_type), text, Clock::now() });
 			if (!g_watching.exchange(true)) {
 				Watch();
@@ -263,7 +288,7 @@ namespace Lifecast::Panel::Bridge
 			return;
 		}
 
-		spdlog::info("[bridge] dll->page: {}", a_logWhole ? text : Clip(text));
+		spdlog::info("[bridge] dll->page \"{}\": {}", a_type, a_logWhole ? text : Clip(text));
 		browser->ExecEventFunction(kEventName, text.c_str());
 	}
 

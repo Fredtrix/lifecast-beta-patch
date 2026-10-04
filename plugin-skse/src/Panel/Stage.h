@@ -84,6 +84,20 @@
 //                                             "liftMin", "liftMax",
 //                                             "panMin", "panMax",
 //                                             "tiltMax" } }
+//   page -> dll  "stage-tune"   { "maxDistance", "liftUp", "panMax",
+//                                 "pairApart", "pairSpan", "ease" }
+//                                 (any subset; absent means leave alone)
+//                                 ONLY in a LIFECAST_TUNING build - a release
+//                                 DLL has no handler and answers unknown-type.
+//                                 The answer carries "tuning" with all six, and
+//                                 "tuning" is absent from a release build, which
+//                                 is what keeps the page's section hidden there.
+//                                 The six do NOT go in "limits": the page
+//                                 disables buttons from that key, so it means
+//                                 "how far a move may go" - true of maxDistance,
+//                                 liftUp and panMax, and false of the other
+//                                 three. Reporting them together would disable
+//                                 a button from a number that is not its bound.
 //   dll -> page  "stage-visible" { "on": bool }  hides or shows the frame and
 //                                 its controls; the view itself is untouched.
 //                                 Not sent by this module - it is there for
@@ -91,13 +105,35 @@
 
 #pragma once
 
+// Six of the numbers below are the author's to retune at OLHO DO AUTOR, and
+// trying one used to cost a build and a boot. LIFECAST_TUNABLE is how he turns
+// them instead: in a release build it is plain constexpr and nothing can write
+// them, and in a build configured with LIFECAST_TUNING the panel can set them
+// at run time ("stage-tune"). The VALUE is written once, here, for both.
+//
+// It is a declarator macro rather than two #ifdef branches per number because
+// two branches means writing each value TWICE, and the release branch is the
+// one nobody exercises - six numbers would be six chances for the two copies
+// to drift apart in silence. The macro has one job and no logic, and no use
+// site changes spelling.
+//
+// Which numbers are tunable is NOT a judgement about which matter: it is the
+// list the author asked for. kMinDistance and kFloorMargin stay constant
+// because they bound the one measured way to lose the character (see the note
+// below), and kTiltMax because nobody asked.
+#ifdef LIFECAST_TUNING
+	#define LIFECAST_TUNABLE inline double
+#else
+	#define LIFECAST_TUNABLE inline constexpr double
+#endif
+
 namespace Lifecast::Panel::Stage
 {
 	inline constexpr double kMinDistance = 33.56;   // camera to player, ground plane
-	inline constexpr double kMaxDistance = 320.0;
-	inline constexpr double kLiftUp = 80.0;         // above the opening height
+	LIFECAST_TUNABLE        kMaxDistance = 320.0;
+	LIFECAST_TUNABLE        kLiftUp = 80.0;         // above the opening height
 	inline constexpr double kFloorMargin = 12.0;    // above the player's origin
-	inline constexpr double kPanMax = 80.0;         // sideways, either way - see note above
+	LIFECAST_TUNABLE        kPanMax = 80.0;         // sideways, either way - see note above
 	inline constexpr double kTiltMax = 35.0;        // degrees, either way
 
 	// How far to the side the second subject stands, in the ground plane and
@@ -112,7 +148,7 @@ namespace Lifecast::Panel::Stage
 	// came out on top of the player, at 28 she was still partly behind her
 	// shoulder and hair. Both of those were measured with the camera where
 	// the menu left it, which is why neither of them is a rule.
-	inline constexpr double kPairApart = 60.0;
+	LIFECAST_TUNABLE kPairApart = 60.0;
 
 	// How much of the character view the pair should span, edge to edge of
 	// the two heads. The rest is margin: a figure is wider than the point
@@ -122,7 +158,7 @@ namespace Lifecast::Panel::Stage
 	//
 	// WORKING VALUE, and this one is the author's to retune at OLHO DO AUTOR:
 	// it is the one number here that is pure taste. Nothing measures it.
-	inline constexpr double kPairSpan = 0.5;
+	LIFECAST_TUNABLE kPairSpan = 0.5;
 
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.
