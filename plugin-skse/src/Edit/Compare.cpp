@@ -476,11 +476,14 @@ namespace Lifecast::Edit::Compare
 
 		// ----- the session --------------------------------------------------------
 
-		// Where the twin is BORN, and it is the one thing in this file that is
-		// not a detail: boot 80 measured that a twin born in the world with the
-		// menu CLOSED draws, and boots 78 and 79 measured that one born inside
-		// the menu does not. The discriminator is when she entered, not the
-		// chain of parents - which were identical in all three.
+		// Where the twin is BORN. A figure born with the menu OPEN drew (confirmed
+		// in a captured frame) in cell 00016A06 - the very cell where boots 78
+		// and 79 had measured that one born inside the menu does not. Those two
+		// boots measured a probe that no longer exists, with
+		// code from four days before this module was written, so that
+		// measurement does not transfer here. What decides whether she draws is
+		// therefore OPEN: it is not the cell and it is not being born with the
+		// menu open, and the path of the birth is the part nobody has isolated.
 		//
 		// So the birth is armed when the editor CLOSES, and it happens on the
 		// next input tick, in the room the player is standing in, which is the
@@ -510,15 +513,10 @@ namespace Lifecast::Edit::Compare
 			}
 			g_arm = false;  // one attempt per arming, and it is not retried on failure
 
-			// A twin born inside the menu is replaced rather than kept: she is
-			// the case that does not draw, and leaving her in place would make
-			// the second opening fail for the same reason as the first.
-			if (TwinHere() && !g_bornInMenu) {
-				return;
-			}
+			// The figure already in this room stays, however she was born: being
+			// born with the menu open is not what decides whether she draws.
 			if (TwinHere()) {
-				spdlog::info("[compare] the figure in this room was born with the menu open - replacing her with one "
-							 "born in the world. The old reference is left standing, culled, and is never deleted");
+				return;
 			}
 			Make("born in the world, with the menu closed");
 		}
