@@ -95,6 +95,12 @@ namespace Lifecast::Panel::Stage
 			double tilt{ 0.0 };
 			bool   reset{ false };
 			bool   any{ false };
+			// The framing rule: 0 nothing, 1 frame the pair, 2 stop framing
+			// it. Not a bool, because "no request" and "turn it off" are
+			// different things and folding them loses the second.
+			int    pair{ 0 };
+			double frameLeft{ 0.0 };
+			double frameRight{ 1.0 };
 			// Whether the page is waiting for an answer. A tick is not: the
 			// state it would send is the target, and the target is exactly
 			// what a tick does not change.
@@ -106,6 +112,14 @@ namespace Lifecast::Panel::Stage
 		std::mutex g_lock;
 		Pending    g_pending;
 		bool       g_queued = false;
+
+		// The framing rule, while it is on (UI thread). The edges are kept
+		// because the audit after the slide needs the same frame the solve
+		// used, and the page is not asked twice.
+		bool   g_pairOn = false;
+		double g_pairLeft = 0.0;
+		double g_pairRight = 1.0;
+		int    g_pairSolves = 0;  // how many times the rule has solved for this pairing
 
 		// ----- small helpers ------------------------------------------------------
 
@@ -311,6 +325,210 @@ namespace Lifecast::Panel::Stage
 			return g_frame.distance < kMinDistance ? g_frame.distance : kMinDistance;
 		}
 
+		// ----- the framing rule (UI thread, with the kept frame) -----------------
+
+		// Where the two subjects are aimed at: the player's own look-at point,
+		// and the same point kPairApart to the side, across the line of sight.
+		//
+		// The second one is where the twin's head is BY CONSTRUCTION and not by
+		// measurement of her: Edit/Compare places her at the player's position
+		// plus that same offset, and she is a duplicate of the player's base,
+		// so she is the same height. Projecting a point rather than her head
+		// node is also what lets the rule be solved BEFORE she is there.
+		bool Aims(RE::NiPoint3& a_player, RE::NiPoint3& a_other)
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			if (!player) {
+				return false;
+			}
+			a_player = player->GetLookingAtLocation();
+			// (-dirY, dirX) is the player-camera direction turned 90 degrees in
+			// the ground plane - the same perpendicular pan moves along, and the
+			// same one the probe measured as the axis that actually separates
+			// two figures on screen. Pushing the other subject TOWARDS the
+			// camera does not make her bigger: past a point she disappears
+			// (V107), so this offset has no component along the line of sight.
+			const double perpX = -g_frame.dirY;
+			const double perpY = g_frame.dirX;
+			a_other = RE::NiPoint3(static_cast<float>(a_player.x + perpX * kPairApart),
+				static_cast<float>(a_player.y + perpY * kPairApart), a_player.z);
+			return true;
+		}
+
+		// Asks the engine's own camera where a world point lands, as a fraction
+		// of the window's width. Nothing here assumes a field of view, a
+		// resolution or where RaceMenu aims: all three come out of this call.
+		//
+		// The port is read and divided by rather than trusted to be 0..1. If it
+		// is the normalized viewport its width is 1 and the division changes
+		// nothing; if it is in pixels the division is what makes the number
+		// comparable with the edges the page sends. Both are logged, so which
+		// one it is stops being a guess after the first run.
+		bool ScreenX(RE::NiCamera* a_cam, const RE::NiPoint3& a_point, double& a_x, double& a_y, double& a_depth)
+		{
+			if (!a_cam) {
+				return false;
+			}
+			float x = 0.0f;
+			float y = 0.0f;
+			float z = 0.0f;
+			if (!a_cam->WorldPtToScreenPt3(a_point, x, y, z, 1e-5f)) {
+				return false;
+			}
+			const auto&  port = a_cam->GetRuntimeData2().port;
+			const double w = port.GetWidth();
+			const double h = port.GetHeight();
+			a_x = w > 0.0 ? x / w : x;
+			a_y = h > 0.0 ? y / h : y;
+			a_depth = z;
+			return true;
+		}
+
+		// Projects both aims and reports where they landed. Returns false, with
+		// the reason logged, when any step of it is missing - and a rule that
+		// cannot measure does not guess: it leaves the camera alone.
+		bool Measure(double& a_x1, double& a_x2, const char* a_when)
+		{
+			auto* cam = RE::Main::WorldRootCamera();
+			if (!cam) {
+				spdlog::warn("[stage] pair {}: there is no world camera to ask - the rule does not move anything", a_when);
+				return false;
+			}
+			RE::NiPoint3 one;
+			RE::NiPoint3 two;
+			if (!Aims(one, two)) {
+				spdlog::warn("[stage] pair {}: no player to aim at", a_when);
+				return false;
+			}
+			double y1 = 0.0;
+			double y2 = 0.0;
+			double d1 = 0.0;
+			double d2 = 0.0;
+			if (!ScreenX(cam, one, a_x1, y1, d1) || !ScreenX(cam, two, a_x2, y2, d2)) {
+				spdlog::warn("[stage] pair {}: the camera would not project one of the two aims", a_when);
+				return false;
+			}
+			const auto& port = cam->GetRuntimeData2().port;
+			spdlog::info("[stage] pair {}: player head at x {:.4f} y {:.4f} depth {:.1f} | the other at x {:.4f} y "
+						 "{:.4f} depth {:.1f} | apart {:.4f} of the window | port {:.1f} x {:.1f}",
+				a_when, a_x1, y1, d1, a_x2, y2, d2, a_x2 - a_x1, port.GetWidth(), port.GetHeight());
+			return true;
+		}
+
+		// Solves for distance and pan, and writes them on the target. Returns
+		// whether it solved; a refusal leaves the view exactly as it was.
+		bool SolvePair(const char* a_when)
+		{
+			double x1 = 0.0;
+			double x2 = 0.0;
+			if (!Measure(x1, x2, a_when)) {
+				return false;
+			}
+			const double span = g_pairRight - g_pairLeft;
+			const double want = span * kPairSpan;
+			const double sepNow = x2 - x1;
+			if (span <= 0.0 || want <= 0.0) {
+				spdlog::warn("[stage] pair {}: the page gave a character view {:.4f} wide - nothing to frame into",
+					a_when, span);
+				return false;
+			}
+			if (std::abs(sepNow) < 1e-6) {
+				spdlog::warn("[stage] pair {}: the two aims project to the same point ({:.6f} apart) - the camera "
+							 "cannot be solved from that",
+					a_when, sepNow);
+				return false;
+			}
+
+			// x = x0 + k * lateral / depth, with lateral measured across the
+			// line of sight and depth along it. Two points at the same depth
+			// give k, and k with either point gives x0. Both are properties of
+			// THIS opening, not of this file.
+			const double now = g_at.distance;
+			const double k = sepNow * now / kPairApart;
+			const double x0 = x1 + k * g_at.pan / now;
+
+			// Distance so the pair spans what was asked: the separation on
+			// screen falls as 1/depth, so the distance scales by exactly how
+			// much too wide the pair is now.
+			const double wantedDistance = now * std::abs(sepNow) / want;
+			const double distance = ClampSaid(wantedDistance, DistanceMin(), kMaxDistance, "distance");
+
+			// Pan so the pair's middle lands on the middle of the character
+			// view. The middle of the pair is half the separation to the side
+			// of the player, so the camera has to go the same way.
+			const double centre = (g_pairLeft + g_pairRight) / 2.0;
+			const double wantedPan = kPairApart / 2.0 - (centre - x0) * distance / k;
+			const double pan = ClampSaid(wantedPan, -kPanMax, kPanMax, "pan");
+
+			spdlog::info("[stage] pair {}: view {:.3f}..{:.3f}, asking for {:.3f} of the window between the heads. "
+						 "Measured k {:.4f} and centre-of-view {:.4f} at distance {:.2f}, pan {:.2f}",
+				a_when, g_pairLeft, g_pairRight, want, k, x0, now, g_at.pan);
+			spdlog::info("[stage] pair {}: solved distance {:.2f} (wanted {:.2f}) and pan {:.2f} (wanted {:.2f}){}",
+				a_when, distance, wantedDistance, pan, wantedPan,
+				(distance != wantedDistance || pan != wantedPan)
+					? " - A LIMIT WAS HIT, and these two limits are ours: the pair comes out closer together than "
+					  "asked for, and the number the rule would have needed is the 'wanted' above"
+					: "");
+
+			g_target.distance = distance;
+			g_target.pan = pan;
+			++g_pairSolves;
+			return true;
+		}
+
+		// What the slide actually produced, projected again at the camera it
+		// arrived at. Everything SolvePair does is a model of a camera, and
+		// the model is not the camera: this is where the two are compared.
+		//
+		// At most ONE correction follows, and the cap is deliberate. A rule
+		// that keeps correcting itself towards a target it never reaches is
+		// not converging, it is hunting - and the third small variation of the
+		// same attempt is where a wrong premise stops being worth another try.
+		// A second miss is left standing in the log, which is the measurement.
+		void AuditPair()
+		{
+			if (!g_pairOn || g_pairSolves < 1 || g_pairSolves > 2) {
+				return;
+			}
+			double x1 = 0.0;
+			double x2 = 0.0;
+			if (!Measure(x1, x2, g_pairSolves == 1 ? "arrived" : "arrived after the correction")) {
+				g_pairSolves = 3;
+				return;
+			}
+			const double got = std::abs(x2 - x1);
+			const double want = (g_pairRight - g_pairLeft) * kPairSpan;
+			const double middle = (x1 + x2) / 2.0;
+			const double centre = (g_pairLeft + g_pairRight) / 2.0;
+			const double sepOff = want > 0.0 ? (got - want) / want : 0.0;
+			spdlog::info("[stage] pair check: the heads came out {:.4f} of the window apart against {:.4f} asked "
+						 "({:+.1f}%), and their middle at {:.4f} against {:.4f} ({:+.4f})",
+				got, want, sepOff * 100.0, middle, centre, middle - centre);
+
+			// The tolerances are working values, and they are about what an eye
+			// can see rather than what a float can measure: a tenth of the
+			// separation, and a fiftieth of the window off centre.
+			constexpr double kSepTolerance = 0.10;
+			constexpr double kCentreTolerance = 0.02;
+			const bool       wide = std::abs(sepOff) > kSepTolerance;
+			const bool       offCentre = std::abs(middle - centre) > kCentreTolerance;
+			if (g_pairSolves == 1 && (wide || offCentre)) {
+				spdlog::info("[stage] pair check: outside tolerance ({}{}{}) - solving once more, and only once",
+					wide ? "separation" : "", (wide && offCentre) ? " and " : "", offCentre ? "centre" : "");
+				if (SolvePair("correction")) {
+					// The tick stopped when the slide arrived; this target is
+					// new, so it has to be told to start again.
+					g_moving.store(true, std::memory_order_relaxed);
+					return;
+				}
+			}
+			if (g_pairSolves == 2 && (wide || offCentre)) {
+				spdlog::warn("[stage] pair check: still outside tolerance after the one correction. The rule stops "
+							 "here on purpose - this line is the measurement, not a failure to retry");
+			}
+			g_pairSolves = 3;
+		}
+
 		// ----- the work (UI thread) -------------------------------------------------
 
 		bool Capture(RE::RaceSexMenu* a_menu, RE::GFxValue& a_cg)
@@ -483,6 +701,24 @@ namespace Lifecast::Panel::Stage
 				g_target.tilt = ClampSaid(g_target.tilt + p.tilt, -kTiltMax, kTiltMax, "tilt");
 			}
 
+			// The rule sets the target outright rather than by a delta: it
+			// solves for where the camera has to BE, and a delta would make
+			// that depend on where it happened to be left.
+			if (p.pair == 1) {
+				g_pairLeft = p.frameLeft;
+				g_pairRight = p.frameRight;
+				g_pairSolves = 0;
+				g_pairOn = SolvePair("on");
+			} else if (p.pair == 2) {
+				if (g_pairOn) {
+					spdlog::info("[stage] pair off: back to the view the menu opened with");
+				}
+				g_pairOn = false;
+				g_pairSolves = 0;
+				g_target = At{};
+				g_target.distance = g_frame.distance;
+			}
+
 			// And the tick moves what is written, one step closer.
 			const bool turnMoved = StepAngle(g_at.turn, g_target.turn, kSnapDegrees);
 			const bool distanceMoved = Step(g_at.distance, g_target.distance, kSnapUnits);
@@ -515,6 +751,18 @@ namespace Lifecast::Panel::Stage
 					tiltOk ? "" : " - tilt NOT written");
 			}
 
+			// Set when a slide ends, so the page is told where the camera
+			// actually stopped. A tick carries no question of its own
+			// (Pending::answer is false on it), and that was measured as a
+			// defect in boot 93: the pair rule solves once, the audit
+			// solves AGAIN from the arrived frame, and the page kept showing
+			// the FIRST target for the rest of the opening. Three frames of
+			// that round read "distance 320 | pan 27" while the camera was
+			// at 116.27 / 61.14, and the readout is the player's only view
+			// of where the rule put the camera - a readout that names a
+			// target which is no longer the target is worse than none.
+			bool arrived = false;
+
 			// The slide, tick by tick. At trace because it is one line a
 			// frame while something is moving: raising the level silences it
 			// without touching this file.
@@ -541,10 +789,15 @@ namespace Lifecast::Panel::Stage
 					spdlog::info("[stage] arrived after {} ticks in {} ms - {:.0f} us of work in all, worst tick "
 								 "{:.0f} us",
 						g_ticks, ms.count(), g_workUs, g_worstUs);
+					AuditPair();
+					// After the audit on purpose: when it corrects, it has
+					// already written the new target, and that is the number
+					// the page should be showing.
+					arrived = true;
 				}
 			}
 
-			if (p.answer) {
+			if (p.answer || arrived) {
 				Answer(State());
 			}
 		}
@@ -560,6 +813,13 @@ namespace Lifecast::Panel::Stage
 				g_pending.pan += a_add.pan;
 				g_pending.tilt += a_add.tilt;
 				g_pending.reset = g_pending.reset || a_add.reset;
+				// A toggle does not add up: two presses folded into one pass
+				// are the last one, not both.
+				if (a_add.pair != 0) {
+					g_pending.pair = a_add.pair;
+					g_pending.frameLeft = a_add.frameLeft;
+					g_pending.frameRight = a_add.frameRight;
+				}
 				g_pending.any = g_pending.any || a_add.any;
 				g_pending.answer = g_pending.answer || a_add.answer;
 				if (!g_queued) {
@@ -629,6 +889,8 @@ namespace Lifecast::Panel::Stage
 					g_target = At{};
 					g_moving.store(false, std::memory_order_relaxed);
 					g_why.clear();
+					g_pairOn = false;
+					g_pairSolves = 0;
 				});
 			}
 		}
@@ -651,6 +913,36 @@ namespace Lifecast::Panel::Stage
 	{
 		Pending p;
 		p.reset = true;
+		p.any = true;
+		p.answer = true;
+		Queue(p);
+	}
+
+	bool PairSpot(RE::NiPoint3& a_out)
+	{
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		if (!player || !g_frame.have) {
+			return false;
+		}
+		// The SAME perpendicular Aims() projects, and the same kPairApart.
+		const double perpX = -g_frame.dirY;
+		const double perpY = g_frame.dirX;
+		const RE::NiPoint3 at = player->GetPosition();
+		a_out = RE::NiPoint3(static_cast<float>(at.x + perpX * kPairApart),
+			static_cast<float>(at.y + perpY * kPairApart), at.z);
+		return true;
+	}
+
+	void FramePair(bool a_on, double a_frameLeft, double a_frameRight)
+	{
+		Pending p;
+		p.pair = a_on ? 1 : 2;
+		// A frame the page did not send, or sent inside out, is the whole
+		// window: the rule still frames, it just has no way to know that the
+		// panel is covering part of its result.
+		const bool usable = std::isfinite(a_frameLeft) && std::isfinite(a_frameRight) && a_frameRight > a_frameLeft;
+		p.frameLeft = usable ? Clamp(a_frameLeft, 0.0, 1.0) : 0.0;
+		p.frameRight = usable ? Clamp(a_frameRight, 0.0, 1.0) : 1.0;
 		p.any = true;
 		p.answer = true;
 		Queue(p);

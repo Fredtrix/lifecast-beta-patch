@@ -57,6 +57,7 @@ add_commonlibsse_plugin(
         src/Edit/Body.cpp
         src/Edit/BodyMorphs.cpp
         src/Edit/BodyScales.cpp
+        src/Edit/Compare.cpp
         src/Edit/FaceSliders.cpp
         src/Edit/Finish.cpp
         src/Edit/Light.cpp

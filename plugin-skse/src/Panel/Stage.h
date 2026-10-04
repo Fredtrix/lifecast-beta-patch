@@ -100,6 +100,30 @@ namespace Lifecast::Panel::Stage
 	inline constexpr double kPanMax = 80.0;         // sideways, either way - see note above
 	inline constexpr double kTiltMax = 35.0;        // degrees, either way
 
+	// How far to the side the second subject stands, in the ground plane and
+	// across the line of sight (Edit/Compare). It is a WORLD distance and not
+	// an angle on purpose: two figures overlap on screen when the world gap
+	// between them is smaller than they are wide, and that comparison does
+	// not change with how far the camera is - moving back shrinks the gap and
+	// the figures by the same factor. So separation is settled here, once,
+	// and the camera only has to decide whether the pair FITS.
+	//
+	// 60 is a working value, from the boot 87 sweep: at 18 units the twin
+	// came out on top of the player, at 28 she was still partly behind her
+	// shoulder and hair. Both of those were measured with the camera where
+	// the menu left it, which is why neither of them is a rule.
+	inline constexpr double kPairApart = 60.0;
+
+	// How much of the character view the pair should span, edge to edge of
+	// the two heads. The rest is margin: a figure is wider than the point
+	// that gets framed, and a pair that exactly fills the frame is a pair cut
+	// at both borders - which is what the boot 87 capture shows at the right
+	// edge.
+	//
+	// WORKING VALUE, and this one is the author's to retune at OLHO DO AUTOR:
+	// it is the one number here that is pure taste. Nothing measures it.
+	inline constexpr double kPairSpan = 0.5;
+
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
@@ -109,6 +133,63 @@ namespace Lifecast::Panel::Stage
 	// like the page's.
 	void Move(double a_turn, double a_distance, double a_lift, double a_pan, double a_tilt);
 	void Reset();
+
+	// THE FRAMING RULE: puts the player and a second subject standing
+	// kPairApart to the side both inside the character view, and takes it
+	// back when the comparison is turned off.
+	//
+	// It is not two numbers. For any opening it answers where the camera has
+	// to be, and it answers it from a measurement taken at that opening
+	// rather than from constants that happened to work in one room:
+	//
+	//   1  the engine's own camera is asked where two known world points
+	//      land on screen - the player's aim point, and the same point one
+	//      probe step to the side. That gives how many fractions of the
+	//      window one world unit across the line of sight is worth at the
+	//      distance the camera is at now, and where the middle of the view
+	//      actually sits. Neither is assumed, and neither is a constant of
+	//      this file: the RaceSex camera does not look straight at the
+	//      player - she opens left of centre - and field of view, resolution
+	//      and the player's own height all move those two numbers.
+	//   2  with that, distance and pan are solved: distance so the pair
+	//      spans kPairSpan of the character view, pan so the pair's middle
+	//      lands on the view's middle. Zoom alone cannot do it, because the
+	//      view is centred on the player and backing away from a centre that
+	//      IS the player keeps her in the middle (D105).
+	//   3  the solution is clamped by the same limits every other move is.
+	//      A clamp is where the room wins: in a space too tight to back away
+	//      in, distance stops at kMaxDistance and the pair comes out bigger
+	//      than kPairSpan asked for. The log says what was wanted and what
+	//      was given, and that difference is the measurement.
+	//   4  once the slide has arrived, the two points are projected AGAIN and
+	//      what was achieved is logged against what was asked. That is the
+	//      only honest check: everything above is a model of a camera, and
+	//      the model is not the camera.
+	//
+	// a_frameLeft and a_frameRight are the character view's own edges as a
+	// fraction of the window width. The panel covers the left of the screen,
+	// so the middle of the window is not the middle of what is visible.
+	//
+	// Game thread, queued to the UI thread like every other move here. Off
+	// restores the view the menu opened with, which is what Reset does.
+	void FramePair(bool a_on, double a_frameLeft, double a_frameRight);
+
+	// Where the second subject has to STAND for the rule above to be framing
+	// her and not an empty patch of floor: the player's own position, moved
+	// kPairApart across the line of sight in the ground plane.
+	//
+	// It is published rather than duplicated on purpose. Edit/Compare places
+	// her and this module frames her, and if each worked out the offset for
+	// itself the two would agree until one of them was edited. One definition,
+	// two callers.
+	//
+	// False when there is no kept frame yet - the offset is across the line of
+	// sight, so without a camera direction there is no "to the side". In
+	// practice the frame is captured the moment the panel comes on screen,
+	// well before any button can ask for this; it is written once there and
+	// cleared when the menu closes, which is why reading it from the game
+	// thread is a read of two numbers that do not change during an opening.
+	bool PairSpot(RE::NiPoint3& a_out);
 
 	// One step of the slide, when there is one under way. Game thread, and a
 	// single atomic read when there is not - it is called from the input tick

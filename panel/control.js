@@ -21,6 +21,22 @@
 // Undress - the DLL never reads the stage light's state back (Edit/Light.h),
 // so a label that claimed state would be an inference dressed as a
 // measurement. Placement here is provisional (layout is Fase 7).
+//
+// Compare (Fase 6, E3b): the third one in the same shape, and it is the
+// switch D104 asked for - the side by side costs a frame while it is on and
+// nothing while it is off, so it is a decision and not a preference.
+//
+// Two things make it different from the other two, and neither is cosmetic:
+//
+//   the frame   the DLL has to be told where the character view's own edges
+//               are, because the panel covers the left of the screen and the
+//               middle of the WINDOW is not the middle of what the player can
+//               see. Only the page knows that number. #stage belongs to
+//               stage.js; this reads its rect and writes nothing.
+//   the why     "compare" can come back with a reason it refused - the second
+//               figure left in another room, no body loaded there. The reason
+//               is shown and the rest of the panel is untouched: the
+//               comparison is the only thing that goes away.
 "use strict";
 
 (() => {
@@ -110,4 +126,72 @@
   });
 
   renderLight();
+
+  // The character view's edges, as a fraction of the window width. #stage is
+  // laid out from the panel's right edge to the window's right edge, so this
+  // is exactly the region the camera has to fit the pair into. Read fresh at
+  // every click rather than kept: the panel scale is a setting the player can
+  // change while the editor is open.
+  function frame() {
+    const stage = document.getElementById("stage");
+    const width = window.innerWidth;
+    if (!stage || !(width > 0)) {
+      return null;
+    }
+    const rect = stage.getBoundingClientRect();
+    if (!(rect.width > 0)) {
+      return null;
+    }
+    return { left: rect.left / width, right: rect.right / width };
+  }
+
+  const compareButton = LifecastControls.el("button", "panel-button control-button", "Compare");
+  compareButton.type = "button";
+  const compareNote = LifecastControls.el("span", "control-note", "");
+  section.body.appendChild(compareButton);
+  section.body.appendChild(compareNote);
+
+  let compareOn = false;   // this feature's own belief; the DLL's "compare" reply is the truth
+  let compareBusy = false;
+
+  function renderCompare() {
+    compareButton.textContent = compareOn ? "Compare Off" : "Compare";
+    compareButton.disabled = compareBusy;
+  }
+
+  compareButton.addEventListener("click", () => {
+    if (compareBusy) {
+      return;
+    }
+    const where = frame();
+    compareBusy = true;
+    compareNote.textContent = "";
+    renderCompare();
+    const message = { on: !compareOn };
+    if (where) {
+      message.frame = where;
+    }
+    if (!LifecastBridge.send("compare-set", message)) {
+      compareBusy = false;
+      compareNote.textContent = "No bridge to the game - nothing was done.";
+      renderCompare();
+    }
+  });
+
+  LifecastBridge.on("compare", (data) => {
+    compareOn = !!(data && data.on);
+    compareBusy = false;
+    // The DLL's own words when it refused. Empty when it did not, so a
+    // successful toggle clears whatever the last refusal said.
+    compareNote.textContent = (data && typeof data.why === "string") ? data.why : "";
+    renderCompare();
+  });
+
+  LifecastBridge.whenAttached((ok) => {
+    if (ok) {
+      LifecastBridge.send("compare-get");
+    }
+  });
+
+  renderCompare();
 })();

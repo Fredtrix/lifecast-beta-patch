@@ -3,6 +3,7 @@
 
 #include "Edit/Undress.h"
 
+#include "Edit/Compare.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
@@ -110,6 +111,11 @@ namespace Lifecast::Edit::Undress
 				DoDress();
 			}
 			g_on = wantOn;
+			// The second figure wears what the player wears. Clothes are
+			// CONTEXT and not what is under comparison (D106): a dressed
+			// "before" beside an undressed "after" compares the clothes. Does
+			// nothing when the comparison is off, which is the common case.
+			Compare::MirrorWorn();
 			Session::RequestRedraw(true);
 			PushUndress("after undress-set");
 		}

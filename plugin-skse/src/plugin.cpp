@@ -23,6 +23,7 @@
 #include "Edit/Body.h"
 #include "Edit/BodyMorphs.h"
 #include "Edit/BodyScales.h"
+#include "Edit/Compare.h"
 #include "Edit/FaceSliders.h"
 #include "Edit/Finish.h"
 #include "Edit/Session.h"
@@ -139,6 +140,10 @@ namespace
 			// The character view: the frame in the page and the camera moves
 			// that put the character in it.
 			Lifecast::Panel::Stage::Install();
+
+			// The side by side: the character as she was, next to the
+			// character as she is being edited.
+			Lifecast::Edit::Compare::Install();
 
 			// The panel's own preferences, kept across games.
 			Lifecast::Core::Settings::Install();
