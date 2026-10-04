@@ -390,8 +390,8 @@ namespace Lifecast::Edit::Compare
 			if (!root) {
 				g_why = "the second figure has no body loaded in this room";
 				spdlog::warn("[compare] show: no 3D to uncull{}",
-					g_bornInMenu ? " - and she was born with the menu already OPEN, which boots 78 and 79 measured as "
-								   "not drawing"
+					g_bornInMenu ? " - she was born with the menu already OPEN, and a figure born that way has been "
+								   "seen drawing in this same cell, so the cause is still open"
 								 : "");
 				return false;
 			}

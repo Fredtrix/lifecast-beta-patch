@@ -89,10 +89,10 @@
 //                                 (any subset; absent means leave alone)
 //                                 ONLY in a LIFECAST_TUNING build - a release
 //                                 DLL has no handler and answers unknown-type.
-//                                 The answer carries "tuning" with all six, and
+//                                 The answer carries "tuning" with all seven, and
 //                                 "tuning" is absent from a release build, which
 //                                 is what keeps the page's section hidden there.
-//                                 The six do NOT go in "limits": the page
+//                                 The seven do NOT go in "limits": the page
 //                                 disables buttons from that key, so it means
 //                                 "how far a move may go" - true of maxDistance,
 //                                 liftUp and panMax, and false of the other
@@ -105,7 +105,7 @@
 
 #pragma once
 
-// Six of the numbers below are the author's to retune at OLHO DO AUTOR, and
+// Seven of the numbers below are the author's to retune at OLHO DO AUTOR, and
 // trying one used to cost a build and a boot. LIFECAST_TUNABLE is how he turns
 // them instead: in a release build it is plain constexpr and nothing can write
 // them, and in a build configured with LIFECAST_TUNING the panel can set them
@@ -113,14 +113,15 @@
 //
 // It is a declarator macro rather than two #ifdef branches per number because
 // two branches means writing each value TWICE, and the release branch is the
-// one nobody exercises - six numbers would be six chances for the two copies
+// one nobody exercises - seven numbers would be seven chances for the two copies
 // to drift apart in silence. The macro has one job and no logic, and no use
 // site changes spelling.
 //
 // Which numbers are tunable is NOT a judgement about which matter: it is the
 // list the author asked for. kMinDistance and kFloorMargin stay constant
 // because they bound the one measured way to lose the character (see the note
-// below), and kTiltMax because nobody asked.
+// below). kTiltMax joined the list later, because the tilt limit is one more
+// number the view's reach depends on and costs one declaration to expose.
 #ifdef LIFECAST_TUNING
 	#define LIFECAST_TUNABLE inline double
 #else
@@ -134,7 +135,7 @@ namespace Lifecast::Panel::Stage
 	LIFECAST_TUNABLE        kLiftUp = 80.0;         // above the opening height
 	inline constexpr double kFloorMargin = 12.0;    // above the player's origin
 	LIFECAST_TUNABLE        kPanMax = 80.0;         // sideways, either way - see note above
-	inline constexpr double kTiltMax = 35.0;        // degrees, either way
+	LIFECAST_TUNABLE        kTiltMax = 35.0;        // degrees, either way
 
 	// How far to the side the second subject stands, in the ground plane and
 	// across the line of sight (Edit/Compare). It is a WORLD distance and not

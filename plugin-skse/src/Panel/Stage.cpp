@@ -35,7 +35,7 @@ namespace Lifecast::Panel::Stage
 		// The snap epsilons are in the units each grandeza is measured in:
 		// game units for distance and height, degrees for turn and tilt.
 		//
-		// kEase is one of the six the panel can retune (Stage.h); it stays in
+		// kEase is one of the seven the panel can retune (Stage.h); it stays in
 		// this file rather than moving to the header because nothing outside
 		// reads it, and LIFECAST_TUNABLE works just as well on a name with
 		// internal linkage. The two snap epsilons are NOT tunable: they decide
@@ -634,10 +634,10 @@ namespace Lifecast::Panel::Stage
 								{ "tiltMax", kTiltMax } } } };
 #ifdef LIFECAST_TUNING
 			// Deliberately NOT folded into "limits" - see the note in Stage.h.
-			// Three of these are bounds a button stops at and three are not,
+			// Four of these are bounds a button stops at and three are not,
 			// and the page reads "limits" to decide what to disable.
 			state["tuning"] = { { "maxDistance", kMaxDistance }, { "liftUp", kLiftUp }, { "panMax", kPanMax },
-				{ "pairApart", kPairApart }, { "pairSpan", kPairSpan }, { "ease", kEase } };
+				{ "tiltMax", kTiltMax }, { "pairApart", kPairApart }, { "pairSpan", kPairSpan }, { "ease", kEase } };
 #endif
 			return state;
 		}
@@ -928,6 +928,7 @@ namespace Lifecast::Panel::Stage
 				bool any = Tuned(data, "maxDistance", kMaxDistance);
 				any = Tuned(data, "liftUp", kLiftUp) || any;
 				any = Tuned(data, "panMax", kPanMax) || any;
+				any = Tuned(data, "tiltMax", kTiltMax) || any;
 				any = Tuned(data, "pairApart", kPairApart) || any;
 				any = Tuned(data, "pairSpan", kPairSpan) || any;
 				any = Tuned(data, "ease", kEase) || any;
@@ -939,6 +940,7 @@ namespace Lifecast::Panel::Stage
 					g_target.distance = ClampSaid(g_target.distance, DistanceMin(), kMaxDistance, "distance");
 					g_target.lift = ClampSaid(g_target.lift, LiftMin(), kLiftUp, "height");
 					g_target.pan = ClampSaid(g_target.pan, -kPanMax, kPanMax, "pan");
+					g_target.tilt = ClampSaid(g_target.tilt, -kTiltMax, kTiltMax, "tilt");
 					// A pairing already on the screen was solved with the OLD
 					// numbers, so it is solved again. The twin herself does not
 					// move: Edit/Compare placed her at the old kPairApart and
@@ -1059,7 +1061,7 @@ namespace Lifecast::Panel::Stage
 #endif
 		g_installed = true;
 #ifdef LIFECAST_TUNING
-		spdlog::warn("[stage] installed WITH LIVE TUNING - this is a development build, and the six numbers "
+		spdlog::warn("[stage] installed WITH LIVE TUNING - this is a development build, and the seven numbers "
 					 "of the view can be changed from the panel. A release build has none of this");
 #else
 		spdlog::info("[stage] installed");
