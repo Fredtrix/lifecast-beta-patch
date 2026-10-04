@@ -531,7 +531,7 @@ namespace Lifecast::Edit::Compare
 				// the alternative is a first opening with no comparison at all,
 				// and the log then says which of the two cases this is.
 				spdlog::warn("[compare] menu opened with no second figure in this room - one is made NOW, with the "
-							 "menu already OPEN, which boots 78 and 79 measured as not drawing");
+							 "menu already OPEN - a birth path this module has never measured");
 				Make("born with the menu already open");
 			}
 			// Pushed rather than only reset: the page does not reliably ask
