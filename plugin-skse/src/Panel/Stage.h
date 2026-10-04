@@ -108,7 +108,8 @@
 // Seven numbers of the view are the author's to retune at OLHO DO AUTOR (six
 // are declared below, kEase lives in Stage.cpp), and trying one used to cost
 // a build and a boot. LIFECAST_TUNABLE is how he turns them instead: in a
-// release build it is plain constexpr and nothing can write them, and in a build configured with LIFECAST_TUNING the panel can set them
+// release build it is plain constexpr and nothing can write them, and in a
+// build configured with LIFECAST_TUNING the panel can set them
 // at run time ("stage-tune"). The VALUE is written once, here, for both.
 //
 // It is a declarator macro rather than two #ifdef branches per number because
