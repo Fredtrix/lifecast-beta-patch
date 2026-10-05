@@ -1,5 +1,5 @@
 /*
-  Lifecast panel - a deliberately neutral frame.
+  Lifecast panel.
 
   Every colour, size and font lives in the variables below, so the look can
   be replaced as a whole without touching the structure.
@@ -17,18 +17,20 @@
   --belt-height: 48px;
   --finder-height: 40px;
   --panel-tall: 64vh;
-  --panel-bg: rgba(18, 18, 20, 0.92);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --text: #e6e6e6;
-  --text-dim: #9a9a9a;
-  --accent: #c8c8c8;
+  /* The skin: near-black with a green tint, light text, light green accent.
+     --ok, --warn and --bad are not part of it and keep their values. */
+  --panel-bg: rgba(12, 22, 17, 0.94);
+  --panel-border: rgba(160, 230, 185, 0.14);
+  --text: #f1f5f2;
+  --text-dim: #9bb0a2;
+  --accent: #8fd9a0;
   --ok: #7fb58a;
   --warn: #d6b25e;
   --bad: #d07070;
   --field-bg: rgba(255, 255, 255, 0.04);
   --row-hover: rgba(255, 255, 255, 0.05);
   --row-selected: rgba(255, 255, 255, 0.1);
-  --stage-border: rgba(255, 255, 255, 0.22);
+  --stage-border: rgba(160, 230, 185, 0.30);
   --scrollbar-thumb: rgba(255, 255, 255, 0.28);
   --scrollbar-track: rgba(255, 255, 255, 0.04);
   --font: "Segoe UI", system-ui, sans-serif;
