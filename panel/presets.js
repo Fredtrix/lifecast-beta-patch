@@ -8,8 +8,14 @@
 // arrives later, as a second message, and marks the rows that do not - a
 // bad file never costs the list.
 //
-// Loading and saving are RaceMenu's, asked for from here: Load applies the
-// selected preset whole, Save writes the character under the field's name.
+// Loading and saving are RaceMenu's, asked for from here: each row has its own
+// Load, which applies that preset whole in one click (D128), and Save writes
+// the character under the field's name. Each row also has an "i" that opens,
+// under the row, what the preset holds - its hair, eyes, brows and scar, how
+// many sliders and layers, and the plugins it needs, a missing one marked.
+// That description is the DLL's, sent with the check ("presets-checked",
+// "info"): the page shows what arrived and says nothing it was not told. A
+// DLL that sends no description leaves the date and the size.
 // A load the DLL gave up on can still answer later ("late"), and that later
 // answer is the one that describes the character.
 // Saving over an existing preset can be refused by the DLL when the overwrite
@@ -39,6 +45,9 @@
   const NAME_MAX = 64;
 
   let items = [];          // { name, time, size, bad: null | why }
+  const infoBy = new Map(); // name (lower case) -> the DLL's description
+  let opened = null;       // name of the row whose description is open
+  let loadingName = null;  // the preset a load was asked for
   let sortBy = "name";     // "name" | "time"
   let selected = null;     // name of the selected row
   let confirmUntil = 0;
@@ -56,10 +65,8 @@
   const bar = LifecastControls.el("div", "preset-bar");
   const byName = LifecastControls.el("button", "panel-button", "A-Z");
   const byTime = LifecastControls.el("button", "panel-button", "Newest");
-  const load = LifecastControls.el("button", "panel-button preset-load", "Load");
-  load.title = "Applies the selected preset";
   const save = LifecastControls.el("button", "panel-button preset-save", "Save");
-  for (const b of [byName, byTime, load, save]) {
+  for (const b of [byName, byTime, save]) {
     b.type = "button";
     b.tabIndex = -1;
     bar.appendChild(b);
@@ -316,6 +323,96 @@
     }
   }
 
+  function sizeText(bytes) {
+    const n = Number(bytes) || 0;
+    return n >= 1024 ? (n / 1024).toFixed(1) + " KB" : n + " bytes";
+  }
+
+  function plural(n, one, many) {
+    return n + " " + (n === 1 ? one : many);
+  }
+
+  // What the preset holds, under its row: only what the DLL said.
+  function detail(it) {
+    const box = LifecastControls.el("li", "preset-detail");
+    const line = (cls, text) => {
+      const p = LifecastControls.el("div", "preset-detail-line" + (cls ? " " + cls : ""), text);
+      box.appendChild(p);
+      return p;
+    };
+    if (it.bad) {
+      line("is-bad", "Unreadable: " + it.bad);
+    }
+    const info = infoBy.get(it.name.toLowerCase());
+    if (info) {
+      // Always in the same order, whatever order the file keeps them in.
+      const ORDER = ["Hair", "Beard", "Eyes", "Brows", "Scar"];
+      const at = (x) => (ORDER.indexOf(x.type) < 0 ? ORDER.length : ORDER.indexOf(x.type));
+      const parts = (Array.isArray(info.parts) ? info.parts.slice() : []).sort((a, b) => at(a) - at(b));
+      for (const p of parts.filter((x) => !x.missing)) {
+        const row = line("", "");
+        row.appendChild(LifecastControls.el("span", "preset-detail-key", String(p.type)));
+        row.appendChild(LifecastControls.el("span", "preset-detail-value", String(p.label)));
+      }
+      for (const p of parts.filter((x) => x.missing)) {
+        line("is-bad", "Not found in this game: " + p.label);
+      }
+      const c = info.counts || {};
+      const held = [];
+      if (typeof info.weight === "number") {
+        held.push("weight " + info.weight);
+      }
+      if (c.sliders) {
+        held.push(plural(c.sliders, "slider", "sliders"));
+      }
+      if (c.tints) {
+        held.push(plural(c.tints, "tint layer", "tint layers"));
+      }
+      if (c.overlays) {
+        held.push(plural(c.overlays, "overlay", "overlays"));
+      }
+      if (c.bodyMorphs) {
+        held.push(plural(c.bodyMorphs, "body morph", "body morphs"));
+      }
+      if (c.sculpt) {
+        held.push("sculpt");
+      }
+      if (c.transforms) {
+        held.push("node transforms");
+      }
+      if (held.length) {
+        line("is-dim", held.join(" \u00b7 "));
+      }
+      const plugins = Array.isArray(info.plugins) ? info.plugins : [];
+      const missing = plugins.filter((x) => x.missing);
+      if (plugins.length) {
+        line("is-dim", "Needs " + plural(plugins.length, "plugin", "plugins") + ": " +
+          plugins.filter((x) => !x.missing).map((x) => x.name).join(", ") +
+          (missing.length ? (plugins.length > missing.length ? ", and " : "") +
+            plural(missing.length, "that is", "that are") + " not active:" : ""));
+      }
+      for (const x of missing) {
+        line("is-bad", "Not active: " + x.name);
+      }
+    }
+    line("is-dim", (it.time ? "Saved " + dateText(it.time) + ", " : "") + sizeText(it.size));
+    return box;
+  }
+
+  function loadPreset(name) {
+    if (loading) {
+      return;
+    }
+    loading = true;
+    loadingName = name;
+    selected = name;
+    guard.hidden = true;
+    fallback.hidden = true;
+    notice = "loading " + name + "...";
+    render();
+    LifecastBridge.send("preset-load", { name: name });
+  }
+
   function render() {
     const query = field.value.trim().toLowerCase();
     const shown = items.filter((it) => query === "" || it.name.toLowerCase().includes(query));
@@ -331,6 +428,30 @@
       const li = LifecastControls.el("li", "preset-row");
       li.appendChild(LifecastControls.el("span", "preset-name", it.name));
       li.appendChild(LifecastControls.el("span", "preset-date", it.bad ? "unreadable" : dateText(it.time)));
+      const isOpen = opened !== null && same(opened, it.name);
+      const more = LifecastControls.el("button", "panel-button preset-more", "i");
+      more.type = "button";
+      more.tabIndex = -1;
+      more.title = "What this preset holds";
+      more.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      more.classList.toggle("is-on", isOpen);
+      more.addEventListener("click", (e) => {
+        e.stopPropagation();
+        opened = isOpen ? null : it.name;
+        render();
+      });
+      const go = LifecastControls.el("button", "panel-button preset-row-load",
+        loading && loadingName !== null && same(loadingName, it.name) ? "Loading" : "Load");
+      go.type = "button";
+      go.tabIndex = -1;
+      go.title = "Applies this preset";
+      go.disabled = loading || it.bad !== null;
+      go.addEventListener("click", (e) => {
+        e.stopPropagation();
+        loadPreset(it.name);
+      });
+      li.appendChild(more);
+      li.appendChild(go);
       if (it.bad) {
         li.classList.add("preset-bad");
         li.title = it.bad;
@@ -343,6 +464,9 @@
         render();
       });
       list.appendChild(li);
+      if (isOpen) {
+        list.appendChild(detail(it));
+      }
     }
 
     const bad = items.filter((it) => it.bad).length;
@@ -356,8 +480,6 @@
     save.disabled = field.value.trim() === "";
     save.textContent = Date.now() < confirmUntil ? "Overwrite?" : "Save";
 
-    const pick = selected === null ? undefined : items.find((it) => same(it.name, selected));
-    load.disabled = loading || !pick || pick.bad !== null;
 
     if (reveal !== null) {
       bringIntoView(reveal);
@@ -391,18 +513,6 @@
       sortBy = saved;
       render();
     }
-  });
-
-  load.addEventListener("click", () => {
-    if (loading || selected === null) {
-      return;
-    }
-    loading = true;
-    guard.hidden = true;
-    fallback.hidden = true;
-    notice = "loading " + selected + "...";
-    render();
-    LifecastBridge.send("preset-load", { name: selected });
   });
 
   guardRename.addEventListener("click", () => {
@@ -497,6 +607,13 @@
 
   LifecastBridge.on("presets-checked", (data) => {
     const bad = data && Array.isArray(data.bad) ? data.bad : [];
+    // The description of each preset, when the DLL sends one (D128).
+    infoBy.clear();
+    for (const i of data && Array.isArray(data.info) ? data.info : []) {
+      if (i && typeof i.name === "string") {
+        infoBy.set(i.name.toLowerCase(), i);
+      }
+    }
     for (const b of bad) {
       const it = items.find((x) => x.name === b.name);
       if (it) {
@@ -550,6 +667,7 @@
 
   LifecastBridge.on("preset-loaded", (data) => {
     loading = false;
+    loadingName = null;
     if (data && data.ok) {
       // A late answer overrides the "not loaded" shown at the timeout.
       selected = data.name;

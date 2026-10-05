@@ -720,11 +720,17 @@ html[data-belt-region] #sections > .group-heading {
   border-radius: 4px;
 }
 
+/* A row: name, date, then its own "i" and Load (D128) - one click loads. */
+/* Alone in its region, the list grows: the field and Save stay above it. */
+html[data-belt-region] .section.is-region .preset-list {
+  max-height: 46vh;
+}
+
 .preset-row {
   display: flex;
-  justify-content: space-between;
-  gap: var(--gap);
-  padding: 5px 8px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 8px;
   cursor: pointer;
 }
 
@@ -737,6 +743,8 @@ html[data-belt-region] #sections > .group-heading {
 }
 
 .preset-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -752,6 +760,52 @@ html[data-belt-region] #sections > .group-heading {
 .preset-bad .preset-name,
 .preset-bad .preset-date {
   color: var(--bad);
+}
+
+.preset-row .panel-button {
+  flex: none;
+  padding: 2px 8px;
+}
+
+.preset-more {
+  font-weight: 700;
+  font-style: italic;
+  min-width: 26px;
+}
+
+.preset-more.is-on {
+  color: var(--accent);
+}
+
+/* What the preset holds, under its row: the parts as key and value, the
+   rest as dim lines, what is missing in the bad colour. */
+.preset-detail {
+  padding: 6px 10px 8px 18px;
+  border-bottom: 1px solid var(--panel-border);
+  background: var(--row-selected);
+  font-size: 12px;
+  cursor: default;
+}
+
+.preset-detail-line {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+  overflow-wrap: anywhere;
+}
+
+.preset-detail-line.is-dim {
+  color: var(--text-dim);
+}
+
+.preset-detail-line.is-bad {
+  color: var(--bad);
+}
+
+.preset-detail-key {
+  flex: none;
+  width: 44px;
+  color: var(--text-dim);
 }
 
 .preset-fallback[hidden],
