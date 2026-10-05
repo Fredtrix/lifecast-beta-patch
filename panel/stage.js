@@ -151,8 +151,15 @@
 
   let drag = null;
 
+  // Controls that sit inside the frame and must keep their own mouse. The
+  // tuning box is one: a drag started on it would capture the pointer and
+  // swallow the mousedown, so its inputs could never take focus.
+  function onControls(t) {
+    return bar.contains(t) || (tuningBox !== null && tuningBox.contains(t));
+  }
+
   stage.addEventListener("pointerdown", (e) => {
-    if (bar.contains(e.target) || !state || !state.ready) {
+    if (onControls(e.target) || !state || !state.ready) {
       return;
     }
     const mode = e.button === 2 ? "lift" : (e.ctrlKey ? "tilt" : (e.button === 0 ? "turn" : null));
@@ -199,7 +206,7 @@
   stage.addEventListener("contextmenu", (e) => e.preventDefault());
 
   stage.addEventListener("wheel", (e) => {
-    if (bar.contains(e.target)) {
+    if (onControls(e.target)) {
       return;
     }
     move("distance", e.deltaY * DISTANCE_PER_WHEEL);
@@ -213,13 +220,14 @@
   // never sends "tuning", so the section is never built and never shown. The
   // gate is the DLL's, which is the only place it can be enforced anyway.
   //
-  // The six are read from "tuning" and NOT from "limits". Three of them are in
+  // The seven are read from "tuning" and NOT from "limits". Four of them are in
   // both, and taking them from "limits" would quietly make this section stop
   // working the day a fourth number joins it that is not a bound.
   const TUNABLES = [
     ["maxDistance", "Max distance", "The farthest the camera can pull back", 1],
     ["liftUp", "Max height", "The highest it rises above where the menu opened", 1],
     ["panMax", "Max sideways", "How far it travels left and right", 1],
+    ["tiltMax", "Max tilt", "How far it can tip up or down, in degrees", 1],
     ["pairApart", "Pair separation", "World distance between you and the second figure", 1],
     ["pairSpan", "Frame share", "How much of the view the pair spans, 0.5 being half", 0.01],
     ["ease", "Easing", "Share of the remaining gap covered per frame; 1 is no easing", 0.01],
