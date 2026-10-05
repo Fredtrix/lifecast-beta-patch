@@ -15,7 +15,8 @@
 //     #sections on purpose: search.js watches the whole subtree of #sections
 //     and rewrites the counter on every mutation, so a counter inside it feeds
 //     its own observer forever (measured in the E4 probe: the page hung);
-//   - the version line is in #finish, at the foot of the Character region.
+//   - the version line is in the Character region; the name and Finish are
+//     on the belt, and search and Changed over the upper left corner (D129).
 //
 // Opening: the page outlives the menu (presets.js receives "menu-closed"),
 // so the belt re-opens as the player left it in this run of the game, and

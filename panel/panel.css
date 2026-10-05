@@ -15,6 +15,7 @@
   --panel-width: 430px;
   --panel-scale: 1;
   --belt-height: 48px;
+  --finder-height: 40px;
   --panel-tall: 64vh;
   --panel-bg: rgba(18, 18, 20, 0.92);
   --panel-border: rgba(255, 255, 255, 0.08);
@@ -214,8 +215,11 @@ html:not([data-belt-open]) .belt-panel {
   display: none;
 }
 
+/* All, search and Changed: the panel takes the whole height under the
+   finder, so the results hang from the field that asked for them (D129). */
 html[data-belt-wide] .belt-panel {
-  max-height: calc(100vh - var(--belt-height));
+  height: calc(100vh - var(--belt-height) - var(--finder-height) - var(--gap) * 2);
+  max-height: none;
 }
 
 .belt-head {
@@ -368,19 +372,43 @@ html[data-belt-region] #sections > .group-heading {
   cursor: default;
 }
 
-/* Search and the "changed" filter (E2 items 3, 4), on the belt: a tool for
-   finding a slider is useless if it scrolls away with the sliders. Reuses
-   .preset-field and .panel-button - no new token. */
+/* The name and Finish, then undo and redo, on the belt (D129). */
 .panel-toolbar {
   grid-column: 3;
 }
 
-.panel-toolbar .preset-field {
+.panel-toolbar .finish-row {
+  position: relative;
   flex: 1;
-  min-width: 180px;
+  max-width: 460px;
 }
 
-.panel-toolbar .panel-button[aria-pressed="true"] {
+/* Search and the "changed" filter (D129), over the upper left corner, as
+   wide as the small panel; a search opens the panel under it. Reuses
+   .preset-field and .panel-button - no new token. */
+.finder {
+  position: absolute;
+  top: var(--gap);
+  left: 0;
+  box-sizing: border-box;
+  width: calc(var(--panel-width) * var(--panel-scale));
+  height: var(--finder-height);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 calc(var(--gap) * 1.5);
+  font-size: calc(var(--text-size) * var(--panel-scale));
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-left: none;
+}
+
+.finder .preset-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.finder .panel-button[aria-pressed="true"] {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -389,8 +417,8 @@ html[data-belt-region] #sections > .group-heading {
   white-space: nowrap;
 }
 
-/* The version line, at the foot of the Character region. */
-#finish #versions {
+/* The version line, in the Character region (#finish is unwrapped into it). */
+#versions {
   display: block;
   margin-top: calc(var(--gap) * 1.5);
 }
@@ -830,14 +858,7 @@ html[data-belt-region] .section.is-region .preset-list {
   flex: 1;
 }
 
-/* The name and the finish button: the panel's first section (finish.js). */
-.finish-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
+/* The name and the finish button, on the belt (finish.js, D129). */
 .finish-row {
   display: flex;
   gap: 6px;
@@ -848,10 +869,20 @@ html[data-belt-region] .section.is-region .preset-list {
   min-width: 0;
 }
 
+/* The note floats above the belt, over the name it is about. */
 .finish-note {
-  margin: 8px 0 0;
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + var(--gap) * 1.5);
+  margin: 0;
+  padding: 4px 8px;
+  width: max-content;
+  max-width: 460px;
   font-size: 12px;
   color: var(--warn);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
 }
 
 .finish-note.is-bad {

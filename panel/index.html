@@ -16,25 +16,24 @@
     <header class="panel-header">
       <h1 class="panel-title">Lifecast</h1>
       <span id="bridge-status" class="status status-wait">connecting</span>
-      <!--
-        The way out, always on screen (autor, 2026-09-30): the name field and
-        the Finish below live in the Character region, so the same action
-        lives here too. It runs the same handler - finish.js.
-      -->
-      <button id="finish-top" class="panel-button is-primary" type="button">Finish</button>
     </header>
 
     <!-- The categories of the belt, built by belt.js from groups.js. -->
     <nav id="belt" class="belt-cats" aria-label="Categories"></nav>
 
     <!--
-      Search and the "changed" filter (E2 items 3, 4): on the belt, outside
-      the scrolled list, because a tool for finding a slider is useless if it
-      scrolls away with the sliders - search.js.
+      The character's name and the way out, always on screen (D129): the name
+      is the character's identity, and the menu ends here. A plain text input
+      on purpose: keyboard.js corrects the keyboard only for textarea and
+      input of type text, search or none. The note floats above the belt -
+      finish.js.
     -->
     <div id="toolbar" class="panel-toolbar">
-      <input id="search" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Search sliders">
-      <button id="filter-changed" class="panel-button" type="button" aria-pressed="false">Changed</button>
+      <div class="finish-row">
+        <input id="finish-name" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Name" aria-label="Name">
+        <button id="finish-button" class="panel-button is-primary" type="button">Finish</button>
+        <p id="finish-note" class="finish-note" hidden></p>
+      </div>
       <!--
         Undo and redo are buttons and not Ctrl+Z / Ctrl+Y on purpose: Meridian
         delivers some key presses twice, ~15 ms apart, as fresh presses
@@ -59,19 +58,10 @@
         <p class="placeholder">No sections yet.</p>
 
         <!--
-          The character's name and the button that ends the menu. finish.js
-          wraps this into the panel's FIRST section: they are the character's
-          identity, not a footer. A plain text input on purpose: keyboard.js
-          corrects the keyboard only for textarea and input of type text,
-          search or none.
+          The Character region's own content. finish.js wraps this into the
+          panel's FIRST section; the name and Finish moved to the belt (D129).
         -->
         <div id="finish">
-          <label class="finish-label" for="finish-name">Name</label>
-          <div class="finish-row">
-            <input id="finish-name" class="preset-field" type="text" spellcheck="false" autocomplete="off">
-            <button id="finish-button" class="panel-button" type="button">Finish</button>
-          </div>
-          <p id="finish-note" class="finish-note" hidden></p>
           <!-- Page, DLL and protocol versions: read when something is wrong. -->
           <span id="versions" class="versions"></span>
         </div>
@@ -97,6 +87,18 @@
       <button id="to-racemenu" class="panel-button is-primary" type="button" title="F4">RaceMenu (F4)</button>
     </footer>
   </aside>
+
+  <!--
+    Search and the "changed" filter (E2 items 3, 4; D129): over the screen's
+    upper left corner, where the small panel's results hang from it - a
+    search opens the panel at full height, under this field. Outside the
+    scrolled list, because a tool for finding a slider is useless if it
+    scrolls away with the sliders - search.js.
+  -->
+  <div id="finder" class="finder">
+    <input id="search" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Search sliders">
+    <button id="filter-changed" class="panel-button" type="button" aria-pressed="false">Changed</button>
+  </div>
 
   <!--
     The character view. Transparent: the character inside it is the game's

@@ -23,9 +23,9 @@
 "use strict";
 
 (() => {
-  // The first section of the panel, and the one that does NOT start closed:
-  // its content is the way out of the menu, and a way out behind a collapsed
-  // header is a way out the player has to find first.
+  // The first section of the panel, the Character region. The name and the
+  // button are on the belt (D129), always on screen; what stays in #finish is
+  // the region's own content.
   const host = document.getElementById("finish");
   if (host) {
     const s = LifecastControls.section("Character", { open: true });
@@ -40,8 +40,8 @@
   const field = document.getElementById("finish-name");
   const button = document.getElementById("finish-button");
   const note = document.getElementById("finish-note");
-  // The same action, always on screen in the header (E3). Optional: a page
-  // without it behaves as before.
+  // A second Finish (the E3 header had one). Optional: the belt's button is
+  // always on screen now, and this page has none.
   const top = document.getElementById("finish-top");
   if (!field || !button || !note) {
     console.error("[finish] the name and finish elements are missing from the page");
@@ -61,12 +61,6 @@
     note.textContent = text;
     note.className = "finish-note" + (kind ? " is-" + kind : "");
     note.hidden = text === "";
-    // The note lives in the Character section, which may be scrolled out of
-    // view when Finish was pressed from the header; a refusal nobody can see
-    // is a button that does nothing.
-    if (kind === "bad" && text !== "") {
-      note.scrollIntoView({ block: "nearest" });
-    }
   }
 
   function render() {
