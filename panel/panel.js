@@ -27,9 +27,13 @@
 
   let answered = false;
 
+  // Seen only when something is wrong (D131): a working bridge is the normal
+  // case and tells the player nothing; "connecting" that never ends, a version
+  // mismatch or no bridge at all stay on screen.
   function setStatus(text, kind) {
     statusEl.textContent = text;
     statusEl.className = "status status-" + kind;
+    statusEl.hidden = kind === "ok";
   }
 
   LifecastBridge.on("hello", (data) => {
