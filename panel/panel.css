@@ -30,12 +30,37 @@
   --row-hover: rgba(255, 255, 255, 0.05);
   --row-selected: rgba(255, 255, 255, 0.1);
   --stage-border: rgba(255, 255, 255, 0.22);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.28);
+  --scrollbar-track: rgba(255, 255, 255, 0.04);
   --font: "Segoe UI", system-ui, sans-serif;
   --gap: 12px;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* The native scrollbar is a control the page does not paint, so it never
+   followed a variable (found by the E1 probe, 2026-10-05: white on every skin).
+   Both forms on purpose: scrollbar-color is what current Chromium reads, and
+   when it is set the ::-webkit-scrollbar rules are ignored; an older embedded
+   browser reads only the pseudo-elements. Same two variables feed both. */
+:root {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
 }
 
 /* The hidden attribute must win over the display of any class below: a row
