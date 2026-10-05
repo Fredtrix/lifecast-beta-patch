@@ -1417,7 +1417,7 @@ namespace Lifecast::Edit::Compare
 				RefreshLook(Twin(), "the comparison was turned on");
 #ifdef LIFECAST_TUNING
 				PresetRoute("the comparison was turned on");
-				// FaceByPreset("the comparison was turned on");  // boot 119: the game died inside CharGen.LoadCharacterPresetEx on the copy (see Docs/VERIFY.md V134); boot 129: with the crash fix it survives but the RaceMenu puts a modal in front of the panel (V140)
+				// FaceByPreset("the comparison was turned on");  // boot 119: the game died inside CharGen.LoadCharacterPresetEx on the copy (see Docs/VERIFY.md V134); boot 129: with the crash fix it survives but a modal from the FSMP config loader goes in front of the panel (V140)
 				RefreshLook(Twin(), "after the preset route");
 #endif
 				Panel::Stage::FramePair(true, left, right);
