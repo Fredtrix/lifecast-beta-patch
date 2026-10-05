@@ -372,7 +372,8 @@ html[data-belt-region] #sections > .group-heading {
   cursor: default;
 }
 
-/* The name and Finish, then undo and redo, on the belt (D129). */
+/* The name and Finish on the belt (D129); undo and redo went to the
+   Character Control bar (D130). */
 .panel-toolbar {
   grid-column: 3;
 }
@@ -924,6 +925,13 @@ html[data-belt-region] .section.is-region .preset-list {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 4px;
+}
+
+.control-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--panel-border);
 }
 
 html[data-belt-open] .control-bar {

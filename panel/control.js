@@ -47,7 +47,9 @@
   if (!section.body) {
     return;
   }
-  section.body.appendChild(LifecastControls.el("span", "stage-group-title", "Character"));
+  // The title goes first: undo and redo are already in the bar (index.html,
+  // D130), and the buttons below go after them.
+  section.body.insertBefore(LifecastControls.el("span", "stage-group-title", "Character"), section.body.firstChild);
 
   const button = LifecastControls.el("button", "panel-button control-button", "Undress");
   button.type = "button";
