@@ -60,4 +60,19 @@ namespace Lifecast::Core::SkeeLink
 	// False, and a_out left empty, when the interface is not there or reports
 	// a version older than the vendored header describes.
 	bool ReadBodyMorphs(RE::Actor* a_actor, std::vector<MorphValue>& a_out);
+
+	// E21.2 - the second figure's body. Writes every value in a_values onto
+	// a_actor under the name and the key it was READ with (SetMorph(refr,
+	// name, key, value)), so the figure ends up holding the same table the
+	// player holds. a_written counts the calls made.
+	//
+	// False, and nothing written, when the interface is not there or reports
+	// a version older than the vendored header describes. The same first-base
+	// cast as the readers, and for the same reason.
+	bool WriteBodyMorphs(RE::Actor* a_actor, const std::vector<MorphValue>& a_values, std::size_t& a_written);
+
+	// E21.2 - asks SKEE to apply a_actor's morph table to her loaded body:
+	// ApplyBodyMorphs(refr) and then UpdateModelWeight(refr, immediate).
+	// What was called is returned, not what changed on screen.
+	bool ApplyBodyMorphs(RE::Actor* a_actor);
 }

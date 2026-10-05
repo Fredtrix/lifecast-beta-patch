@@ -11,6 +11,7 @@
 
 #include "Edit/Compare.h"
 
+#include "Core/SkeeLink.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 #include "Panel/Stage.h"
@@ -52,6 +53,11 @@ namespace Lifecast::Edit::Compare
 		bool              g_watch = false;        // log where she is a few seconds after she came back
 		Clock::time_point g_watchAt{};
 		RE::NiPoint3      g_watchFrom{};
+
+		// E21.2 - the player's body morphs as they were when she was born, held
+		// until her body is loaded and SKEE can apply them to it.
+		std::vector<Core::SkeeLink::MorphValue> g_bodySnapshot;
+		bool                                    g_bodyPending = false;
 
 		bool g_installed = false;
 
@@ -219,6 +225,117 @@ namespace Lifecast::Edit::Compare
 			return out.empty() ? std::string("nothing") : out;
 		}
 
+		// E21.1 - is the object equipped in EITHER hand or slot, by the entry and
+		// not by its extra lists. CollectWorn above asks each extra list
+		// GetWorn(), and ExtraDataList exposes no left-hand variant
+		// (ExtraDataList.h:210), so a weapon or shield carried in the left hand
+		// can be missing from it. InventoryEntryData::IsWorn(bool a_left) is the
+		// header's own two-sided question (InventoryEntryData.h:52-53).
+		bool EntryEquipped(const RE::InventoryEntryData* a_entry)
+		{
+			return a_entry && (a_entry->IsWorn(false) || a_entry->IsWorn(true));
+		}
+
+#ifdef LIFECAST_TUNING
+		// E21.1 - EVERY stack an actor carries, by name, FormID, count and what
+		// the game says about its equipped state; plus what her process holds in
+		// each hand. Development build only: the lines are long and a release
+		// build needs none of them. An empty name is resolved by form type and
+		// editor ID, which is how the 24 nameless stacks of V128 get an answer.
+		void DumpInventory(RE::Actor* a_actor, const char* a_who, const char* a_when)
+		{
+			if (!a_actor) {
+				return;
+			}
+			auto        inv = a_actor->GetInventory();
+			std::size_t n = 0;
+			spdlog::info("[compare] inventory ({}, {}): {} stacks | weapon state {} | right hand {} | left hand {}", a_when,
+				a_who, inv.size(), static_cast<std::uint32_t>(a_actor->GetWeaponState()),
+				a_actor->GetEquippedObject(false) ? a_actor->GetEquippedObject(false)->GetName() : "-",
+				a_actor->GetEquippedObject(true) ? a_actor->GetEquippedObject(true)->GetName() : "-");
+			for (auto& [object, pair] : inv) {
+				if (!object) {
+					continue;
+				}
+				auto*             entry = pair.second.get();
+				const char*       name = object->GetName();
+				const char*       edid = object->GetFormEditorID();
+				const std::string type(RE::FormTypeToString(object->GetFormType()));
+				std::size_t       xWorn = 0;
+				if (entry && entry->extraLists) {
+					for (auto* xList : *entry->extraLists) {
+						if (xList && xList->GetWorn()) {
+							++xWorn;
+						}
+					}
+				}
+				spdlog::info("[compare] inventory ({}, {}) #{:02} {:08X} '{}' type {} edid '{}' count {} | IsWorn() {} "
+							 "IsWorn(false) {} IsWorn(true) {} | extra lists worn {}",
+					a_when, a_who, ++n, object->GetFormID(), name ? name : "", type, edid ? edid : "", pair.first,
+					entry && entry->IsWorn(), entry && entry->IsWorn(false), entry && entry->IsWorn(true), xWorn);
+			}
+			// E21.1 - where the drawn weapons ARE in the scene graph: the
+			// attachment nodes the engine hangs a sheathed weapon or a shield on,
+			// and what each one holds, so the object in the frame can be named by
+			// node and not only by inventory. Read-only.
+			if (auto* root = a_actor->Get3D(false)) {
+				for (const char* nodeName :
+					{ "WeaponBack", "WeaponBow", "WeaponDagger", "WeaponSword", "WeaponAxe", "WeaponMace", "SHIELD", "QUIVER" }) {
+					auto* node = root->GetObjectByName(RE::BSFixedString(nodeName));
+					auto* asNode = node ? node->AsNode() : nullptr;
+					std::string kids;
+					std::size_t count = 0;
+					if (asNode) {
+						auto& children = asNode->GetChildren();
+						for (auto* child = children.begin(); child != children.end(); ++child) {
+							if (*child) {
+								++count;
+								const char* childName = (*child)->name.c_str();
+								kids += fmt::format("'{}'{} ", childName ? childName : "", (*child)->GetAppCulled() ? "(culled)" : "");
+							}
+						}
+					}
+					spdlog::info("[compare] inventory ({}, {}) node {}: {} | children {} {}", a_when, a_who, nodeName,
+						node ? (asNode ? "present" : "present, not a node") : "absent", count, kids);
+				}
+			}
+			if (auto* process = a_actor->GetActorRuntimeData().currentProcess) {
+				for (const auto& held : process->equippedForms) {
+					spdlog::info("[compare] inventory ({}, {}) process.equippedForms: {:08X} '{}' in slot {:08X}", a_when,
+						a_who, held.object ? held.object->GetFormID() : 0, held.object ? held.object->GetName() : "",
+						held.slot ? held.slot->GetFormID() : 0);
+				}
+			} else {
+				spdlog::info("[compare] inventory ({}, {}): no currentProcess - equippedForms not readable", a_when, a_who);
+			}
+		}
+
+		// E21.5 - the T-pose is READ, never touched. Whether the graph manager
+		// exists, what two locomotion floats say (a standing actor reads Speed
+		// 0), and the idle the process last played. One line per actor, once.
+		// A variable the graph does not have returns false and is logged so.
+		void DumpGraph(RE::Actor* a_actor, const char* a_who)
+		{
+			if (!a_actor) {
+				return;
+			}
+			RE::BSTSmartPointer<RE::BSAnimationGraphManager> manager;
+			const bool                                       hasManager = a_actor->GetAnimationGraphManager(manager);
+			float                                            speed = 0.0f;
+			float                                            direction = 0.0f;
+			const bool                                       gotSpeed = a_actor->GetGraphVariableFloat(RE::BSFixedString("Speed"), speed);
+			const bool gotDirection = a_actor->GetGraphVariableFloat(RE::BSFixedString("Direction"), direction);
+			auto*      process = a_actor->GetActorRuntimeData().currentProcess;
+			auto*      middle = process ? process->middleHigh : nullptr;
+			auto*      idle = middle ? middle->lastIdlePlayed : nullptr;
+			spdlog::info("[compare] graph ({}): manager {} | Speed {} ({}) | Direction {} ({}) | lastIdlePlayed {:08X} '{}' | "
+						 "process {} middleHigh {}",
+				a_who, hasManager && manager ? "present" : "ABSENT", speed, gotSpeed ? "read" : "NOT read", direction,
+				gotDirection ? "read" : "NOT read", idle ? idle->GetFormID() : 0, idle ? idle->GetFormEditorID() : "-",
+				process ? "present" : "absent", middle ? "present" : "absent");
+		}
+#endif
+
 		// E19.1 - ask the game to rebuild what an actor WEARS on her body.
 		//
 		// Boot 94 measured the data and not the body: she read 4 worn, the
@@ -332,6 +449,10 @@ namespace Lifecast::Edit::Compare
 
 			const auto hers = CollectWorn(actor);
 			spdlog::info("[compare] worn by name ({}) - the second figure BEFORE the dress: {}", a_why, DescribeWorn(actor));
+#ifdef LIFECAST_TUNING
+			DumpInventory(actor, "the second figure", "before the dress");
+			DumpInventory(player, "the player", "before the dress");
+#endif
 			for (const auto& w : hers) {
 				if (w.object) {
 					equip->UnequipObject(actor, w.object, w.extraList, 1, nullptr, kNoQueue, kForce, kSilent, kNow);
@@ -360,6 +481,55 @@ namespace Lifecast::Edit::Compare
 				++asked;
 			}
 
+			// E21.1 - whatever she holds equipped that the PLAYER does not. The
+			// two loops above only touch what GetWorn() found, so an item in a
+			// hand the extra lists do not describe would survive them. Asked by
+			// the entry, in both hands, and compared by object against the
+			// player's own equipped set. Before and after are logged: this is
+			// the only conserto E21 names, and a count that does not move is a
+			// result, not a defect of the caller.
+			{
+				std::set<RE::TESBoundObject*> playerHolds;
+				for (auto& [object, pair] : player->GetInventory()) {
+					if (EntryEquipped(pair.second.get())) {
+						playerHolds.insert(object);
+					}
+				}
+				std::vector<std::pair<RE::TESBoundObject*, RE::ExtraDataList*>> strays;
+				for (auto& [object, pair] : actor->GetInventory()) {
+					auto* entryData = pair.second.get();
+					if (!object || !EntryEquipped(entryData) || playerHolds.count(object)) {
+						continue;
+					}
+					RE::ExtraDataList* xList = nullptr;
+					if (entryData->extraLists) {
+						for (auto* candidate : *entryData->extraLists) {
+							if (candidate && candidate->GetWorn()) {
+								xList = candidate;
+								break;
+							}
+						}
+					}
+					strays.emplace_back(object, xList);
+				}
+				spdlog::info("[compare] strays ({}): equipped on her and not on the player: {} (player holds {} equipped)",
+					a_why, strays.size(), playerHolds.size());
+				for (const auto& [object, xList] : strays) {
+					spdlog::info("[compare] strays ({}): unequipping {:08X} '{}'", a_why, object->GetFormID(),
+						object->GetName());
+					equip->UnequipObject(actor, object, xList, 1, nullptr, kNoQueue, kForce, kSilent, kNow);
+				}
+				if (!strays.empty()) {
+					std::size_t still = 0;
+					for (auto& [object, pair] : actor->GetInventory()) {
+						if (object && EntryEquipped(pair.second.get()) && !playerHolds.count(object)) {
+							++still;
+						}
+					}
+					spdlog::info("[compare] strays ({}): after the unequip {} of them still read equipped", a_why, still);
+				}
+			}
+
 			// The readback, not the intention: what she is actually wearing
 			// after all of that, against what the player wears. The stack count
 			// stays in the line because it is how the accumulation above was
@@ -385,6 +555,12 @@ namespace Lifecast::Edit::Compare
 			// E20.1: the two lists side by side, same pass, same walk.
 			spdlog::info("[compare] worn by name ({}) - the player: {}", a_why, DescribeWorn(player));
 			spdlog::info("[compare] worn by name ({}) - the second figure: {}", a_why, DescribeWorn(actor));
+#ifdef LIFECAST_TUNING
+			DumpInventory(actor, "the second figure", "after the dress");
+			DumpInventory(player, "the player", "after the dress");
+			DumpGraph(actor, "the second figure");
+			DumpGraph(player, "the player");
+#endif
 
 			// E19.1: the data is right, now the body. The player is the control,
 			// read by the same fields in the same pass - she has a process
@@ -394,6 +570,242 @@ namespace Lifecast::Edit::Compare
 			if (a_control) {
 				Refresh3D(player, "the player, control");
 			}
+		}
+
+		// ----- the face (E21.3) ---------------------------------------------------
+		//
+		// Written on the duplicate BEFORE PlaceObjectAtMe, so her first draw
+		// already has the player's face. Every field is logged before and after.
+		// A pointer member the duplicate shares with the player's base is NOT
+		// written (it would write the player); it is logged as shared. Members
+		// not confirmed in RE/T/TESNPC.h are not written and are listed in the
+		// MEDIDO as not covered: the player's live tint masks, which live outside
+		// the NPC, and the engine's own copy semantics, which no header states.
+
+		const char* FormLabel(const RE::TESForm* a_form)
+		{
+			if (!a_form) {
+				return "none";
+			}
+			const char* name = a_form->GetName();
+			return (name && *name) ? name : "(no name)";
+		}
+
+		void CopyFace(RE::TESNPC* a_from, RE::TESNPC* a_to)
+		{
+			// pointers first: shared or distinct decides what may be written
+			spdlog::info("[face] pointers player/copy - headRelatedData {}/{}, faceData {}/{}, headParts {}/{}, tintLayers {}/{}",
+				static_cast<const void*>(a_from->headRelatedData), static_cast<const void*>(a_to->headRelatedData),
+				static_cast<const void*>(a_from->faceData), static_cast<const void*>(a_to->faceData),
+				static_cast<const void*>(a_from->headParts), static_cast<const void*>(a_to->headParts),
+				static_cast<const void*>(a_from->tintLayers), static_cast<const void*>(a_to->tintLayers));
+
+			// hair colour and face texture
+			if (!a_from->headRelatedData || !a_to->headRelatedData) {
+				spdlog::info("[face] headRelatedData: NOT written (player {}, copy {})",
+					static_cast<const void*>(a_from->headRelatedData), static_cast<const void*>(a_to->headRelatedData));
+			} else if (a_from->headRelatedData == a_to->headRelatedData) {
+				spdlog::info("[face] headRelatedData: SHARED with the player's base - not written (hair colour '{}', face texture '{}')",
+					FormLabel(a_from->headRelatedData->hairColor), FormLabel(a_from->headRelatedData->faceDetails));
+			} else {
+				spdlog::info("[face] hairColor: copy '{}' -> player's '{}'", FormLabel(a_to->headRelatedData->hairColor),
+					FormLabel(a_from->headRelatedData->hairColor));
+				a_to->SetHairColor(a_from->headRelatedData->hairColor);
+				spdlog::info("[face] hairColor: copy now reads '{}'", FormLabel(a_to->headRelatedData->hairColor));
+				spdlog::info("[face] faceDetails: copy '{}' -> player's '{}'", FormLabel(a_to->headRelatedData->faceDetails),
+					FormLabel(a_from->headRelatedData->faceDetails));
+				a_to->SetFaceTexture(a_from->headRelatedData->faceDetails);
+				spdlog::info("[face] faceDetails: copy now reads '{}'", FormLabel(a_to->headRelatedData->faceDetails));
+			}
+
+			// head parts, one per player part
+			if (!a_from->headParts || !a_to->headParts) {
+				spdlog::info("[face] headParts: NOT written (player {}, copy {})",
+					static_cast<const void*>(a_from->headParts), static_cast<const void*>(a_to->headParts));
+			} else if (a_from->headParts == a_to->headParts) {
+				spdlog::info("[face] headParts: SHARED with the player's base - not written ({} parts)", a_from->numHeadParts);
+			} else {
+				spdlog::info("[face] headParts: player {} parts, copy {} parts", a_from->numHeadParts, a_to->numHeadParts);
+				for (std::int8_t i = 0; i < a_from->numHeadParts; ++i) {
+					auto* part = a_from->headParts[i];
+					if (!part) {
+						continue;
+					}
+					const auto type = part->type.get();
+					auto*      had = a_to->GetCurrentHeadPartByType(type);
+					// A type can hold several parts (misc does), and ChangeHeadPart
+					// REPLACES the first of its type: boot 113 turned the mouth into
+					// a collision part that way. A part the copy already lists is
+					// left alone.
+					bool listed = false;
+					for (std::int8_t j = 0; j < a_to->numHeadParts; ++j) {
+						listed = listed || a_to->headParts[j] == part;
+					}
+					if (listed) {
+						spdlog::info("[face] headPart type {}: '{}' ({:08X}) already on the copy - not written",
+							static_cast<std::uint32_t>(type), FormLabel(part), part->GetFormID());
+						continue;
+					}
+					spdlog::info("[face] headPart type {}: copy '{}' ({:08X}) -> player's '{}' ({:08X})",
+						static_cast<std::uint32_t>(type), FormLabel(had), had ? had->GetFormID() : 0u,
+						FormLabel(part), part->GetFormID());
+					if (had != part) {
+						a_to->ChangeHeadPart(part);
+					}
+					auto* now = a_to->GetCurrentHeadPartByType(type);
+					spdlog::info("[face] headPart type {}: copy now reads '{}' ({:08X})",
+						static_cast<std::uint32_t>(type), FormLabel(now), now ? now->GetFormID() : 0u);
+				}
+			}
+
+			// face type and sculpt values
+			if (!a_from->faceData || !a_to->faceData) {
+				spdlog::info("[face] faceData: NOT written (player {}, copy {})",
+					static_cast<const void*>(a_from->faceData), static_cast<const void*>(a_to->faceData));
+			} else if (a_from->faceData == a_to->faceData) {
+				spdlog::info("[face] faceData: SHARED with the player's base - not written");
+			} else {
+				std::size_t partsDiffer = 0;
+				for (std::size_t i = 0; i < RE::TESNPC::FaceData::Parts::kTotal; ++i) {
+					spdlog::info("[face] faceData.parts[{}]: copy {} -> player's {}", i, a_to->faceData->parts[i],
+						a_from->faceData->parts[i]);
+					if (a_to->faceData->parts[i] != a_from->faceData->parts[i]) {
+						++partsDiffer;
+					}
+					a_to->faceData->parts[i] = a_from->faceData->parts[i];
+				}
+				std::size_t morphsDiffer = 0;
+				for (std::size_t i = 0; i < RE::TESNPC::FaceData::Morphs::kTotal; ++i) {
+					if (a_to->faceData->morphs[i] != a_from->faceData->morphs[i]) {
+						++morphsDiffer;
+						spdlog::info("[face] faceData.morphs[{}]: copy {:.4f} -> player's {:.4f}", i, a_to->faceData->morphs[i],
+							a_from->faceData->morphs[i]);
+					}
+					a_to->faceData->morphs[i] = a_from->faceData->morphs[i];
+				}
+				std::size_t partsAfter = 0, morphsAfter = 0;
+				for (std::size_t i = 0; i < RE::TESNPC::FaceData::Parts::kTotal; ++i) {
+					partsAfter += a_to->faceData->parts[i] == a_from->faceData->parts[i];
+				}
+				for (std::size_t i = 0; i < RE::TESNPC::FaceData::Morphs::kTotal; ++i) {
+					morphsAfter += a_to->faceData->morphs[i] == a_from->faceData->morphs[i];
+				}
+				spdlog::info("[face] faceData: {} of {} parts and {} of {} morphs differed; after the write {} and {} equal the player's",
+					partsDiffer, static_cast<int>(RE::TESNPC::FaceData::Parts::kTotal), morphsDiffer,
+					static_cast<int>(RE::TESNPC::FaceData::Morphs::kTotal), partsAfter, morphsAfter);
+			}
+
+			// skin tint colour, held by value
+			spdlog::info("[face] bodyTintColor: copy ({},{},{},{}) -> player's ({},{},{},{})", a_to->bodyTintColor.red,
+				a_to->bodyTintColor.green, a_to->bodyTintColor.blue, a_to->bodyTintColor.alpha, a_from->bodyTintColor.red,
+				a_from->bodyTintColor.green, a_from->bodyTintColor.blue, a_from->bodyTintColor.alpha);
+			a_to->bodyTintColor = a_from->bodyTintColor;
+
+			// tint layers
+			if (!a_from->tintLayers || !a_to->tintLayers) {
+				spdlog::info("[face] tintLayers: NOT written (player {}, copy {})",
+					static_cast<const void*>(a_from->tintLayers), static_cast<const void*>(a_to->tintLayers));
+			} else if (a_from->tintLayers == a_to->tintLayers) {
+				spdlog::info("[face] tintLayers: SHARED with the player's base - not written ({} layers)", a_from->tintLayers->size());
+			} else if (a_from->tintLayers->size() != a_to->tintLayers->size()) {
+				spdlog::info("[face] tintLayers: NOT written - sizes differ (player {}, copy {})", a_from->tintLayers->size(),
+					a_to->tintLayers->size());
+			} else {
+				for (std::uint32_t i = 0; i < a_from->tintLayers->size(); ++i) {
+					auto* src = (*a_from->tintLayers)[i];
+					auto* dst = (*a_to->tintLayers)[i];
+					if (!src || !dst || src == dst) {
+						spdlog::info("[face] tintLayers[{}]: NOT written (player {}, copy {})", i, static_cast<const void*>(src),
+							static_cast<const void*>(dst));
+						continue;
+					}
+					spdlog::info("[face] tintLayers[{}]: index {} color ({},{},{},{}) preset {} interp {} -> index {} color ({},{},{},{}) preset {} interp {}",
+						i, dst->tintIndex, dst->tintColor.red, dst->tintColor.green, dst->tintColor.blue, dst->tintColor.alpha,
+						dst->preset, dst->interpolationValue, src->tintIndex, src->tintColor.red, src->tintColor.green,
+						src->tintColor.blue, src->tintColor.alpha, src->preset, src->interpolationValue);
+					dst->tintColor = src->tintColor;
+					dst->tintIndex = src->tintIndex;
+					dst->preset = src->preset;
+					dst->interpolationValue = src->interpolationValue;
+				}
+			}
+
+			// weight and height, by value
+			spdlog::info("[face] weight: copy {:.2f} -> player's {:.2f}; height: copy {:.4f} -> player's {:.4f}", a_to->weight,
+				a_from->weight, a_to->height, a_from->height);
+			a_to->weight = a_from->weight;
+			a_to->height = a_from->height;
+			spdlog::info("[face] not covered: the player's live tint masks (outside the NPC), originalRace, faceNPC, outfits, "
+						 "the engine's own copy semantics");
+		}
+
+		// ----- the body (E21.2) ---------------------------------------------------
+		//
+		// The player's body lives in morphs held by SKEE per REFERENCE, not in
+		// her base record, so CreateDuplicateForm does not carry it and the
+		// figure is born with none. Written here under the same name and key the
+		// player's were read with. Edit/BodyMorphs.h warns that a third party's
+		// key sums when it is written from outside; that is about the PLAYER,
+		// who already holds a value under it. Whether it reaches a reference
+		// that holds none is what the counts below measure.
+
+		std::size_t MorphMatches(const std::vector<Core::SkeeLink::MorphValue>& a_a,
+			const std::vector<Core::SkeeLink::MorphValue>& a_b)
+		{
+			std::size_t same = 0;
+			for (const auto& x : a_a) {
+				for (const auto& y : a_b) {
+					if (x.name == y.name && x.key == y.key && std::abs(x.value - y.value) < 0.0005f) {
+						++same;
+						break;
+					}
+				}
+			}
+			return same;
+		}
+
+		// Reads the player's table and writes it onto her reference. Needs only the
+		// reference, not the body; applying waits for the body (ApplyBody).
+		void CopyBody(RE::Actor* a_figure)
+		{
+			auto* player = Player();
+			if (!player || !a_figure) {
+				return;
+			}
+			std::vector<Core::SkeeLink::MorphValue> mine;
+			std::vector<Core::SkeeLink::MorphValue> hers;
+			std::vector<Core::SkeeLink::MorphValue> after;
+			std::size_t                             written = 0;
+			const bool                              readMine = Core::SkeeLink::ReadBodyMorphs(player, mine);
+			const bool                              readHers = Core::SkeeLink::ReadBodyMorphs(a_figure, hers);
+			const bool wrote = readMine && !mine.empty() && Core::SkeeLink::WriteBodyMorphs(a_figure, mine, written);
+			const bool readAfter = Core::SkeeLink::ReadBodyMorphs(a_figure, after);
+			spdlog::info("[compare] body: the player holds {} morph values (read {}), the second figure held {} before "
+						 "(read {}), {} SetMorph calls (wrote {}), she reads {} after (read {}) of which {} equal the "
+						 "player's by name, key and value",
+				mine.size(), readMine, hers.size(), readHers, written, wrote, after.size(), readAfter,
+				MorphMatches(mine, after));
+			g_bodySnapshot = std::move(mine);
+			g_bodyPending = wrote;
+		}
+
+		// Once her body is loaded: ApplyBodyMorphs then UpdateModelWeight. The
+		// readback of the call says it was made; only the frame says the body
+		// changed (V127).
+		void ApplyBody(const char* a_why)
+		{
+			if (!g_bodyPending) {
+				return;
+			}
+			auto* actor = Twin();
+			if (!actor || !actor->Get3D(false)) {
+				return;  // not yet - still pending
+			}
+			g_bodyPending = false;
+			spdlog::info("[compare] body ({}): ApplyBodyMorphs + UpdateModelWeight(immediate) on {:08X} ...", a_why,
+				actor->GetFormID());
+			const bool done = Core::SkeeLink::ApplyBodyMorphs(actor);
+			spdlog::info("[compare] body ({}): returned, called {}", a_why, done);
 		}
 
 		// ----- born, parked, fetched, shown ---------------------------------------
@@ -465,6 +877,9 @@ namespace Lifecast::Edit::Compare
 				return false;
 			}
 
+			// E21.3: the face, on the duplicate, before she is born.
+			CopyFace(base, dup);
+
 			// forcePersist false: nothing of her is written to the save, which
 			// is the whole of what Compare.h declares about surviving a load.
 			spdlog::info("[compare] {}: PlaceObjectAtMe({:08X}, persist=false) ...", a_when, dup->GetFormID());
@@ -491,6 +906,9 @@ namespace Lifecast::Edit::Compare
 				actor->EnableAI(false);
 				spdlog::info("[compare] {}: EnableAI(false) - IsAIEnabled reads back {}", a_when, actor->IsAIEnabled());
 			}
+
+			// E21.2: the body, by reference, while her 3D is still arriving.
+			CopyBody(placed->As<RE::Actor>());
 
 			spdlog::info("[compare] {}: DONE - base {:08X}, reference {:08X} at {} in cell {:08X}, 3D {}, born with "
 						 "the menu {}",
@@ -757,6 +1175,10 @@ namespace Lifecast::Edit::Compare
 					Push("compare-set refused");
 					return;
 				}
+				// E21.2: boot 111 applied the morphs on the tick her body arrived,
+				// while she was still culled, and she was not drawn afterwards. The
+				// apply moves here, to the moment she is shown.
+				ApplyBody("the comparison was turned on");
 				Panel::Stage::FramePair(true, left, right);
 				g_on = true;
 			} else {

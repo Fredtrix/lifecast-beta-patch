@@ -163,4 +163,49 @@ namespace Lifecast::Core::SkeeLink
 		static_cast<Skee::IBodyMorphInterface*>(iface)->VisitMorphValues(refr, collector);
 		return true;
 	}
+
+	bool WriteBodyMorphs(RE::Actor* a_actor, const std::vector<MorphValue>& a_values, std::size_t& a_written)
+	{
+		a_written = 0;
+		auto* map = GetInterfaceMap();
+		auto* iface = map ? map->QueryInterface("BodyMorph") : nullptr;
+		if (!a_actor || !iface) {
+			spdlog::warn("[skee] body morphs NOT written: actor {}, BodyMorph interface {}",
+				static_cast<const void*>(a_actor), static_cast<const void*>(iface));
+			return false;
+		}
+		const auto version = iface->GetVersion();
+		if (version < Skee::IBodyMorphInterface::kCurrentPluginVersion) {
+			spdlog::warn("[skee] body morphs NOT written: BodyMorph interface version {}, header describes {}",
+				version, static_cast<std::uint32_t>(Skee::IBodyMorphInterface::kCurrentPluginVersion));
+			return false;
+		}
+		auto* refr = reinterpret_cast<Skee::TESObjectREFR*>(a_actor);
+		auto* morphs = static_cast<Skee::IBodyMorphInterface*>(iface);
+		for (const auto& v : a_values) {
+			morphs->SetMorph(refr, v.name.c_str(), v.key.c_str(), v.value);
+			++a_written;
+		}
+		return true;
+	}
+
+	bool ApplyBodyMorphs(RE::Actor* a_actor)
+	{
+		auto* map = GetInterfaceMap();
+		auto* iface = map ? map->QueryInterface("BodyMorph") : nullptr;
+		if (!a_actor || !iface) {
+			spdlog::warn("[skee] body morphs NOT applied: actor {}, BodyMorph interface {}",
+				static_cast<const void*>(a_actor), static_cast<const void*>(iface));
+			return false;
+		}
+		if (iface->GetVersion() < Skee::IBodyMorphInterface::kCurrentPluginVersion) {
+			spdlog::warn("[skee] body morphs NOT applied: BodyMorph interface version {}", iface->GetVersion());
+			return false;
+		}
+		auto* refr = reinterpret_cast<Skee::TESObjectREFR*>(a_actor);
+		auto* morphs = static_cast<Skee::IBodyMorphInterface*>(iface);
+		morphs->ApplyBodyMorphs(refr);
+		morphs->UpdateModelWeight(refr, true);
+		return true;
+	}
 }
