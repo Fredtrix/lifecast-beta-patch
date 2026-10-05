@@ -75,4 +75,13 @@ namespace Lifecast::Core::SkeeLink
 	// ApplyBodyMorphs(refr) and then UpdateModelWeight(refr, immediate).
 	// What was called is returned, not what changed on screen.
 	bool ApplyBodyMorphs(RE::Actor* a_actor);
+
+	// E22.3 - the RaceMenu's own preset route (IPresetInterface, "Preset").
+	// QueryInterface("Preset") answered null once in this tree, so every call
+	// here reports whether the interface is there and does nothing when it is
+	// not. LoadPreset may write the actor's TESNPC (the header says so): the
+	// caller must prove the actor's base is not the player's BEFORE calling it.
+	bool PresetReady();
+	bool SavePreset(RE::Actor* a_actor, const char* a_file, const char* a_tint);
+	bool LoadPreset(RE::Actor* a_actor, const char* a_file, const char* a_tint);
 }

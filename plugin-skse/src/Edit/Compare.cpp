@@ -399,6 +399,80 @@ namespace Lifecast::Edit::Compare
 				rootAfter ? rootAfter->GetAppCulled() : false, wornBefore, CollectWorn(a_actor).size());
 		}
 
+		// ----- what is DRAWN on her, by the biped (E22.1) --------------------------
+		//
+		// The inventory says what she carries. What is attached to her 3D is
+		// BipedAnim::objects[slot] (RE/B/BipedAnim.h:47): `item` is the form the
+		// slot was built from and `partClone` is the node actually hanging on
+		// her. A slot that has a partClone is drawn. Read for the five slots the
+		// author saw on her back: shield, sword, dagger, bow, quiver.
+		struct BipedSlot
+		{
+			RE::BIPED_OBJECT slot;
+			const char*      name;
+		};
+		constexpr BipedSlot kBipedSlots[] = {
+			{ RE::BIPED_OBJECT::kShield, "shield" },
+			{ RE::BIPED_OBJECT::kOneHandSword, "one-hand sword" },
+			{ RE::BIPED_OBJECT::kOneHandDagger, "one-hand dagger" },
+			{ RE::BIPED_OBJECT::kBow, "bow" },
+			{ RE::BIPED_OBJECT::kQuiver, "quiver" },
+		};
+
+		bool BipedDrawn(RE::Actor* a_actor, RE::BIPED_OBJECT a_slot)
+		{
+			auto* biped = a_actor ? a_actor->GetBiped().get() : nullptr;
+			return biped && biped->objects[a_slot].partClone != nullptr;
+		}
+
+		void DumpBiped(RE::Actor* a_actor, const char* a_who, const char* a_when)
+		{
+			auto* biped = a_actor ? a_actor->GetBiped().get() : nullptr;
+			if (!biped) {
+				spdlog::info("[compare] biped ({}, {}): NO biped data (GetBiped() is null)", a_who, a_when);
+				return;
+			}
+			for (const auto& s : kBipedSlots) {
+				const auto& o = biped->objects[s.slot];
+				spdlog::info("[compare] biped ({}, {}): {} - item {:08X} '{}', partClone {}", a_who, a_when, s.name,
+					o.item ? o.item->GetFormID() : 0u, o.item ? o.item->GetName() : "-",
+					o.partClone ? "PRESENT (drawn)" : "null");
+			}
+		}
+
+		// E22.1 - the conserto: a slot drawn on her and not on the player is
+		// taken off with Actor::RemoveWeapon (RE/A/Actor.h:348).
+		void RemoveStrayDrawn(RE::Actor* a_actor, RE::Actor* a_player, const char* a_why)
+		{
+			DumpBiped(a_actor, "the second figure", "before RemoveWeapon");
+			DumpBiped(a_player, "the player", "before RemoveWeapon");
+			std::size_t removed = 0;
+			for (const auto& s : kBipedSlots) {
+				if (BipedDrawn(a_actor, s.slot) && !BipedDrawn(a_player, s.slot)) {
+					spdlog::info("[compare] biped ({}): {} is drawn on her and not on the player - RemoveWeapon", a_why, s.name);
+					a_actor->RemoveWeapon(s.slot);
+					++removed;
+				}
+			}
+			spdlog::info("[compare] biped ({}): RemoveWeapon called on {} slot(s)", a_why, removed);
+			DumpBiped(a_actor, "the second figure", "after RemoveWeapon");
+		}
+
+		// E22.2 - hair and skin colour on the figure, with her 3D loaded
+		// (RE/A/Actor.h:690 and :693). What is logged is that the calls were
+		// made; whether the colour moved is the frame's to say.
+		void RefreshLook(RE::Actor* a_actor, const char* a_why)
+		{
+			if (!a_actor || !a_actor->Is3DLoaded() || !a_actor->Get3D(false)) {
+				spdlog::info("[compare] look ({}): her 3D is not loaded - UpdateHairColor/UpdateSkinColor not called", a_why);
+				return;
+			}
+			spdlog::info("[compare] look ({}): UpdateHairColor + UpdateSkinColor on {:08X} ...", a_why, a_actor->GetFormID());
+			a_actor->UpdateHairColor();
+			a_actor->UpdateSkinColor();
+			spdlog::info("[compare] look ({}): returned", a_why);
+		}
+
 		// D106: clothes are CONTEXT, so the twin mirrors them. A dressed
 		// "before" next to an undressed "after" compares the clothes.
 		//
@@ -570,6 +644,10 @@ namespace Lifecast::Edit::Compare
 			if (a_control) {
 				Refresh3D(player, "the player, control");
 			}
+
+			// E22.1 and E22.2, after the refresh: what her 3D now shows.
+			RemoveStrayDrawn(actor, player, a_why);
+			RefreshLook(actor, a_why);
 		}
 
 		// ----- the face (E21.3) ---------------------------------------------------
@@ -789,6 +867,46 @@ namespace Lifecast::Edit::Compare
 			g_bodyPending = wrote;
 		}
 
+#ifdef LIFECAST_TUNING
+		// E22.3 - the RaceMenu's own route: SavePreset on the player, LoadPreset on
+		// the figure (kPresetApplyAll). Two gates. (1) The Preset interface must
+		// answer; it answered null once, and then this logs and stops. (2) The
+		// header warns that LoadPreset may write the actor's TESNPC, so it is
+		// called ONLY when the figure's base is provably not the player's: pointer
+		// and FormID of both are logged first, and equal means no call.
+		void PresetRoute(const char* a_why)
+		{
+			auto* player = Player();
+			auto* actor = Twin();
+			if (!player || !actor || !actor->Get3D(false)) {
+				spdlog::info("[preset] ({}): no player, or her 3D is not there - not called", a_why);
+				return;
+			}
+			if (!Core::SkeeLink::PresetReady()) {
+				spdlog::info("[preset] ({}): the Preset interface is NOT reachable - the item stops here", a_why);
+				return;
+			}
+			auto*      mine = player->GetActorBase();
+			auto*      hers = actor->GetActorBase();
+			const bool distinct = mine && hers && mine != hers && mine->GetFormID() != hers->GetFormID();
+			spdlog::info("[preset] ({}): player base {} {:08X}, her base {} {:08X} - {}", a_why, static_cast<const void*>(mine),
+				mine ? mine->GetFormID() : 0u, static_cast<const void*>(hers), hers ? hers->GetFormID() : 0u,
+				distinct ? "distinct" : "NOT distinct, LoadPreset is NOT called");
+			if (!distinct) {
+				return;
+			}
+			const char* file = "SKSE\\Plugins\\CharGen\\Exported\\lifecast-e22.jslot";
+			const char* tint = "Textures\\CharGen\\Exported\\lifecast-e22.dds";
+			const bool  saved = Core::SkeeLink::SavePreset(player, file, tint);
+			spdlog::info("[preset] ({}): SavePreset on the player returned {}", a_why, saved);
+			if (!saved) {
+				return;
+			}
+			const bool loaded = Core::SkeeLink::LoadPreset(actor, file, tint);
+			spdlog::info("[preset] ({}): LoadPreset on the figure returned {}", a_why, loaded);
+		}
+#endif
+
 		// Once her body is loaded: ApplyBodyMorphs then UpdateModelWeight. The
 		// readback of the call says it was made; only the frame says the body
 		// changed (V127).
@@ -876,6 +994,22 @@ namespace Lifecast::Edit::Compare
 				spdlog::warn("[compare] {}: no duplicate - the comparison is not available", a_when);
 				return false;
 			}
+
+			// E22.1, prevention: her own outfit and bag are the source of the
+			// shield, bow and dagger on her back. Assigned on the DUPLICATE only,
+			// by plain assignment (no change flag, so nothing of it is save data).
+			// numContainerObjects is zeroed without freeing the array: whether
+			// CreateDuplicateForm gave her a copy of it or shares the player's is
+			// not stated by any header, and a free would be the wrong call in the
+			// second case. The pointers are logged so the log says which it was.
+			spdlog::info("[face] defaultOutfit: copy {:08X} '{}' (player {:08X}) -> none; containerObjects player {} / copy {}, "
+						 "copy had {} entries -> 0",
+				dup->defaultOutfit ? dup->defaultOutfit->GetFormID() : 0u, FormLabel(dup->defaultOutfit),
+				base->defaultOutfit ? base->defaultOutfit->GetFormID() : 0u,
+				static_cast<const void*>(base->containerObjects), static_cast<const void*>(dup->containerObjects),
+				dup->numContainerObjects);
+			dup->defaultOutfit = nullptr;
+			dup->numContainerObjects = 0;
 
 			// E21.3: the face, on the duplicate, before she is born.
 			CopyFace(base, dup);
@@ -1179,6 +1313,11 @@ namespace Lifecast::Edit::Compare
 				// while she was still culled, and she was not drawn afterwards. The
 				// apply moves here, to the moment she is shown.
 				ApplyBody("the comparison was turned on");
+				RefreshLook(Twin(), "the comparison was turned on");
+#ifdef LIFECAST_TUNING
+				PresetRoute("the comparison was turned on");
+				RefreshLook(Twin(), "after the preset route");
+#endif
 				Panel::Stage::FramePair(true, left, right);
 				g_on = true;
 			} else {

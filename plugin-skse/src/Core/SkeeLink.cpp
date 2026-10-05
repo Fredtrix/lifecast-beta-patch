@@ -208,4 +208,48 @@ namespace Lifecast::Core::SkeeLink
 		morphs->UpdateModelWeight(refr, true);
 		return true;
 	}
+
+	namespace
+	{
+		Skee::IPresetInterface* PresetIface()
+		{
+			auto* map = GetInterfaceMap();
+			auto* iface = map ? map->QueryInterface("Preset") : nullptr;
+			if (!iface) {
+				spdlog::warn("[skee] Preset interface: QueryInterface(\"Preset\") = null (map {})", static_cast<const void*>(map));
+				return nullptr;
+			}
+			if (iface->GetVersion() < Skee::IPresetInterface::kCurrentPluginVersion) {
+				spdlog::warn("[skee] Preset interface: version {} older than the header's", iface->GetVersion());
+				return nullptr;
+			}
+			spdlog::info("[skee] Preset interface: {} version {}", static_cast<const void*>(iface), iface->GetVersion());
+			return static_cast<Skee::IPresetInterface*>(iface);
+		}
+	}
+
+	bool PresetReady()
+	{
+		return PresetIface() != nullptr;
+	}
+
+	// Skee::Actor is not RE::Actor; the address is the same because
+	// TESObjectREFR is Actor's first base (Actor.h:144), as in the readers above.
+	bool SavePreset(RE::Actor* a_actor, const char* a_file, const char* a_tint)
+	{
+		auto* iface = PresetIface();
+		if (!a_actor || !iface) {
+			return false;
+		}
+		return iface->SavePreset(a_file, a_tint, reinterpret_cast<Skee::Actor*>(a_actor));
+	}
+
+	bool LoadPreset(RE::Actor* a_actor, const char* a_file, const char* a_tint)
+	{
+		auto* iface = PresetIface();
+		if (!a_actor || !iface) {
+			return false;
+		}
+		return iface->LoadPreset(a_file, a_tint, reinterpret_cast<Skee::Actor*>(a_actor), Skee::IPresetInterface::kPresetApplyAll);
+	}
 }
