@@ -84,4 +84,15 @@ namespace Lifecast::Core::SkeeLink
 	bool PresetReady();
 	bool SavePreset(RE::Actor* a_actor, const char* a_file, const char* a_tint);
 	bool LoadPreset(RE::Actor* a_actor, const char* a_file, const char* a_tint);
+
+	// E23 - the node transforms (scale, position, rotation, scale mode) SKEE
+	// holds for a_from, written onto a_to under the SAME node and key, then
+	// UpdateNodeAllTransforms(a_to). Read by VisitNodes, the way that worked
+	// where Has/Get read 1.000 (Edit/BodyScales.cpp:148-153). Counts what was
+	// read and what was written; says nothing about what was drawn.
+	struct NodeCopyCounts
+	{
+		std::size_t scales{ 0 }, positions{ 0 }, rotations{ 0 }, modes{ 0 };
+	};
+	bool CopyNodeTransforms(RE::Actor* a_from, RE::Actor* a_to, bool a_female, NodeCopyCounts& a_read, NodeCopyCounts& a_written);
 }

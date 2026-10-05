@@ -11,10 +11,12 @@
 
 #include "Edit/Compare.h"
 
+#include "Core/RaceMenuSync.h"
 #include "Core/SkeeLink.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 #include "Panel/Stage.h"
+#include "Preset/Library.h"
 
 namespace Lifecast::Edit::Compare
 {
@@ -907,6 +909,93 @@ namespace Lifecast::Edit::Compare
 		}
 #endif
 
+#ifdef LIFECAST_TUNING
+		// E23 - the face by the RaceMenu's own Papyrus natives, the route the Preset
+		// panel already uses (Preset\Save.cpp, Preset\Load.cpp): CharGen.
+		// SaveCharacterPreset(player, file), and when it answers,
+		// CharGen.LoadCharacterPresetEx(figure, file, hairColor, -1). The sculpt
+		// and the extended face sliders live in SKEE keyed by the TESNPC pointer
+		// and are not reachable any other way (the "Preset" C++ interface answers
+		// null). LoadCharacterPresetEx writes the figure's TESNPC, so it is called
+		// ONLY when that base is provably not the player's. The file is the panel's
+		// own preview slot (Library::kPreviewName), so no preset appears in the list.
+		void FaceLoaded(const char* a_why);
+
+		class FaceLoadDone : public RE::BSScript::IStackCallbackFunctor
+		{
+		public:
+			void operator()(RE::BSScript::Variable a_result) override
+			{
+				const bool value = a_result.IsBool() && a_result.GetBool();
+				spdlog::info("[face-preset] LoadCharacterPresetEx returned (bool {}, value {})", a_result.IsBool(), value);
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddTask([]() { FaceLoaded("the preset load returned"); });
+				}
+			}
+			void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
+		};
+
+		void FaceLoaded(const char* a_why)
+		{
+			RefreshLook(Twin(), a_why);
+		}
+
+		void FaceLoadStart()
+		{
+			auto* player = Player();
+			auto* actor = Twin();
+			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+			if (!player || !actor || !vm || !actor->Get3D(false)) {
+				spdlog::info("[face-preset] no player, figure 3D or VM - the load is not dispatched");
+				return;
+			}
+			auto*      mine = player->GetActorBase();
+			auto*      hers = actor->GetActorBase();
+			const bool distinct = mine && hers && mine != hers && mine->GetFormID() != hers->GetFormID();
+			spdlog::info("[face-preset] player base {} {:08X}, her base {} {:08X} - {}", static_cast<const void*>(mine),
+				mine ? mine->GetFormID() : 0u, static_cast<const void*>(hers), hers ? hers->GetFormID() : 0u,
+				distinct ? "distinct" : "NOT distinct, the load is NOT dispatched");
+			if (!distinct) {
+				return;
+			}
+			auto*                                                    hair = Core::RaceMenuSync::HairColorForm();
+			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new FaceLoadDone());
+			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(actor), std::string(Preset::Library::kPreviewName),
+				static_cast<RE::BGSColorForm*>(hair), std::int32_t(-1));
+			const bool sent = vm->DispatchStaticCall("CharGen", "LoadCharacterPresetEx", args, callback);
+			spdlog::info("[face-preset] CharGen.LoadCharacterPresetEx(figure {:08X}, \"{}\", hair {}, -1) dispatched: {}",
+				actor->GetFormID(), Preset::Library::kPreviewName, hair ? "RaceMenu's" : "NONE", sent);
+		}
+
+		class FaceSaveDone : public RE::BSScript::IStackCallbackFunctor
+		{
+		public:
+			void operator()(RE::BSScript::Variable) override
+			{
+				spdlog::info("[face-preset] SaveCharacterPreset returned");
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddTask([]() { FaceLoadStart(); });
+				}
+			}
+			void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
+		};
+
+		void FaceByPreset(const char* a_why)
+		{
+			auto* player = Player();
+			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+			if (!player || !vm) {
+				spdlog::info("[face-preset] ({}): no player or VM", a_why);
+				return;
+			}
+			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new FaceSaveDone());
+			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(Preset::Library::kPreviewName));
+			const bool sent = vm->DispatchStaticCall("CharGen", "SaveCharacterPreset", args, callback);
+			spdlog::info("[face-preset] ({}): CharGen.SaveCharacterPreset(player, \"{}\") dispatched: {}", a_why,
+				Preset::Library::kPreviewName, sent);
+		}
+#endif
+
 		// Once her body is loaded: ApplyBodyMorphs then UpdateModelWeight. The
 		// readback of the call says it was made; only the frame says the body
 		// changed (V127).
@@ -922,6 +1011,18 @@ namespace Lifecast::Edit::Compare
 			g_bodyPending = false;
 			spdlog::info("[compare] body ({}): ApplyBodyMorphs + UpdateModelWeight(immediate) on {:08X} ...", a_why,
 				actor->GetFormID());
+			// E23: the body's SHAPE also lives in node transforms (the panel's body
+			// scales and any other mod's), held by SKEE per reference. They go over
+			// first, under the same node and key, so the apply below sees them.
+			if (auto* player = Player(); player && player->GetActorBase()) {
+				const bool                           female = player->GetActorBase()->GetSex() == RE::SEX::kFemale;
+				Core::SkeeLink::NodeCopyCounts read, wrote;
+				const bool                           copied = Core::SkeeLink::CopyNodeTransforms(player, actor, female, read, wrote);
+				spdlog::info("[compare] nodes ({}): player holds {} scales, {} positions, {} rotations, {} scale modes (female {}) - "
+							 "copied {}; written {} / {} / {} / {}",
+					a_why, read.scales, read.positions, read.rotations, read.modes, female, copied, wrote.scales, wrote.positions,
+					wrote.rotations, wrote.modes);
+			}
 			const bool done = Core::SkeeLink::ApplyBodyMorphs(actor);
 			spdlog::info("[compare] body ({}): returned, called {}", a_why, done);
 		}
@@ -1316,6 +1417,7 @@ namespace Lifecast::Edit::Compare
 				RefreshLook(Twin(), "the comparison was turned on");
 #ifdef LIFECAST_TUNING
 				PresetRoute("the comparison was turned on");
+				// FaceByPreset("the comparison was turned on");  // boot 119: the game died inside CharGen.LoadCharacterPresetEx on the copy (see Docs/VERIFY.md V134)
 				RefreshLook(Twin(), "after the preset route");
 #endif
 				Panel::Stage::FramePair(true, left, right);

@@ -252,4 +252,87 @@ namespace Lifecast::Core::SkeeLink
 		}
 		return iface->LoadPreset(a_file, a_tint, reinterpret_cast<Skee::Actor*>(a_actor), Skee::IPresetInterface::kPresetApplyAll);
 	}
+
+	bool CopyNodeTransforms(RE::Actor* a_from, RE::Actor* a_to, bool a_female, NodeCopyCounts& a_read, NodeCopyCounts& a_written)
+	{
+		a_read = {};
+		a_written = {};
+		auto* map = GetInterfaceMap();
+		auto* raw = map ? map->QueryInterface("NiTransform") : nullptr;
+		if (!a_from || !a_to || !raw) {
+			spdlog::warn("[skee] node transforms NOT copied: NiTransform interface {}", static_cast<const void*>(raw));
+			return false;
+		}
+		if (raw->GetVersion() < Skee::INiTransformInterface::kCurrentPluginVersion) {
+			spdlog::warn("[skee] node transforms NOT copied: NiTransform interface version {}", raw->GetVersion());
+			return false;
+		}
+		auto* iface = static_cast<Skee::INiTransformInterface*>(raw);
+		// Same first-base cast as the readers above.
+		auto* src = reinterpret_cast<Skee::TESObjectREFR*>(a_from);
+		auto* dst = reinterpret_cast<Skee::TESObjectREFR*>(a_to);
+
+		class Collector : public Skee::INiTransformInterface::NodeVisitor
+		{
+		public:
+			struct Pos { std::string node, key; Skee::INiTransformInterface::Position v; };
+			struct Rot { std::string node, key; Skee::INiTransformInterface::Rotation v; };
+			struct Sca { std::string node, key; float v; };
+			struct Mod { std::string node, key; Skee::skee_u32 v; };
+			std::vector<Pos> pos;
+			std::vector<Rot> rot;
+			std::vector<Sca> sca;
+			std::vector<Mod> mod;
+
+			bool VisitPosition(const char* n, const char* k, Skee::INiTransformInterface::Position& p) override
+			{
+				pos.push_back({ n ? n : "", k ? k : "", p });
+				return false;
+			}
+			bool VisitRotation(const char* n, const char* k, Skee::INiTransformInterface::Rotation& r) override
+			{
+				rot.push_back({ n ? n : "", k ? k : "", r });
+				return false;
+			}
+			bool VisitScale(const char* n, const char* k, float s) override
+			{
+				sca.push_back({ n ? n : "", k ? k : "", s });
+				return false;
+			}
+			bool VisitScaleMode(const char* n, const char* k, Skee::skee_u32 m) override
+			{
+				mod.push_back({ n ? n : "", k ? k : "", m });
+				return false;
+			}
+		};
+
+		Collector c;
+		iface->VisitNodes(src, false, a_female, c);
+		a_read.scales = c.sca.size();
+		a_read.positions = c.pos.size();
+		a_read.rotations = c.rot.size();
+		a_read.modes = c.mod.size();
+		for (auto& s : c.sca) {
+			spdlog::info("[skee] node transform read: scale {} / {} = {:.4f}", s.node, s.key, s.v);
+			iface->AddNodeTransformScale(dst, false, a_female, s.node.c_str(), s.key.c_str(), s.v);
+			++a_written.scales;
+		}
+		for (auto& p : c.pos) {
+			spdlog::info("[skee] node transform read: position {} / {} = ({:.3f}, {:.3f}, {:.3f})", p.node, p.key, p.v.x, p.v.y, p.v.z);
+			iface->AddNodeTransformPosition(dst, false, a_female, p.node.c_str(), p.key.c_str(), p.v);
+			++a_written.positions;
+		}
+		for (auto& r : c.rot) {
+			spdlog::info("[skee] node transform read: rotation {} / {}", r.node, r.key);
+			iface->AddNodeTransformRotation(dst, false, a_female, r.node.c_str(), r.key.c_str(), r.v);
+			++a_written.rotations;
+		}
+		for (auto& m : c.mod) {
+			spdlog::info("[skee] node transform read: scale mode {} / {} = {}", m.node, m.key, m.v);
+			iface->AddNodeTransformScaleMode(dst, false, a_female, m.node.c_str(), m.key.c_str(), m.v);
+			++a_written.modes;
+		}
+		iface->UpdateNodeAllTransforms(dst);
+		return true;
+	}
 }
