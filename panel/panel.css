@@ -932,9 +932,10 @@ html[data-belt-region] .section.is-region .preset-list {
    stage bar's look. Its notes (why a toggle refused) stay inline. */
 .control-bar {
   position: absolute;
-  left: calc(var(--gap) * 3);
-  /* --control-lift is control.js lifting the bar over the camera bar when
-     the stage is too narrow for both on one line; 0 otherwise. */
+  /* --control-lift and --control-shift are control.js lifting the bar over
+     the camera bar, centred on it, when the stage is too narrow for both on
+     one line (D135); 0 otherwise. */
+  left: calc(var(--gap) * 3 + var(--control-shift, 0px));
   bottom: calc(var(--belt-height) + var(--gap) * 3 + var(--control-lift, 0px));
   display: flex;
   align-items: center;
@@ -953,7 +954,7 @@ html[data-belt-region] .section.is-region .preset-list {
 }
 
 html[data-belt-open] .control-bar {
-  left: calc(var(--panel-width) * var(--panel-scale) + var(--gap) * 3);
+  left: calc(var(--panel-width) * var(--panel-scale) + var(--gap) * 3 + var(--control-shift, 0px));
 }
 
 .control-note {
