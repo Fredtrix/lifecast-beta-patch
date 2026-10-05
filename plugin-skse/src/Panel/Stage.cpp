@@ -949,7 +949,7 @@ namespace Lifecast::Panel::Stage
 					// on. Said here so the log shows the gap rather than
 					// leaving the rule aiming at a figure that is not there.
 					if (g_pairOn) {
-						spdlog::info("[stage] tune: the pair is on - solving again. The twin standing in the "
+						spdlog::info("[stage] tune: the pair is on - solving again. The second figure standing in the "
 									 "world was placed at the previous separation and does NOT move; toggle "
 									 "the comparison off and on to place her at the new one");
 						g_pairSolves = 0;

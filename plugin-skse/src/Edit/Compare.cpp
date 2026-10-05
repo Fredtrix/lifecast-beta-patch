@@ -25,7 +25,8 @@ namespace Lifecast::Edit::Compare
 		//
 		// One twin at a time. She is never deleted - SetDelete poisons the next
 		// duplicate (V099, and it is what took boots 76 and 77) - so replacing
-		// her leaves the old reference standing in its cell, culled, with its
+		// her leaves the old reference standing in its cell, disabled (E19: it
+		// is disabled while the editor is closed, not only culled), with its
 		// AI off. That is a declared leak, bounded by how many rooms the player
 		// opens the editor in during one game session, and it is the price of
 		// not calling the one function that is measured to crash.
@@ -40,6 +41,17 @@ namespace Lifecast::Edit::Compare
 		std::string g_why;         // why the last request refused, for the page
 		bool        g_arm = false;  // make her on the next tick with the menu closed
 		bool        g_cull = false;  // cull her as soon as she has a body to cull
+
+		// E19: she is GONE while the editor is closed, and these are the state of
+		// that. Culled is not gone - a culled actor is still in the world with
+		// her collision, her name and her dialogue (boot 107).
+		constexpr auto    kSettle = std::chrono::milliseconds(1500);  // how long her body stands before it may be disabled
+		bool              g_hidden = false;     // Disable() was called on her and she has not been enabled since
+		bool              g_hidePending = false;  // the editor closed; she goes as soon as her body has settled
+		Clock::time_point g_settleUntil{};        // no Disable() before this, so none lands on a 3D still in flight
+		bool              g_watch = false;        // log where she is a few seconds after she came back
+		Clock::time_point g_watchAt{};
+		RE::NiPoint3      g_watchFrom{};
 
 		bool g_installed = false;
 
@@ -87,7 +99,45 @@ namespace Lifecast::Edit::Compare
 				return false;
 			}
 			const auto mine = CellOf(Player());
-			return mine != 0 && CellOf(actor) == mine;
+			// A disabled reference may not report a parent cell, and she never
+			// leaves the one she was born in (Place refuses to), so the cell she
+			// was born in is the answer while she is away.
+			const auto hers = g_hidden ? g_cellId : CellOf(actor);
+			return mine != 0 && hers == mine;
+		}
+
+		const char* LevelName(RE::PROCESS_TYPE a_level)
+		{
+			switch (a_level) {
+			case RE::PROCESS_TYPE::kNone:
+				return "kNone";
+			case RE::PROCESS_TYPE::kHigh:
+				return "kHigh";
+			case RE::PROCESS_TYPE::kMiddleHigh:
+				return "kMiddleHigh";
+			case RE::PROCESS_TYPE::kMiddleLow:
+				return "kMiddleLow";
+			case RE::PROCESS_TYPE::kLow:
+				return "kLow";
+			default:
+				return "?";
+			}
+		}
+
+		// Everything the E19 lines read back about one actor, in one place so
+		// the figure and the player are read by the SAME fields. Each part is
+		// a plain getter; nothing here writes.
+		std::string Read(RE::Actor* a_actor)
+		{
+			if (!a_actor) {
+				return "absent";
+			}
+			auto* root = a_actor->Get3D(false);
+			return fmt::format("level {} | AI {} | disabled {} | activation blocked {} | 3D {}{} | at {}",
+				LevelName(a_actor->GetProcessLevel()), a_actor->IsAIEnabled() ? "ON" : "off",
+				a_actor->IsDisabled() ? "YES" : "no", a_actor->IsActivationBlocked() ? "YES" : "no",
+				a_actor->Is3DLoaded() ? "loaded" : "NOT loaded", root ? (root->GetAppCulled() ? ", culled" : ", not culled") : "",
+				P(a_actor->GetPosition()));
 		}
 
 		void Push(const char* a_why)
@@ -137,6 +187,69 @@ namespace Lifecast::Edit::Compare
 			return found;
 		}
 
+		// E19.1 - ask the game to rebuild what an actor WEARS on her body.
+		//
+		// Boot 94 measured the data and not the body: she read 4 worn, the
+		// player's four, and the frame 4.5 s later still showed her own helm and
+		// hide. The candidate is Update3DModel, and what it needs is two things,
+		// not one:
+		//
+		//   a process   Actor::Update3DModel does nothing, silently, without a
+		//               currentProcess (Actor.cpp:1402-1408). She HAS one: the
+		//               process level read kHigh seven times in boot 92 with her
+		//               AI off, and this logs it again on THIS figure, which is
+		//               not the probe's.
+		//   a pending   AIProcess::Update3DModel acts on the flags that
+		//   flag        Set3DUpdateFlag wrote into middleHigh->update3DModel, and
+		//               a bare call has measured as a no-op on the PLAYER: 0.07 ms
+		//               and nothing redrawn. The same call with the flag raised
+		//               redraws. So the flag is raised here, kModel and kSkin -
+		//               the pair the player's weight already uses (Appearance.cpp)
+		//               - and the process is asked directly because the process
+		//               is what is being read.
+		//
+		// What is read back is the pending-flag byte before the raise, after it
+		// and after the call. The header places it at offset 311 right after an
+		// unnamed byte, and nobody has checked that offset in a running game, so
+		// the log says "unverified" beside it: if the byte never moves, that is
+		// the first suspect, not the call.
+		void Refresh3D(RE::Actor* a_actor, const char* a_who)
+		{
+			auto* process = a_actor ? a_actor->GetActorRuntimeData().currentProcess : nullptr;
+			if (!process) {
+				spdlog::warn("[compare] refresh ({}): NO currentProcess - Update3DModel would do nothing and is not called",
+					a_who);
+				return;
+			}
+			auto* middle = process->middleHigh;
+			if (!middle) {
+				spdlog::warn("[compare] refresh ({}): process present but no middleHigh - Set3DUpdateFlag is a silent "
+							 "no-op without it, so nothing is asked",
+					a_who);
+				return;
+			}
+
+			auto*      rootBefore = a_actor->Get3D(false);
+			const bool culledBefore = rootBefore && rootBefore->GetAppCulled();
+			const auto flagsBefore = static_cast<unsigned>(middle->update3DModel.underlying());
+			const auto wornBefore = CollectWorn(a_actor).size();
+			process->Set3DUpdateFlag(static_cast<RE::RESET_3D_FLAGS>(
+				static_cast<std::uint32_t>(RE::RESET_3D_FLAGS::kModel) | static_cast<std::uint32_t>(RE::RESET_3D_FLAGS::kSkin)));
+			const auto flagsRaised = static_cast<unsigned>(middle->update3DModel.underlying());
+
+			const auto t0 = Clock::now();
+			process->Update3DModel(a_actor);
+			const auto ms = std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
+
+			const auto flagsAfter = static_cast<unsigned>(middle->update3DModel.underlying());
+			auto*      rootAfter = a_actor->Get3D(false);
+			spdlog::info("[compare] refresh ({}): level {} | pending-flag byte (offset 311, unverified) {:02X} -> raised {:02X} "
+						 "-> after the call {:02X} | Update3DModel took {:.3f} ms | root {} | culled {} -> {} | worn {} -> {}",
+				a_who, LevelName(a_actor->GetProcessLevel()), flagsBefore, flagsRaised, flagsAfter, ms,
+				rootBefore == rootAfter ? "the same node" : (rootAfter ? "a NEW node" : "GONE"), culledBefore,
+				rootAfter ? rootAfter->GetAppCulled() : false, wornBefore, CollectWorn(a_actor).size());
+		}
+
 		// D106: clothes are CONTEXT, so the twin mirrors them. A dressed
 		// "before" next to an undressed "after" compares the clothes.
 		//
@@ -152,7 +265,7 @@ namespace Lifecast::Edit::Compare
 		// belongs to the player's stack; pointing a second container at it to
 		// make a visual match is not a trade this module makes. The twin wears
 		// a plain copy, and a tempered item reads as untempered on her.
-		void Dress(const char* a_why)
+		void Dress(const char* a_why, bool a_control = false)
 		{
 			auto* player = Player();
 			auto* actor = Twin();
@@ -235,6 +348,15 @@ namespace Lifecast::Edit::Compare
 			spdlog::info("[compare] dress ({}): took {} off her, asked for {} of the player's {} ({} of them new to "
 						 "her bag) - she now reads {} worn, {} inventory stacks",
 				a_why, hers.size(), asked, theirs.size(), added, nowWorn, inv.size());
+
+			// E19.1: the data is right, now the body. The player is the control,
+			// read by the same fields in the same pass - she has a process
+			// nobody doubts, so a refresh that reads differently on the figure
+			// says where the figure differs.
+			Refresh3D(actor, "the second figure");
+			if (a_control) {
+				Refresh3D(player, "the player, control");
+			}
 		}
 
 		// ----- born, parked, fetched, shown ---------------------------------------
@@ -318,6 +440,8 @@ namespace Lifecast::Edit::Compare
 
 			g_base = dup;
 			g_twin = placed->CreateRefHandle();
+			g_hidden = false;
+			g_hidePending = false;
 			g_cellId = CellOf(placed.get());
 			g_bornInMenu = Session::MenuOpen();
 			g_bornAt = Clock::now();
@@ -336,7 +460,20 @@ namespace Lifecast::Edit::Compare
 				a_when, dup->GetFormID(), placed->GetFormID(), P(placed->GetPosition()), g_cellId,
 				placed->Is3DLoaded() ? "LOADED" : "not loaded", g_bornInMenu ? "OPEN" : "closed");
 
+			// E19, gate 1: the process level of THIS figure, at the instant of
+			// birth. It is read again once her body is there (the tick, and the
+			// refresh), because a process can appear after the 3D does.
+			spdlog::info("[compare] {}: process readback at birth - {}", a_when, Read(Twin()));
+
 			Park("just born");
+
+			// Born with the menu closed, she is not wanted until the next opening.
+			// Born with it open (the first-opening path), she is wanted NOW and
+			// goes when the editor closes.
+			if (!Session::MenuOpen()) {
+				g_hidePending = true;
+				g_settleUntil = Clock::now() + kSettle;
+			}
 			return true;
 		}
 
@@ -402,6 +539,98 @@ namespace Lifecast::Edit::Compare
 			return true;
 		}
 
+		// ----- gone, and back (E19) -----------------------------------------------
+		//
+		// The author's requirement, verbatim: after she leaves the panel she must
+		// vanish - not stay in the world, not be interactable, not walk away, not
+		// exist to the player's eyes. Park() only culls her node, and boot 107
+		// showed what that leaves: a culled actor is still standing there, with
+		// her collision, her name over the crosshair and her dialogue.
+		//
+		// Two calls, and each is read back:
+		//   Disable()               takes the reference out of the world.
+		//   SetActivationBlocked()  belt and braces for the case Disable leaves
+		//                           her targetable.
+		// SetDelete is NOT among them, and it is the one that is measured to
+		// crash (V099). Disable() alone has never been isolated: V099 tested it
+		// together with SetDelete. The first Disable() therefore waits until her
+		// body has had time to finish loading (kSettle, at the top of the file),
+		// because the two crashes that nobody attributed both landed on a 3D
+		// still in flight.
+
+		void Vanish(const char* a_why)
+		{
+			g_hidePending = false;
+			auto* actor = Twin();
+			if (!actor || g_hidden) {
+				return;
+			}
+			const auto from = actor->GetPosition();
+			spdlog::info("[compare] vanish ({}): before - {}", a_why, Read(actor));
+			if (auto* root = actor->Get3D(false)) {
+				root->SetAppCulled(true);
+			}
+			actor->SetActivationBlocked(true);
+			actor->Disable();
+			g_hidden = true;
+			spdlog::info("[compare] vanish ({}): SetActivationBlocked(true) and Disable() called - right after: {} | cell {:08X}, "
+						 "born in {:08X}",
+				a_why, Read(actor), CellOf(actor), g_cellId);
+			g_watch = true;
+			g_watchAt = Clock::now() + std::chrono::milliseconds(3000);
+			g_watchFrom = from;
+		}
+
+		// Called every tick while a vanish is owed. It does nothing until she has
+		// a body that has been there for kSettle.
+		void TryVanish()
+		{
+			if (!g_hidePending || Clock::now() < g_settleUntil) {
+				return;
+			}
+			auto* actor = Twin();
+			if (!actor) {
+				g_hidePending = false;
+				return;
+			}
+			if (g_cull || !actor->Get3D(false) || !actor->Is3DLoaded()) {
+				return;  // the body has not arrived; the tick that culls her sets the settle time again
+			}
+			Vanish("the editor is closed");
+		}
+
+		void Appear(const char* a_why)
+		{
+			g_hidePending = false;
+			auto* actor = Twin();
+			if (!actor) {
+				g_hidden = false;
+				return;
+			}
+			if (!g_hidden) {
+				return;
+			}
+			const auto from = actor->GetPosition();
+			spdlog::info("[compare] return ({}): before - {}", a_why, Read(actor));
+			actor->SetActivationBlocked(false);
+			actor->Enable(false);
+			g_hidden = false;
+			// The AI bit is asserted again rather than trusted: Disable and Enable
+			// are the engine's own lifecycle and nothing here has measured that
+			// they leave the bit alone. She must not walk.
+			actor->EnableAI(false);
+			// Her body comes back not culled. The tick culls it as soon as there is
+			// one, exactly as it does for a figure that was just born.
+			g_cull = true;
+			g_bornAt = Clock::now();
+			spdlog::info("[compare] return ({}): Enable(false), SetActivationBlocked(false), EnableAI(false) called - right "
+						 "after: {}",
+				a_why, Read(actor));
+			g_watch = true;
+			g_watchAt = Clock::now() + std::chrono::milliseconds(3000);
+			g_watchFrom = from;
+		}
+
 		// ----- the bridge ---------------------------------------------------------
 
 		double Num(const nlohmann::json& a_d, const char* a_key, double a_fallback)
@@ -459,7 +688,7 @@ namespace Lifecast::Edit::Compare
 				// THIS instant, and boot 93 ran it once and skipped it on the
 				// second switch-on of the same opening, which would leave her in
 				// last switch-on's clothes if the player changed in between.
-				Dress("the comparison was turned on");
+				Dress("the comparison was turned on", true);
 				if (!Show()) {
 					Push("compare-set refused");
 					return;
@@ -499,9 +728,20 @@ namespace Lifecast::Edit::Compare
 					spdlog::info("[compare] the body arrived {} ms after she was placed - that gap is how long a copy "
 								 "of the player stood visible in the world",
 						flash);
+					spdlog::info("[compare] the body arrived - {}", Read(actor));
 					Park("the body finally loaded");
+					g_settleUntil = Clock::now() + kSettle;
 				}
 			}
+
+			if (g_watch && Clock::now() >= g_watchAt) {
+				g_watch = false;
+				if (auto* actor = Twin()) {
+					spdlog::info("[compare] watch, 3 s later: {} | moved {:.2f} units from where she was", Read(actor),
+						actor->GetPosition().GetDistance(g_watchFrom));
+				}
+			}
+			TryVanish();
 
 			if (!g_arm || Session::MenuOpen()) {
 				return;
@@ -525,6 +765,11 @@ namespace Lifecast::Edit::Compare
 		{
 			g_on = false;
 			g_why.clear();
+			// She is back before anything else is asked of her, so the page's
+			// first Compare click finds a body and not a figure still gone.
+			if (TwinHere()) {
+				Appear("the menu opened");
+			}
 			if (!TwinHere()) {
 				// The measured birth has not happened in this room. Try the
 				// other one anyway - born with the menu already open - because
@@ -548,6 +793,9 @@ namespace Lifecast::Edit::Compare
 			g_on = false;
 			g_why.clear();
 			g_arm = true;
+			// E19: she goes when the editor does. TryVanish waits for her body.
+			g_hidePending = true;
+			g_settleUntil = Clock::now() + kSettle;
 		}
 	}
 
