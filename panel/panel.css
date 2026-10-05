@@ -179,6 +179,23 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* The always-visible buttons (D126), after the categories. */
+.belt-sep {
+  align-self: stretch;
+  margin: 10px 6px;
+  border-left: 1px solid var(--panel-border);
+}
+
+.belt-quick {
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.belt-quick.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* The small panel: closed until a category, All, search or Changed opens it.
    A head that stays put over a body that scrolls. */
 .belt-panel {
@@ -807,6 +824,34 @@ html[data-belt-region] #sections > .group-heading {
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+/* Character Control (D127): fixed over the stage's lower left corner, the
+   stage bar's look. Its notes (why a toggle refused) stay inline. */
+.control-bar {
+  position: absolute;
+  left: calc(var(--gap) * 3);
+  bottom: calc(var(--belt-height) + var(--gap) * 3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+html[data-belt-open] .control-bar {
+  left: calc(var(--panel-width) * var(--panel-scale) + var(--gap) * 3);
+}
+
+.control-note {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.control-note:empty {
+  display: none;
 }
 
 /* The open small panel takes its width off the stage. */

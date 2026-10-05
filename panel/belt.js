@@ -67,6 +67,40 @@ const LifecastBelt = (() => {
     buttons.set(name, b);
   }
 
+  // The always-visible buttons (autor, 2026-10-05 - D126), after the
+  // categories: Presets and OBody open their region from anywhere, Sculpt
+  // hands over to RaceMenu (the one thing the Lifecast does not do - D125).
+  // OBody shows only when its section exists: without the mod there is no
+  // section (D007), and a button to nothing would be a lie.
+  const QUICK = [
+    { name: "Presets", cat: "Presets", key: "presets" },
+    { name: "OBody", cat: "Body", key: "obody" },
+    { name: "Sculpt", title: "Opens RaceMenu's Sculpt (F4 comes back)", send: "sculpt" },
+  ];
+  const quick = [];
+  const sep = document.createElement("span");
+  sep.className = "belt-sep";
+  nav.appendChild(sep);
+  for (const q of QUICK) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.tabIndex = -1;
+    b.className = "panel-button belt-quick";
+    b.textContent = q.name;
+    if (q.title) {
+      b.title = q.title;
+    }
+    b.addEventListener("click", () => {
+      if (q.send) {
+        LifecastBridge.send("show-racemenu", { for: q.send });
+      } else {
+        openRegion(q.cat, q.key);
+      }
+    });
+    nav.appendChild(b);
+    quick.push({ q: q, el: b });
+  }
+
   // A second click on the open category closes the panel.
   function choose(name) {
     if (name === "All") {
@@ -81,6 +115,16 @@ const LifecastBelt = (() => {
         ui.region = keys.indexOf(kept) >= 0 ? kept : (keys[0] || null);
       }
     }
+    apply();
+    host.scrollTop = 0;
+  }
+
+  // One region of one category, from a quick button; pressed again, closes.
+  function openRegion(cat, key) {
+    const shown = !ui.all && !ui.results && ui.cat === cat && ui.region === key;
+    ui.all = false;
+    ui.cat = shown ? null : cat;
+    ui.region = shown ? ui.region : key;
     apply();
     host.scrollTop = 0;
   }
@@ -117,6 +161,12 @@ const LifecastBelt = (() => {
       const on = name === "All" ? ui.all && !ui.results : name === ui.cat && !wide;
       b.classList.toggle("is-on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    for (const { q, el } of quick) {
+      if (q.key) {
+        el.hidden = !host.querySelector(':scope > .section[data-key="' + q.key + '"]');
+        el.classList.toggle("is-on", region && ui.cat === q.cat && ui.region === q.key);
+      }
     }
     root.toggleAttribute("data-belt-open", wide || region);
     root.toggleAttribute("data-belt-wide", wide);
@@ -163,6 +213,7 @@ const LifecastBelt = (() => {
   return {
     choose: choose,
     chooseRegion: chooseRegion,
+    openRegion: openRegion,
     state: () => ({ cat: ui.cat, region: ui.region, all: ui.all, results: ui.results }),
   };
 })();

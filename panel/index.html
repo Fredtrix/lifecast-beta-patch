@@ -108,6 +108,13 @@
     <div id="stage-bar" class="stage-bar" hidden></div>
   </section>
 
+  <!--
+    Character Control (Undress, Light, Compare): always open and always on
+    screen (D127), over the stage's lower left corner - outside #stage, so
+    it is neither part of the drag nor hidden with the frame. control.js.
+  -->
+  <div id="control-bar" class="control-bar" aria-label="Character Control"></div>
+
   <script src="keyboard.js"></script>
   <script src="bridge.js"></script>
   <script src="settings.js"></script>

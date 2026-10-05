@@ -16,16 +16,18 @@
 // The categories of the belt (Fase 7, E4: the LB structure, D119) ARE the
 // groups: one mapping, read by controls.js to draw the headings of All and by
 // belt.js to build the belt. A section's key decides its category here and
-// nowhere else.
+// nowhere else. A group marked quick is not a category word on the belt but
+// one of its always-visible buttons (D126).
 const LifecastGroups = (() => {
   const GROUPS = [
-    { title: "Character", test: (key) => key === "character" || key === "control" },
+    // "In RaceMenu" (delegate) sits here only until its rows move into the
+    // Lifecast (D125); Character Control left the list for a fixed bar (D127).
+    { title: "Character", test: (key) => key === "character" || key === "delegate" },
     { title: "Body", test: (key) => key === "look:Body" || key === "scales" || key === "obody" },
     { title: "Head", test: (key) => key === "look:Hair" || key === "look:Features" || (key.indexOf("face:") === 0 && key !== "face:paint") },
     { title: "Skin & Paint", test: (key) => key === "tints" || key.indexOf("overlay:") === 0 || key === "face:paint" },
     { title: "Morphs", test: (key) => key.indexOf("morph:") === 0 },
-    { title: "Presets", test: (key) => key === "presets" },
-    { title: "RaceMenu", test: (key) => key === "delegate" },
+    { title: "Presets", quick: true, test: (key) => key === "presets" },
   ];
 
   // key can be undefined for a section still mounting (E2 item 3): a section
@@ -50,14 +52,16 @@ const LifecastGroups = (() => {
   // keep the order they mount in. "face:paint" is named on its own so it
   // joins Skin & Paint, not Head.
   LifecastControls.setOrder([
-    "character", "control",
+    "character", "delegate",
     "look:Body", "scales", "obody",
     "look:Hair", "look:Features", "face:*",
     "tints", "overlay:body", "overlay:hand", "overlay:foot", "face:paint",
     "morph:*",
     "presets",
-    "delegate",
   ]);
 
-  return { names: GROUPS.map((g) => g.title), groupOf: groupOf };
+  return {
+    names: GROUPS.filter((g) => !g.quick).map((g) => g.title),
+    groupOf: groupOf,
+  };
 })();

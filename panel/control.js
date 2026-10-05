@@ -40,8 +40,14 @@
 "use strict";
 
 (() => {
-  const section = LifecastControls.section("Character Control");
-  LifecastControls.mount(section, "control");
+  // Always open and always on screen (autor, 2026-10-05 - D127): not a
+  // section of the list but a fixed bar of its own over the stage's corner,
+  // so no category, search or collapse can take it away.
+  const section = { body: document.getElementById("control-bar") };
+  if (!section.body) {
+    return;
+  }
+  section.body.appendChild(LifecastControls.el("span", "stage-group-title", "Character"));
 
   const button = LifecastControls.el("button", "panel-button control-button", "Undress");
   button.type = "button";
