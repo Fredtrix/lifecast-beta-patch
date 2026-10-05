@@ -52,7 +52,7 @@ const LifecastBelt = (() => {
   }
 
   const buttons = new Map();
-  for (const name of LifecastGroups.names.concat(["All"], LifecastGroups.after)) {
+  for (const name of LifecastGroups.names.concat(["All"])) {
     const b = document.createElement("button");
     b.type = "button";
     b.tabIndex = -1;

@@ -15,7 +15,6 @@
   <aside id="panel" class="panel">
     <header class="panel-header">
       <h1 class="panel-title">Lifecast</h1>
-      <span id="bridge-status" class="status status-wait">connecting</span>
     </header>
 
     <!-- The categories of the belt, built by belt.js from groups.js. -->
@@ -54,7 +53,12 @@
           a section; the name and Finish moved to the belt (D129).
         -->
         <div id="finish">
-          <!-- Page, DLL and protocol versions: read when something is wrong. -->
+          <!--
+            The bridge to the DLL, and page, DLL and protocol versions: read
+            when something is wrong. A bridge in trouble also marks the
+            Settings button (D133) - panel.js.
+          -->
+          <span id="bridge-status" class="status status-wait">connecting</span>
           <span id="versions" class="versions"></span>
         </div>
       </main>

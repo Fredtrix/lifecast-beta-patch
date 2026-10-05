@@ -24,16 +24,21 @@
   const statusEl = document.getElementById("bridge-status");
   const versionsEl = document.getElementById("versions");
   const toRaceMenuEl = document.getElementById("to-racemenu");
+  const settingsEl = document.getElementById("settings-button");
 
   let answered = false;
 
-  // Seen only when something is wrong (D131): a working bridge is the normal
-  // case and tells the player nothing; "connecting" that never ends, a version
-  // mismatch or no bridge at all stay on screen.
+  // The status lives in Settings > Debug (D133). A working bridge is the
+  // normal case and tells the player nothing; a broken one (a version
+  // mismatch, no bridge) also marks the Settings button, so it is not hidden
+  // behind a click nobody makes.
   function setStatus(text, kind) {
     statusEl.textContent = text;
     statusEl.className = "status status-" + kind;
-    statusEl.hidden = kind === "ok";
+    if (settingsEl) {
+      settingsEl.classList.toggle("has-trouble", kind === "bad");
+      settingsEl.title = kind === "bad" ? "Bridge: " + text : "";
+    }
   }
 
   LifecastBridge.on("hello", (data) => {

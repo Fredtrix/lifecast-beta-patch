@@ -305,6 +305,17 @@ html[data-belt-region] #sections > .group-heading {
   font-size: 12px;
 }
 
+/* In Settings > Debug (D133), one line above the versions. */
+#bridge-status {
+  display: block;
+}
+
+/* A bridge in trouble marks the Settings button (D133). */
+.panel-button.has-trouble {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
 .status-wait {
   color: var(--text-dim);
 }
