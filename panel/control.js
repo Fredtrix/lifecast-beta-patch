@@ -202,4 +202,50 @@
   });
 
   renderCompare();
+
+  // ----- out of the stage bar's way --------------------------------------
+  // This bar sits at the stage's left edge and the camera bar at the stage's
+  // middle, on the same line. With the panel open and a large panel scale,
+  // or on a narrow screen, the stage is too narrow for both and this one
+  // covered the camera bar (measured in the E5 photos: 1920 at 160%, 1280
+  // at 100%). Then this bar goes up, over the camera bar, by just enough -
+  // --control-lift; zero otherwise. Read from the rects, so it follows the
+  // scale, the open panel and the window without knowing any of them.
+  const stageBar = document.getElementById("stage-bar");
+  let lift = 0;
+
+  function placeBar() {
+    let want = 0;
+    if (stageBar && !stageBar.hidden && stageBar.offsetParent !== null) {
+      const c = section.body.getBoundingClientRect();
+      const s = stageBar.getBoundingClientRect();
+      const gap = 8;
+      if (c.right + gap > s.left && c.left < s.right + gap) {
+        // Measured with the current lift in place; undo it to get the base.
+        want = Math.ceil(c.bottom + lift - s.top + gap);
+      }
+    }
+    if (want !== lift) {
+      lift = want;
+      section.body.style.setProperty("--control-lift", lift + "px");
+    }
+  }
+
+  window.addEventListener("resize", placeBar);
+  if (typeof ResizeObserver !== "undefined") {
+    const watch = new ResizeObserver(placeBar);
+    watch.observe(section.body);
+    if (stageBar) {
+      watch.observe(stageBar);
+    }
+    watch.observe(document.getElementById("stage"));
+  }
+  // The open panel and the scale change the stage's width through
+  // attributes and the style on <html>; the stage bar shows and hides.
+  const changes = new MutationObserver(placeBar);
+  changes.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "data-belt-open"] });
+  if (stageBar) {
+    changes.observe(stageBar, { attributes: true, attributeFilter: ["hidden"] });
+  }
+  placeBar();
 })();
