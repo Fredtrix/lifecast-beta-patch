@@ -335,6 +335,57 @@ namespace Lifecast::Edit::Compare
 				a_who, hasManager && manager ? "present" : "ABSENT", speed, gotSpeed ? "read" : "NOT read", direction,
 				gotDirection ? "read" : "NOT read", idle ? idle->GetFormID() : 0, idle ? idle->GetFormEditorID() : "-",
 				process ? "present" : "absent", middle ? "present" : "absent");
+
+			// E24.1 - the same read, deeper (all fields from headers read 2026-10-05): is the graph LINKED and ACTIVE,
+			// what level does the process hold, which of the flags that drive the graph update are set. Nothing is written.
+			const auto  level = a_actor->GetProcessLevel();
+			auto*       high = process ? process->high : nullptr;
+			auto*       sequencerIdle = high ? high->currentProcessIdle : nullptr;
+			const auto& flags = a_actor->GetActorRuntimeData().boolFlags;
+			std::size_t graphs = 0;
+			int         linked = -1;
+			int         active = -1;
+			bool        behavior = false;
+			if (hasManager && manager) {
+				graphs = manager->graphs.size();
+				if (graphs > 0 && manager->graphs[0]) {
+					if (auto* bg = manager->graphs[0]->behaviorGraph) {
+						behavior = true;
+						linked = bg->isLinked ? 1 : 0;
+						active = bg->isActive ? 1 : 0;
+					}
+				}
+			}
+			spdlog::info("[compare] graph+ ({}): processLevel {} | InHigh {} InMiddleHigh {} | graphs {} | behaviorGraph {} "
+						 "isLinked {} isActive {} | currentProcessIdle {:08X} | flags ShouldAnimGraphUpdate {} "
+						 "ForceOneAnimgraphUpdate {} ForceAnimGraphUpdate {} | AnimationDriven {}",
+				a_who, static_cast<int>(level), process && process->InHighProcess(), process && process->InMiddleHighProcess(),
+				graphs, behavior ? "present" : "absent/not read", linked, active, sequencerIdle ? sequencerIdle->GetFormID() : 0,
+				flags.all(RE::Actor::BOOL_FLAGS::kShouldAnimGraphUpdate), flags.all(RE::Actor::BOOL_FLAGS::kForceOneAnimgraphUpdate),
+				flags.all(RE::Actor::BOOL_FLAGS::kForceAnimGraphUpdate), a_actor->IsAnimationDriven());
+
+			// E24.1 - graph variables, by name, tried as bool, int and float; a name the graph does not hold reads
+			// false in all three. The names are data (strings of the vanilla behavior graph), not API; a name that
+			// reads on one figure and not on the other, or differs, is the finding. Nothing is written.
+			static const char* const kNames[] = { "bAnimationDriven", "bIsSynced", "iSyncIdleLocomotion", "iState",
+				"IsBeastRace", "IsSneaking", "iLeftHandEquipped", "iRightHandEquipped", "iRightHandType", "iLeftHandType",
+				"SpeedSampled", "TurnDelta", "Pitch", "bAllowRotation", "bHeadTrackingOn", "IsAttackReady", "IsFirstPerson",
+				"iIsInSneak", "bNoStagger", "bInJumpState" };
+			std::string line;
+			for (const char* name : kNames) {
+				const RE::BSFixedString key(name);
+				bool                    b = false;
+				std::int32_t            i = 0;
+				float                   f = 0.0f;
+				if (a_actor->GetGraphVariableBool(key, b)) {
+					line += fmt::format(" {}=bool:{}", name, b);
+				} else if (a_actor->GetGraphVariableInt(key, i)) {
+					line += fmt::format(" {}=int:{}", name, i);
+				} else if (a_actor->GetGraphVariableFloat(key, f)) {
+					line += fmt::format(" {}=float:{}", name, f);
+				}
+			}
+			spdlog::info("[compare] graph vars ({}), only the names that READ:{}", a_who, line.empty() ? " none" : line);
 		}
 #endif
 
@@ -1335,6 +1386,13 @@ namespace Lifecast::Edit::Compare
 #ifdef LIFECAST_TUNING
 		// Development build only (E20.2): the dress and the refresh WITH the comparison
 		// already on and her body on screen, so a frame can sit on each side of it.
+		// E24.1: the graph read, on demand, for both figures. Read-only.
+		void OnCompareGraph(const nlohmann::json&)
+		{
+			DumpGraph(Twin(), "the second figure (asked)");
+			DumpGraph(RE::PlayerCharacter::GetSingleton(), "the player (asked)");
+		}
+
 		void OnCompareDress(const nlohmann::json&)
 		{
 			if (!g_on) {
@@ -1538,6 +1596,7 @@ namespace Lifecast::Edit::Compare
 		Panel::Bridge::On("compare-set", &OnCompareSet);
 #ifdef LIFECAST_TUNING
 		Panel::Bridge::On("compare-dress", &OnCompareDress);
+		Panel::Bridge::On("compare-graph", &OnCompareGraph);
 #endif
 		g_installed = true;
 		spdlog::info("[compare] installed");
