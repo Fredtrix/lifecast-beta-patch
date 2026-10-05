@@ -25,6 +25,12 @@
         <button id="shortcut-sculpt" class="panel-button" type="button" title="Opens RaceMenu (F4 comes back)">Sculpt</button>
       </nav>
       <span id="bridge-status" class="status status-wait">connecting</span>
+      <!--
+        The way out, always on screen (autor, 2026-09-30): the name field and
+        the Finish below scroll away with the list, so the same action lives
+        here too. It runs the same handler - finish.js.
+      -->
+      <button id="finish-top" class="panel-button is-primary" type="button">Finish</button>
     </header>
 
     <!--
@@ -83,7 +89,7 @@
         One of the two ways back to RaceMenu. The other is F4, which the DLL
         registers with Meridian and which works even when this page does not.
       -->
-      <button id="to-racemenu" class="panel-button" type="button" title="F4">RaceMenu</button>
+      <button id="to-racemenu" class="panel-button is-primary" type="button" title="F4">RaceMenu (F4)</button>
     </footer>
   </aside>
 

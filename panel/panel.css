@@ -33,7 +33,27 @@
   --scrollbar-thumb: rgba(255, 255, 255, 0.28);
   --scrollbar-track: rgba(255, 255, 255, 0.04);
   --font: "Segoe UI", system-ui, sans-serif;
-  --gap: 12px;
+  --gap: 8px;
+  /* Type and spacing the author chose by eye (D114: compact, strong titles).
+     They are variables so a later skin or density changes them without
+     touching a rule. */
+  --text-size: 12.5px;
+  --title-size: 22px;
+  --title-weight: 700;
+  --section-title-size: 14px;
+  --section-title-weight: 700;
+  --section-title-color: var(--text);
+  --group-size: 12px;
+  --group-weight: 700;
+  --group-color: var(--accent);
+  --section-head-pad: 3px;
+  --slider-gap: 2px;
+  /* How long a section takes to open and shut (D115). ZERO is the off
+     switch: it gives back the instant toggle with no code touched. 160 ms
+     with ease is what the author watched in the probe - an inference from
+     what he SAW, not a number he chose; revisit with the colour. */
+  --section-anim: 160ms;
+  --section-ease: ease;
 }
 
 * {
@@ -87,7 +107,7 @@ body {
   left: 0;
   bottom: 0;
   width: calc(var(--panel-width) * var(--panel-scale));
-  font-size: calc(14px * var(--panel-scale));
+  font-size: calc(var(--text-size) * var(--panel-scale));
   display: flex;
   flex-direction: column;
   background: var(--panel-bg);
@@ -110,9 +130,9 @@ body {
 
 .panel-title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: var(--title-size);
+  font-weight: var(--title-weight);
+  letter-spacing: 0.02em;
   color: var(--accent);
 }
 
@@ -180,6 +200,17 @@ body {
   outline: none;
 }
 
+/* The two ways out of the page (E3): Finish confirms and leaves, RaceMenu
+   goes back to the old editor. The accent is a variable like any other. */
+.panel-button.is-primary {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+#to-racemenu {
+  padding: 6px 14px;
+}
+
 .panel-button:disabled {
   color: var(--text-dim);
   border-color: var(--panel-border);
@@ -233,11 +264,11 @@ body {
 .group-heading {
   margin-top: calc(var(--gap) * 1.5);
   margin-bottom: 4px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--group-size);
+  font-weight: var(--group-weight);
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--group-color);
 }
 
 .group-heading:first-child {
@@ -253,7 +284,7 @@ body {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 0;
+  padding: var(--section-head-pad) 0;
   font: inherit;
   text-align: left;
   color: inherit;
@@ -294,19 +325,32 @@ body {
   display: none;
 }
 
+/* Closing keeps the body displayed while its height runs down to 0 (D115);
+   controls.js sets data-closing and removes it at the end, so between
+   gestures a closed section is display:none exactly as before. */
+.section[data-closing="1"]:not([data-open="1"]) > .section-body {
+  display: block;
+}
+
+.section-body.is-animating {
+  overflow: hidden;
+  transition: height var(--section-anim) var(--section-ease),
+    padding-top var(--section-anim) var(--section-ease);
+}
+
 .section-title {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: var(--section-title-size);
+  font-weight: var(--section-title-weight);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--section-title-color);
 }
 
 .slider {
   display: grid;
   grid-template-columns: 1fr auto;
-  row-gap: 4px;
+  row-gap: var(--slider-gap);
   margin-bottom: var(--gap);
 }
 

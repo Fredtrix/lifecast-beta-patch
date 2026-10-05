@@ -47,13 +47,108 @@ const LifecastControls = (() => {
     head.setAttribute("aria-expanded", opts.open ? "true" : "false");
     head.addEventListener("click", () => {
       const open = s.dataset.open !== "1";
-      s.dataset.open = open ? "1" : "0";
+      toggle(s, body, open);
       head.setAttribute("aria-expanded", open ? "true" : "false");
       if (s.dataset.key) {
         saveOpen(s.dataset.key, open);
       }
     });
     return s;
+  }
+
+  // ----- opening and closing a section, animated only while it animates -----
+  //
+  // D115 (autor, 2026-10-05): a section eases open and shut, and it is in the
+  // layout ONLY during the animation. A closed section is display:none, which
+  // cannot animate, so closing keeps the body displayed (data-closing) until the
+  // height reaches 0 and then lets the closed rule hide it again - between
+  // gestures the panel is exactly what it was before this existed.
+  //
+  // The off switch is ONE declaration, no code: --section-anim: 0ms in :root.
+  // A duration of zero takes the first branch below, which is the old toggle.
+  //
+  // Each animation measures itself (frame intervals between its start and end)
+  // and tells the DLL, which logs every page message whether or not it has a
+  // handler - "anim-measure" has none on purpose, so the number lands in
+  // Lifecast.log with no DLL change. The "no handler" warning that follows is
+  // that, and is expected.
+  function sectionAnimMs() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--section-anim").trim();
+    const n = parseFloat(raw);
+    if (!isFinite(n) || n <= 0) {
+      return 0;
+    }
+    return /ms$/.test(raw) ? n : (/s$/.test(raw) ? n * 1000 : n);
+  }
+
+  function toggle(s, body, open) {
+    if (s._animEnd) {
+      s._animEnd();
+    }
+    const ms = sectionAnimMs();
+    if (ms === 0) {
+      s.dataset.open = open ? "1" : "0";
+      return;
+    }
+    if (open) {
+      s.dataset.open = "1";
+    } else {
+      s.dataset.closing = "1";
+      s.dataset.open = "0";
+    }
+    const target = open ? body.scrollHeight : 0;
+    // Where it starts: opening grows from 0, closing shrinks from where it is.
+    const from = open ? 0 : body.scrollHeight;
+    body.style.height = from + "px";
+    if (open) {
+      body.style.paddingTop = "0px";
+    }
+    body.classList.add("is-animating");
+    void body.offsetHeight;
+    body.style.height = target + "px";
+    body.style.paddingTop = open ? "" : "0px";
+
+    const t0 = performance.now();
+    const frames = [];
+    let last = t0;
+    let raf = requestAnimationFrame(function tick(now) {
+      frames.push(now - last);
+      last = now;
+      raf = requestAnimationFrame(tick);
+    });
+    let finished = false;
+    const timer = setTimeout(end, ms + 80);
+    function end() {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      clearTimeout(timer);
+      cancelAnimationFrame(raf);
+      body.removeEventListener("transitionend", onEnd);
+      body.classList.remove("is-animating");
+      body.style.height = "";
+      body.style.paddingTop = "";
+      delete s.dataset.closing;
+      s._animEnd = null;
+      const took = performance.now() - t0;
+      const worst = frames.length ? Math.max.apply(null, frames) : 0;
+      LifecastBridge.send("anim-measure", {
+        what: open ? "section-open" : "section-close",
+        key: s.dataset.key || "",
+        wantedMs: ms,
+        tookMs: Math.round(took),
+        frames: frames.length,
+        worstFrameMs: Math.round(worst),
+      });
+    }
+    function onEnd(e) {
+      if (e.target === body && e.propertyName === "height") {
+        end();
+      }
+    }
+    body.addEventListener("transitionend", onEnd);
+    s._animEnd = end;
   }
 
   // Which sections the player left open, kept by the DLL (autor

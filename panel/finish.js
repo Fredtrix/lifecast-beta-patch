@@ -40,6 +40,9 @@
   const field = document.getElementById("finish-name");
   const button = document.getElementById("finish-button");
   const note = document.getElementById("finish-note");
+  // The same action, always on screen in the header (E3). Optional: a page
+  // without it behaves as before.
+  const top = document.getElementById("finish-top");
   if (!field || !button || !note) {
     console.error("[finish] the name and finish elements are missing from the page");
     return;
@@ -58,10 +61,19 @@
     note.textContent = text;
     note.className = "finish-note" + (kind ? " is-" + kind : "");
     note.hidden = text === "";
+    // The note lives in the Character section, which may be scrolled out of
+    // view when Finish was pressed from the header; a refusal nobody can see
+    // is a button that does nothing.
+    if (kind === "bad" && text !== "") {
+      note.scrollIntoView({ block: "nearest" });
+    }
   }
 
   function render() {
     button.disabled = sent || readable === false;
+    if (top) {
+      top.disabled = button.disabled;
+    }
     field.disabled = sent || readable === false;
   }
 
@@ -73,7 +85,7 @@
     render();
   });
 
-  button.addEventListener("click", () => {
+  function finish() {
     if (sent) {
       return;
     }
@@ -97,7 +109,12 @@
       say("No bridge to the game - nothing was done.", "bad");
       render();
     }
-  });
+  }
+
+  button.addEventListener("click", finish);
+  if (top) {
+    top.addEventListener("click", finish);
+  }
 
   LifecastBridge.on("name", (data) => {
     const incoming = data && data.session !== undefined ? data.session : null;
