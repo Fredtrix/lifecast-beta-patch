@@ -15,6 +15,9 @@
   --panel-width: 430px;
   --panel-scale: 1;
   --belt-height: 48px;
+  /* The name row over the belt, only on the narrow belt (D136); 0 otherwise,
+     so everything placed from the bottom adds it unconditionally. */
+  --name-row: 0px;
   --finder-height: 40px;
   --panel-tall: 64vh;
   /* The skin: near-black with a green tint, light text, light green accent.
@@ -195,6 +198,88 @@ body {
 .belt-quick {
   margin-left: 4px;
   white-space: nowrap;
+}
+
+/* The quick buttons' group, and the arrow that only the narrow belt shows. */
+/* As tall as the belt, so the pop-up's "100%" is the belt's top edge. */
+.belt-more {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.belt-quick-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;   /* the belt's own gap, as when the buttons were its children */
+}
+
+.belt-more-toggle {
+  display: none;
+}
+
+.belt-more-toggle.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ----- the narrow belt (D136) ----------------------------------------------
+   belt.js sets data-belt-narrow when the belt does not fit in one row. The
+   counts go, the quick buttons go behind the arrow, and the name and Finish
+   go up to a row of their own over the belt. */
+html[data-belt-narrow] {
+  --name-row: 44px;
+}
+
+/* The name's column is empty on the narrow belt: the categories' column
+   grows into the room instead, so the belt stays one band. */
+html[data-belt-narrow] .panel {
+  grid-template-columns: calc(var(--panel-width) * var(--panel-scale)) minmax(max-content, 1fr) 0 auto;
+}
+
+html[data-belt-narrow] .belt-count {
+  display: none;
+}
+
+html[data-belt-narrow] .belt-more-toggle {
+  display: block;
+}
+
+html[data-belt-narrow] .belt-quick-group {
+  display: none;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--name-row) + var(--gap));
+  /* Over the stage and its bars, which come later in the page. */
+  z-index: 10;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+html[data-belt-narrow][data-belt-more] .belt-quick-group {
+  display: flex;
+}
+
+html[data-belt-narrow] .belt-quick-group .belt-quick {
+  margin-left: 0;
+}
+
+html[data-belt-narrow] .panel-toolbar {
+  grid-row: 1;
+  grid-column: 2 / -1;
+  align-self: end;
+  height: var(--name-row);
+  box-sizing: border-box;
+}
+
+html[data-belt-narrow]:not([data-belt-open]) .panel-toolbar {
+  grid-column: 1 / -1;
 }
 
 .belt-quick.is-on {
@@ -917,7 +1002,7 @@ html[data-belt-region] .section.is-region .preset-list {
 .stage {
   position: absolute;
   top: calc(var(--gap) * 2);
-  bottom: calc(var(--belt-height) + var(--gap) * 2);
+  bottom: calc(var(--belt-height) + var(--name-row) + var(--gap) * 2);
   left: calc(var(--gap) * 2);
   right: calc(var(--gap) * 2);
   border: 1px solid var(--stage-border);
@@ -936,7 +1021,7 @@ html[data-belt-region] .section.is-region .preset-list {
      the camera bar, centred on it, when the stage is too narrow for both on
      one line (D135); 0 otherwise. */
   left: calc(var(--gap) * 3 + var(--control-shift, 0px));
-  bottom: calc(var(--belt-height) + var(--gap) * 3 + var(--control-lift, 0px));
+  bottom: calc(var(--belt-height) + var(--name-row) + var(--gap) * 3 + var(--control-lift, 0px));
   display: flex;
   align-items: center;
   gap: 6px;
