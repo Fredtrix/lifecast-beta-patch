@@ -217,9 +217,18 @@ const LifecastControls = (() => {
   let order = [];
   let mounted = 0;
 
+  // An entry ending in "*" names every key that starts with what comes before
+  // it ("morph:*"): sections a mod produces on the DLL's own time cannot be
+  // named one by one, but their place can. An exact entry wins over a prefix
+  // one, so "face:paint" can sit apart from "face:*".
   function rank(a_el) {
-    const at = order.indexOf(a_el.dataset.key);
-    return at < 0 ? order.length : at;
+    const key = a_el.dataset.key;
+    const at = order.indexOf(key);
+    if (at >= 0) {
+      return at;
+    }
+    const pre = order.findIndex((o) => o.slice(-1) === "*" && typeof key === "string" && key.indexOf(o.slice(0, -1)) === 0);
+    return pre < 0 ? order.length : pre;
   }
 
   // What group a section's key belongs to (E2 item 1). null means no group -
@@ -262,19 +271,21 @@ const LifecastControls = (() => {
       bucket.push(s);
     });
 
-    let last;
-    [].concat.apply([], buckets).forEach((s) => {
-      const g = groupOf(s.dataset.key);
-      // Read by search.js to tell which heading a hidden section belongs to
-      // without depending on DOM adjacency (an ungrouped section can sit
-      // right after a group, and must not be read as still part of it).
-      s.dataset.group = g || "";
-      if (g && g !== last) {
-        const heading = el("div", "group-heading", g);
-        host.appendChild(heading);
+    // A group of ONE section gets no heading: the heading would only repeat
+    // the section's own title above it (Presets over Presets).
+    buckets.forEach((bucket) => {
+      const g = groupOf(bucket[0].dataset.key);
+      if (g && bucket.length > 1) {
+        host.appendChild(el("div", "group-heading", g));
       }
-      last = g;
-      host.appendChild(s);
+      bucket.forEach((s) => {
+        // Read by search.js to tell which heading a hidden section belongs
+        // to without depending on DOM adjacency (an ungrouped section can
+        // sit right after a group, and must not be read as still part of
+        // it), and by belt.js to tell which category a section is in.
+        s.dataset.group = g || "";
+        host.appendChild(s);
+      });
     });
   }
 

@@ -7,36 +7,30 @@
 </head>
 <body>
   <!--
-    The page is drawn over the whole screen, and only the side panel is
-    opaque: the character stays visible in the rest of it, which is the
-    point of editing live.
+    The page is drawn over the whole screen, and only the belt along the
+    bottom and the small panel over it are opaque: the character stays
+    visible in the rest of it, which is the point of editing live (D119, the
+    LB structure - belt.js).
   -->
   <aside id="panel" class="panel">
     <header class="panel-header">
       <h1 class="panel-title">Lifecast</h1>
-      <!--
-        Always-present shortcuts (E2 item 8): one click from anywhere in the
-        scrolled list to Presets or Body, and to RaceMenu's own Sculpt.
-        Buttons that jump, not a second navigation structure - shortcuts.js.
-      -->
-      <nav id="shortcuts" class="shortcuts" aria-label="Quick access">
-        <button id="shortcut-presets" class="panel-button" type="button">Presets</button>
-        <button id="shortcut-obody" class="panel-button" type="button">Body</button>
-        <button id="shortcut-sculpt" class="panel-button" type="button" title="Opens RaceMenu (F4 comes back)">Sculpt</button>
-      </nav>
       <span id="bridge-status" class="status status-wait">connecting</span>
       <!--
         The way out, always on screen (autor, 2026-09-30): the name field and
-        the Finish below scroll away with the list, so the same action lives
-        here too. It runs the same handler - finish.js.
+        the Finish below live in the Character region, so the same action
+        lives here too. It runs the same handler - finish.js.
       -->
       <button id="finish-top" class="panel-button is-primary" type="button">Finish</button>
     </header>
 
+    <!-- The categories of the belt, built by belt.js from groups.js. -->
+    <nav id="belt" class="belt-cats" aria-label="Categories"></nav>
+
     <!--
-      Search, the "changed" filter and the counter (E2 items 3, 4, 5): a
-      second bar, outside the scrolled list for the same reason the header
-      and footer are - search.js.
+      Search and the "changed" filter (E2 items 3, 4): on the belt, outside
+      the scrolled list, because a tool for finding a slider is useless if it
+      scrolls away with the sliders - search.js.
     -->
     <div id="toolbar" class="panel-toolbar">
       <input id="search" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Search sliders">
@@ -49,28 +43,40 @@
       -->
       <button id="undo" class="panel-button" type="button" disabled>Undo</button>
       <button id="redo" class="panel-button" type="button" disabled>Redo</button>
-      <span id="row-counter" class="versions"></span>
     </div>
 
-    <main id="sections" class="panel-body">
-      <p class="placeholder">No sections yet.</p>
-
-      <!--
-        The character's name and the button that ends the menu. finish.js
-        wraps this into the panel's FIRST section: they are the character's
-        identity, not a footer. A plain text input on purpose: keyboard.js
-        corrects the keyboard only for textarea and input of type text,
-        search or none.
-      -->
-      <div id="finish">
-        <label class="finish-label" for="finish-name">Name</label>
-        <div class="finish-row">
-          <input id="finish-name" class="preset-field" type="text" spellcheck="false" autocomplete="off">
-          <button id="finish-button" class="panel-button" type="button">Finish</button>
-        </div>
-        <p id="finish-note" class="finish-note" hidden></p>
+    <!--
+      The small panel, over the belt's left end. Its head holds the chips of
+      the open category's regions, or the row counter when more than one
+      region shows (E2 item 5) - outside #sections, see belt.js.
+    -->
+    <div class="belt-panel">
+      <div class="belt-head">
+        <div id="regions" class="region-chips"></div>
+        <span id="row-counter" class="versions"></span>
       </div>
-    </main>
+      <main id="sections" class="panel-body">
+        <p class="placeholder">No sections yet.</p>
+
+        <!--
+          The character's name and the button that ends the menu. finish.js
+          wraps this into the panel's FIRST section: they are the character's
+          identity, not a footer. A plain text input on purpose: keyboard.js
+          corrects the keyboard only for textarea and input of type text,
+          search or none.
+        -->
+        <div id="finish">
+          <label class="finish-label" for="finish-name">Name</label>
+          <div class="finish-row">
+            <input id="finish-name" class="preset-field" type="text" spellcheck="false" autocomplete="off">
+            <button id="finish-button" class="panel-button" type="button">Finish</button>
+          </div>
+          <p id="finish-note" class="finish-note" hidden></p>
+          <!-- Page, DLL and protocol versions: read when something is wrong. -->
+          <span id="versions" class="versions"></span>
+        </div>
+      </main>
+    </div>
 
     <footer class="panel-footer">
       <!--
@@ -84,7 +90,6 @@
         <span id="scale-value" class="versions">100%</span>
         <button id="scale-up" class="step-button" type="button" title="Bigger">+</button>
       </div>
-      <span id="versions" class="versions"></span>
       <!--
         One of the two ways back to RaceMenu. The other is F4, which the DLL
         registers with Meridian and which works even when this page does not.
@@ -109,7 +114,6 @@
   <script src="history.js"></script>
   <script src="panel.js"></script>
   <script src="controls.js"></script>
-  <script src="shortcuts.js"></script>
   <script src="search.js"></script>
   <script src="picker.js"></script>
   <script src="look.js"></script>
@@ -124,6 +128,7 @@
   <script src="finish.js"></script>
   <script src="control.js"></script>
   <script src="groups.js"></script>
+  <script src="belt.js"></script>
   <script src="stage.js"></script>
 </body>
 </html>

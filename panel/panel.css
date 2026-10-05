@@ -6,18 +6,16 @@
 */
 
 :root {
-  --panel-width: 546px;
-  /* What the player sets before touching the scale control - 420 x 1.3, the
-     author's own comparison ("o 100% igual ao 130% de hoje"). No fixed size
-     serves every resolution: the same panel is read close up on one machine
-     and from a couch on another, so a number chosen here is a guess about
-     someone else's monitor. Width and type scale together, and .stage
-     follows because its left edge is the same expression. Measured at both
-     100% and 160%, at 1280x720 and 2560x1440: the 100% figure only
-     improves the ratio at both resolutions, so it is safe to apply on its
-     own - the same measurement found the 160% ceiling DOES eat the
-     character at 1280x720, and that number is not decided here. */
+  /* The LB structure (D119): a belt along the bottom, and a small panel over
+     its left end. The panel's width and the type scale together with the
+     player's scale control, and .stage follows because its left edge is the
+     same expression. The width is the LB's in the E4a photos the author
+     chose from; --panel-tall is how far up the small panel grows for one
+     region (All, search and Changed take the whole height). */
+  --panel-width: 430px;
   --panel-scale: 1;
+  --belt-height: 48px;
+  --panel-tall: 64vh;
   --panel-bg: rgba(18, 18, 20, 0.92);
   --panel-border: rgba(255, 255, 255, 0.08);
   --text: #e6e6e6;
@@ -101,31 +99,166 @@ body {
   overflow: hidden;
 }
 
+/* The frame: one grid over the bottom of the screen. Row 2 is the belt -
+   header (as wide as the small panel), categories, search, footer; row 1 is
+   the small panel, over the header. The grid itself paints nothing: the
+   screen above the belt is the character's. */
 .panel {
   position: absolute;
-  top: 0;
   left: 0;
+  right: 0;
   bottom: 0;
-  width: calc(var(--panel-width) * var(--panel-scale));
   font-size: calc(var(--text-size) * var(--panel-scale));
-  display: flex;
-  flex-direction: column;
-  background: var(--panel-bg);
-  border-right: 1px solid var(--panel-border);
+  display: grid;
+  grid-template-columns: calc(var(--panel-width) * var(--panel-scale)) auto minmax(0, 1fr) auto;
+  grid-template-rows: auto var(--belt-height);
 }
 
 .panel-header,
+.belt-cats,
+.panel-toolbar,
 .panel-footer {
+  grid-row: 2;
   display: flex;
   align-items: center;
+  gap: 6px;
+  padding: 0 calc(var(--gap) * 1.5);
+  background: var(--panel-bg);
+  border-top: 1px solid var(--panel-border);
+}
+
+.panel-header {
+  grid-column: 1;
   justify-content: space-between;
+  border-right: 1px solid var(--panel-border);
+}
+
+.panel-footer {
+  grid-column: 4;
+  justify-content: space-between;
+  border-left: 1px solid var(--panel-border);
+}
+
+/* The categories (belt.js). A category is a word with its slider count; the
+   open one is underlined in the accent. */
+.belt-cats {
+  grid-column: 2;
+  gap: 2px;
+  border-right: 1px solid var(--panel-border);
+}
+
+.belt-cat {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 10px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.belt-cat:hover {
+  color: var(--text);
+}
+
+.belt-cat.is-on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.belt-count {
+  margin-left: 5px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The small panel: closed until a category, All, search or Changed opens it.
+   A head that stays put over a body that scrolls. */
+.belt-panel {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  max-height: var(--panel-tall);
+  background: var(--panel-bg);
+  border-top: 1px solid var(--panel-border);
+  border-right: 1px solid var(--panel-border);
+}
+
+html:not([data-belt-open]) .belt-panel {
+  display: none;
+}
+
+html[data-belt-wide] .belt-panel {
+  max-height: calc(100vh - var(--belt-height));
+}
+
+.belt-head {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
   padding: var(--gap) calc(var(--gap) * 1.5);
   border-bottom: 1px solid var(--panel-border);
 }
 
-.panel-footer {
-  border-bottom: none;
-  border-top: 1px solid var(--panel-border);
+.region-chips {
+  display: contents;
+}
+
+/* In one region the belt's numbers say the count; the counter is for when
+   more than one region shows. */
+html:not([data-belt-wide]) .belt-head #row-counter {
+  display: none;
+}
+
+.region-chip {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.region-chip:hover {
+  color: var(--text);
+}
+
+.region-chip.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+#sections > .section.is-off {
+  display: none;
+}
+
+/* One region: its body shows whatever its saved open state, and its head is
+   a title, not a toggle - collapsing the only thing on screen would leave an
+   empty panel. The saved open state is untouched, for All. */
+html[data-belt-region] #sections > .section.is-region > .section-body {
+  display: block;
+}
+
+html[data-belt-region] #sections > .section.is-region > .section-head {
+  pointer-events: none;
+}
+
+html[data-belt-region] #sections > .section.is-region .section-caret,
+html[data-belt-region] #sections > .group-heading {
+  display: none;
 }
 
 .panel-title {
@@ -137,7 +270,8 @@ body {
 }
 
 .panel-body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--gap) calc(var(--gap) * 1.5);
 }
@@ -217,31 +351,16 @@ body {
   cursor: default;
 }
 
-/* The always-present shortcuts (E2 item 8), between the title and the
-   status: buttons that jump to a section below, not a second navigation
-   structure. Reuses .panel-button and --gap - no token of its own, so the
-   Fase 7 skin still owns colour (D072: the palette is frozen). */
-.shortcuts {
-  display: flex;
-  gap: 6px;
-}
-
-/* Search, the "changed" filter and the counter (E2 items 3, 4, 5) - a
-   second bar, outside the scrolling body for the same reason the header and
-   footer are: a tool for finding a slider is useless if it scrolls away
-   with the sliders. Reuses .preset-field and .panel-button - no new token,
-   D072 still holds. */
+/* Search and the "changed" filter (E2 items 3, 4), on the belt: a tool for
+   finding a slider is useless if it scrolls away with the sliders. Reuses
+   .preset-field and .panel-button - no new token. */
 .panel-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: calc(var(--gap) * 0.75) calc(var(--gap) * 1.5);
-  border-bottom: 1px solid var(--panel-border);
+  grid-column: 3;
 }
 
 .panel-toolbar .preset-field {
   flex: 1;
-  min-width: 0;
+  min-width: 180px;
 }
 
 .panel-toolbar .panel-button[aria-pressed="true"] {
@@ -249,8 +368,14 @@ body {
   color: var(--accent);
 }
 
-.panel-toolbar .versions {
+#row-counter {
   white-space: nowrap;
+}
+
+/* The version line, at the foot of the Character region. */
+#finish #versions {
+  display: block;
+  margin-top: calc(var(--gap) * 1.5);
 }
 
 .section + .section {
@@ -673,8 +798,8 @@ body {
 .stage {
   position: absolute;
   top: calc(var(--gap) * 2);
-  bottom: calc(var(--gap) * 2);
-  left: calc(var(--panel-width) * var(--panel-scale) + var(--gap) * 2);
+  bottom: calc(var(--belt-height) + var(--gap) * 2);
+  left: calc(var(--gap) * 2);
   right: calc(var(--gap) * 2);
   border: 1px solid var(--stage-border);
   border-radius: 6px;
@@ -682,6 +807,11 @@ body {
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+/* The open small panel takes its width off the stage. */
+html[data-belt-open] .stage {
+  left: calc(var(--panel-width) * var(--panel-scale) + var(--gap) * 2);
 }
 
 .stage.is-dragging {

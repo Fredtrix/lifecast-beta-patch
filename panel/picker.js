@@ -212,9 +212,15 @@ const LifecastPicker = (() => {
       draw();
     }
 
+    // Opened, it scrolls into view: it opens inline under its chip, and in
+    // the small panel a chip near the bottom would open it out of sight
+    // (E4, D120 - nothing floats over the stage).
     function toggle() {
       wrap.hidden = !wrap.hidden;
       refresh();
+      if (!wrap.hidden) {
+        wrap.scrollIntoView({ block: "nearest" });
+      }
     }
 
     return { el: wrap, toggle: toggle, refresh: refresh, dragging: () => state.dragging };

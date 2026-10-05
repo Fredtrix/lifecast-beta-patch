@@ -13,15 +13,24 @@
 // What stays is the grouping, which is the job the file is named after.
 "use strict";
 
-(() => {
+// The categories of the belt (Fase 7, E4: the LB structure, D119) ARE the
+// groups: one mapping, read by controls.js to draw the headings of All and by
+// belt.js to build the belt. A section's key decides its category here and
+// nowhere else.
+const LifecastGroups = (() => {
   const GROUPS = [
-    { title: "Body", test: (key) => key === "look:Body" || key === "look:Hair" || key === "look:Features" || key === "obody" || key === "scales" || key === "tints" || key.indexOf("overlay:") === 0 || key.indexOf("morph:") === 0 },
-    { title: "Face", test: (key) => key.indexOf("face:") === 0 },
+    { title: "Character", test: (key) => key === "character" || key === "control" },
+    { title: "Body", test: (key) => key === "look:Body" || key === "scales" || key === "obody" },
+    { title: "Head", test: (key) => key === "look:Hair" || key === "look:Features" || (key.indexOf("face:") === 0 && key !== "face:paint") },
+    { title: "Skin & Paint", test: (key) => key === "tints" || key.indexOf("overlay:") === 0 || key === "face:paint" },
+    { title: "Morphs", test: (key) => key.indexOf("morph:") === 0 },
+    { title: "Presets", test: (key) => key === "presets" },
+    { title: "RaceMenu", test: (key) => key === "delegate" },
   ];
 
   // key can be undefined for a section still mounting (E2 item 3): a section
-  // without a key must never reach a group's test, because one test here
-  // (Face) calls .indexOf on it without a guard of its own.
+  // without a key must never reach a group's test, because the tests call
+  // .indexOf on it without a guard of their own.
   function groupOf(key) {
     if (typeof key !== "string") {
       return null;
@@ -32,33 +41,23 @@
 
   LifecastControls.setGroups(groupOf);
 
-  // The explicit order this page had by accident, from the <script> tags,
-  // before OBody's section started mounting on the DLL's own time (E2 item
-  // 1): without a declared order an async mount always lands last, wherever
-  // "last" happens to be when the DLL answers. Only OBody needed naming to
-  // fix that; character, control and the Body group members are named too so
-  // that naming OBody does not silently move any of them.
-  // The paint overlay sections mount on the DLL's own time, like OBody, so
-  // the three body ones are named here or they land wherever "last" happens
-  // to be. Face paint is deliberately NOT named: a rank puts a section ahead
-  // of every unranked one, which would tear the Face group in two - a
-  // heading above face paint and a second heading above the face sections
-  // that have no rank. Unranked, it falls last inside its own group, which
-  // is both stable and where it belongs.
-  //
-  // That last sentence was WRONG when it was written and is true now: an
-  // unranked section used to sort past every group and open a second heading
-  // of its own down at the bottom - which is exactly the tearing the sentence
-  // says it avoids. controls.js rank() now lends an unranked section the
-  // place of its group. Measured on the bench, 2026-09-30.
-  //
-  // The sections a mod's tab produces (morph:<key>) are unranked for a second
-  // reason on top of that one: which of them exist is the player's mod order,
-  // so there is no order to declare that would survive a different machine.
-  // Unranked they fall last inside Body, in the order RaceMenu lists them.
+  // The order, category by category. Without a declared place a section
+  // mounted on the DLL's own time (OBody, the paint overlays, a mod's morph
+  // tabs) lands wherever "last" happens to be when the DLL answers - after
+  // Presets and RaceMenu, for the morphs. "morph:*" and "face:*" give a place
+  // to keys that cannot be named one by one (which morph tabs exist is the
+  // player's mod order; the face groups are RaceMenu's); inside a prefix they
+  // keep the order they mount in. "face:paint" is named on its own so it
+  // joins Skin & Paint, not Head.
   LifecastControls.setOrder([
     "character", "control",
-    "look:Body", "look:Hair", "look:Features", "scales", "obody", "tints",
-    "overlay:body", "overlay:hand", "overlay:foot",
+    "look:Body", "scales", "obody",
+    "look:Hair", "look:Features", "face:*",
+    "tints", "overlay:body", "overlay:hand", "overlay:foot", "face:paint",
+    "morph:*",
+    "presets",
+    "delegate",
   ]);
+
+  return { names: GROUPS.map((g) => g.title), groupOf: groupOf };
 })();

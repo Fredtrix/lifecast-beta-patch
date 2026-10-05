@@ -16,8 +16,12 @@
 
 (() => {
   const SECTIONS = [
+    // The key stays "look:Body" - it is what sectionsOpen saved and what
+    // groups.js orders by - but the title is Weight: "Body" is the category
+    // this section sits in, beside OBody and Body Scales (E4, D123).
     {
       title: "Body",
+      label: "Weight",
       controls: [["weight", "Weight"]],
     },
     {
@@ -138,7 +142,7 @@
   }
 
   for (const s of SECTIONS) {
-    const section = LifecastControls.section(s.title);
+    const section = LifecastControls.section(s.label || s.title);
     for (const [key, label] of s.controls) {
       section.body.appendChild(buildRow(key, label));
     }

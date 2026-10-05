@@ -10,7 +10,7 @@
 // Character - are outside both filters (Prisma item 3 is about sliders).
 //
 // This runs before any section is built (script order: controls.js,
-// shortcuts.js, search.js, then the sections), so it never scans the DOM
+// search.js, then the sections), so it never scans the DOM
 // once at startup - every call re-queries it live, and a MutationObserver
 // re-runs the filter whenever a row appears, disappears, or its
 // data-changed flips.
