@@ -50,8 +50,8 @@
         <p class="placeholder">No sections yet.</p>
 
         <!--
-          The Character region's own content. finish.js wraps this into the
-          panel's FIRST section; the name and Finish moved to the belt (D129).
+          The Debug section, under Settings (D132). finish.js wraps this into
+          a section; the name and Finish moved to the belt (D129).
         -->
         <div id="finish">
           <!-- Page, DLL and protocol versions: read when something is wrong. -->
@@ -76,6 +76,11 @@
         One of the two ways back to RaceMenu. The other is F4, which the DLL
         registers with Meridian and which works even when this page does not.
       -->
+      <!--
+        Settings (D132): debug and configuration, one category opened from
+        here and not from the belt - belt.js, groups.js.
+      -->
+      <button id="settings-button" class="panel-button" type="button" data-cat="Settings">Settings</button>
       <button id="to-racemenu" class="panel-button is-primary" type="button" title="F4">RaceMenu (F4)</button>
     </footer>
   </aside>

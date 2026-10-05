@@ -19,16 +19,20 @@
 // nowhere else. A group marked quick is not a category word on the belt but
 // one of its always-visible buttons (D126).
 const LifecastGroups = (() => {
-  // The belt's order (D131): after Character, the categories run toward All,
-  // which sits beside the name - Head is the one next to it.
+  // The belt's order (D131): the categories run toward All, which sits beside
+  // the name - Head is the one next to it. Race comes after All (D132), and
+  // Settings is not on the belt at all: its button is in the footer, beside
+  // RaceMenu's - where whatever is debug or configuration lives.
+  // after: placed after All. footer: the footer's button, not the belt's.
   const GROUPS = [
-    // "In RaceMenu" (delegate) sits here only until its rows move into the
-    // Lifecast (D125); Character Control left the list for a fixed bar (D127).
-    { title: "Character", test: (key) => key === "character" || key === "delegate" },
     { title: "Skin & Paint", test: (key) => key === "tints" || key.indexOf("overlay:") === 0 || key === "face:paint" },
     { title: "Morphs", test: (key) => key.indexOf("morph:") === 0 },
     { title: "Body", test: (key) => key === "look:Body" || key === "scales" || key === "obody" },
     { title: "Head", test: (key) => key === "look:Hair" || key === "look:Features" || (key.indexOf("face:") === 0 && key !== "face:paint") },
+    // Race holds RaceMenu's doors (delegate) only until they move into the
+    // Lifecast (D125): then it is the race picker, with the sex beside it.
+    { title: "Race", after: true, test: (key) => key === "delegate" },
+    { title: "Settings", footer: true, test: (key) => key === "debug" },
     { title: "Presets", quick: true, test: (key) => key === "presets" },
   ];
 
@@ -54,16 +58,19 @@ const LifecastGroups = (() => {
   // keep the order they mount in. "face:paint" is named on its own so it
   // joins Skin & Paint, not Head.
   LifecastControls.setOrder([
-    "character", "delegate",
     "tints", "overlay:body", "overlay:hand", "overlay:foot", "face:paint",
     "morph:*",
     "look:Body", "scales", "obody",
     "look:Hair", "look:Features", "face:*",
+    "delegate",
     "presets",
+    "debug",
   ]);
 
   return {
-    names: GROUPS.filter((g) => !g.quick).map((g) => g.title),
+    names: GROUPS.filter((g) => !g.quick && !g.after && !g.footer).map((g) => g.title),
+    after: GROUPS.filter((g) => g.after).map((g) => g.title),
+    footer: GROUPS.filter((g) => g.footer).map((g) => g.title),
     groupOf: groupOf,
   };
 })();

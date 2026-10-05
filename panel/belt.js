@@ -15,7 +15,7 @@
 //     #sections on purpose: search.js watches the whole subtree of #sections
 //     and rewrites the counter on every mutation, so a counter inside it feeds
 //     its own observer forever (measured in the E4 probe: the page hung);
-//   - the version line is in the Character region; the name and Finish are
+//   - the version line is in Settings > Debug (D132); the name and Finish are
 //     on the belt, search and Changed over the upper left corner (D129),
 //     undo and redo in the Character Control bar (D130).
 //
@@ -52,7 +52,7 @@ const LifecastBelt = (() => {
   }
 
   const buttons = new Map();
-  for (const name of LifecastGroups.names.concat(["All"])) {
+  for (const name of LifecastGroups.names.concat(["All"], LifecastGroups.after)) {
     const b = document.createElement("button");
     b.type = "button";
     b.tabIndex = -1;
@@ -67,6 +67,16 @@ const LifecastBelt = (() => {
     b.addEventListener("click", () => choose(name));
     nav.appendChild(b);
     buttons.set(name, b);
+  }
+
+  // Settings (D132): a category like the others, but its button is the
+  // footer's, beside RaceMenu's, and carries no count.
+  for (const name of LifecastGroups.footer) {
+    const b = document.querySelector('.panel-footer [data-cat="' + name + '"]');
+    if (b) {
+      b.addEventListener("click", () => choose(name));
+      buttons.set(name, b);
+    }
   }
 
   // The always-visible buttons (autor, 2026-10-05 - D126), after the
@@ -159,7 +169,10 @@ const LifecastBelt = (() => {
     for (const [name, b] of buttons) {
       const n = name === "All" ? host.querySelectorAll(".slider").length
         : inCat(name).reduce((t, s) => t + s.querySelectorAll(".slider").length, 0);
-      b.lastChild.textContent = n > 0 ? String(n) : "";
+      const count = b.querySelector(".belt-count");
+      if (count) {
+        count.textContent = n > 0 ? String(n) : "";
+      }
       const on = name === "All" ? ui.all && !ui.results : name === ui.cat && !wide;
       b.classList.toggle("is-on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");

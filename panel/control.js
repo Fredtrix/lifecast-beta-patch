@@ -5,7 +5,7 @@
 // It stands where the Index section used to. The Index was a grid of tiles
 // that jumped to a category, and the author cut it in favour of this.
 //
-// The key is "control" and NOT "character": "character" is already taken by
+// The key is "control" and NOT "character": "character" was taken by
 // the identity section, which is always open because it is identity and not
 // a category to browse (D064). A name that reads alike is not a free key
 // (D079).

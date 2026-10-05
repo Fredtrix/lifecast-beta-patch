@@ -23,18 +23,17 @@
 "use strict";
 
 (() => {
-  // The first section of the panel, the Character region. The name and the
-  // button are on the belt (D129), always on screen; what stays in #finish is
-  // the region's own content.
+  // What stays in #finish is the Debug section, under Settings (D132); the
+  // name and the button are on the belt (D129), always on screen.
   const host = document.getElementById("finish");
   if (host) {
-    const s = LifecastControls.section("Character", { open: true });
+    const s = LifecastControls.section("Debug", { open: true });
     while (host.firstChild) {
       s.body.appendChild(host.firstChild);
     }
     host.remove();
-    LifecastControls.mount(s, "character");
-    LifecastControls.setOrder(["character"]);
+    LifecastControls.mount(s, "debug");
+    LifecastControls.setOrder(["debug"]);
   }
 
   const field = document.getElementById("finish-name");
