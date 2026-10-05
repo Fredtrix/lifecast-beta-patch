@@ -187,6 +187,38 @@ namespace Lifecast::Edit::Compare
 			return found;
 		}
 
+		// E20.1 - what is worn, by NAME and SLOT. A count says how many, never
+		// which: "worn 4 -> 4" cannot tell a shield on the copy that the player
+		// also wears from one she should not have. Slots are written as the
+		// 30-based numbers a modder reads (body 32, shield 39); a weapon has no
+		// armour slot and reads "hand". Same walk as CollectWorn, so the list is
+		// exactly the set that was counted.
+		std::string DescribeWorn(RE::TESObjectREFR* a_ref)
+		{
+			std::string out;
+			for (const auto& w : CollectWorn(a_ref)) {
+				if (!w.object) {
+					continue;
+				}
+				std::string slots;
+				if (auto* armo = w.object->As<RE::TESObjectARMO>()) {
+					const std::uint32_t mask = armo->GetSlotMask().underlying();
+					for (std::uint32_t bit = 0; bit < 32; ++bit) {
+						if (mask & (1u << bit)) {
+							slots += (slots.empty() ? "" : ",") + std::to_string(30 + bit);
+						}
+					}
+					if (slots.empty()) {
+						slots = "none";
+					}
+				} else {
+					slots = w.object->IsWeapon() ? "hand" : "n/a";
+				}
+				out += fmt::format("[{:08X} '{}' slot {}] ", w.object->GetFormID(), w.object->GetName(), slots);
+			}
+			return out.empty() ? std::string("nothing") : out;
+		}
+
 		// E19.1 - ask the game to rebuild what an actor WEARS on her body.
 		//
 		// Boot 94 measured the data and not the body: she read 4 worn, the
@@ -299,6 +331,7 @@ namespace Lifecast::Edit::Compare
 			constexpr bool kNow = true;
 
 			const auto hers = CollectWorn(actor);
+			spdlog::info("[compare] worn by name ({}) - the second figure BEFORE the dress: {}", a_why, DescribeWorn(actor));
 			for (const auto& w : hers) {
 				if (w.object) {
 					equip->UnequipObject(actor, w.object, w.extraList, 1, nullptr, kNoQueue, kForce, kSilent, kNow);
@@ -348,6 +381,10 @@ namespace Lifecast::Edit::Compare
 			spdlog::info("[compare] dress ({}): took {} off her, asked for {} of the player's {} ({} of them new to "
 						 "her bag) - she now reads {} worn, {} inventory stacks",
 				a_why, hers.size(), asked, theirs.size(), added, nowWorn, inv.size());
+
+			// E20.1: the two lists side by side, same pass, same walk.
+			spdlog::info("[compare] worn by name ({}) - the player: {}", a_why, DescribeWorn(player));
+			spdlog::info("[compare] worn by name ({}) - the second figure: {}", a_why, DescribeWorn(actor));
 
 			// E19.1: the data is right, now the body. The player is the control,
 			// read by the same fields in the same pass - she has a process
@@ -642,6 +679,19 @@ namespace Lifecast::Edit::Compare
 
 		void OnCompareGet(const nlohmann::json&) { Push("the page asked"); }
 
+#ifdef LIFECAST_TUNING
+		// Development build only (E20.2): the dress and the refresh WITH the comparison
+		// already on and her body on screen, so a frame can sit on each side of it.
+		void OnCompareDress(const nlohmann::json&)
+		{
+			if (!g_on) {
+				spdlog::warn("[compare] compare-dress while the comparison is off - ignored");
+				return;
+			}
+			Dress("asked by the page (development build)", true);
+		}
+#endif
+
 		void OnCompareSet(const nlohmann::json& a_data)
 		{
 			if (!Session::MenuOpen()) {
@@ -688,7 +738,21 @@ namespace Lifecast::Edit::Compare
 				// THIS instant, and boot 93 ran it once and skipped it on the
 				// second switch-on of the same opening, which would leave her in
 				// last switch-on's clothes if the player changed in between.
-				Dress("the comparison was turned on", true);
+				bool dressHer = true;
+#ifdef LIFECAST_TUNING
+				// Development build only, like Panel/Stage's "stage-tune": a frame of
+				// her BEFORE the dress (E20.2). A release build has no such field.
+				if (a_data.contains("dress") && a_data["dress"].is_boolean()) {
+					dressHer = a_data["dress"].get<bool>();
+				}
+				if (!dressHer) {
+					spdlog::info("[compare] compare-set: dress SKIPPED on request (development build) - she is seen in "
+								 "her own outfit until \"compare-dress\" arrives");
+				}
+#endif
+				if (dressHer) {
+					Dress("the comparison was turned on", true);
+				}
 				if (!Show()) {
 					Push("compare-set refused");
 					return;
@@ -809,6 +873,9 @@ namespace Lifecast::Edit::Compare
 		Session::OnTick(&OnTick);
 		Panel::Bridge::On("compare-get", &OnCompareGet);
 		Panel::Bridge::On("compare-set", &OnCompareSet);
+#ifdef LIFECAST_TUNING
+		Panel::Bridge::On("compare-dress", &OnCompareDress);
+#endif
 		g_installed = true;
 		spdlog::info("[compare] installed");
 	}
