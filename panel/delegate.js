@@ -8,7 +8,9 @@
 // no entry in the category list at all and could never come from the list.
 // Face Presets was the other, and it is gone: the race's preset faces are a
 // section of their own now (racepresets.js, Edit/RacePresets.cpp), the second
-// door D125 brought inside. The War Paint Catalog left before it (D141).
+// door D125 brought inside. The War Paint Catalog left before it (D141), and
+// Race & Sex after it: two controls now, the race in Race and the sex in Body
+// (racesex.js, Edit/RaceSex.cpp).
 //
 // The rest arrive FROM THE GAME. RaceMenu's category list belongs to the
 // player, not to us: mods inject categories into it, so which ones exist is
@@ -20,7 +22,6 @@
 
 (() => {
   const ENTRIES = [
-    ["race-sex", "Race & Sex", "Changing race or sex rebuilds every list here."],
     ["face-sliders", "Extended Face Sliders", "RaceMenu's own face sliders, beyond the game's."],
     ["extra", "Extra Sliders", "The sliders RaceMenu files under its own Extra tab."],
     ["expressions", "Expressions", "The face expression sliders."],
@@ -89,7 +90,7 @@
   // no home shows up as an orphan instead of passing over in silence.
   // $ALL is the one entry that is not a category (it carries every bit).
   const HOME = {
-    "RACE": { door: "race-sex" },
+    "RACE": { section: "race" },
     "BODY": { section: "look:Body" },
     "HEAD": { section: "face:" }, "FACE": { section: "face:" }, "EYES": { section: "face:" },
     "BROW": { section: "face:" }, "MOUTH": { section: "face:" },

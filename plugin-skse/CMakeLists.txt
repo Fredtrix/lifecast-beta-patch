@@ -84,6 +84,7 @@ add_commonlibsse_plugin(
         src/Edit/Light.cpp
         src/Edit/Overlays.cpp
         src/Edit/RacePresets.cpp
+        src/Edit/RaceSex.cpp
         src/Edit/Session.cpp
         src/Edit/Tints.cpp
         src/Edit/Undress.cpp

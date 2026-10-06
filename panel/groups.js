@@ -21,7 +21,7 @@
 const LifecastGroups = (() => {
   // The belt's order (D131, D133): the categories run toward All, which sits
   // beside the name - Head, then Body, then Race next to it. Body and Race
-  // stand together because the sex will live in Body (D133). Settings is not
+  // stand together because the sex lives in Body (D133). Settings is not
   // on the belt at all: its button is in the footer, beside RaceMenu's -
   // where whatever is debug or configuration lives (D132).
   // footer: the footer's button, not the belt's.
@@ -29,10 +29,10 @@ const LifecastGroups = (() => {
     { title: "Skin & Paint", test: (key) => key === "tints" || key.indexOf("overlay:") === 0 || key === "face:paint" },
     { title: "Morphs", test: (key) => key.indexOf("morph:") === 0 },
     { title: "Head", test: (key) => key === "look:Hair" || key === "look:Features" || (key.indexOf("face:") === 0 && key !== "face:paint") },
-    { title: "Body", test: (key) => key === "look:Body" || key === "scales" || key === "obody" },
-    // Race holds RaceMenu's doors (delegate) only until they move into the
-    // Lifecast (D125): then it is the race picker.
-    { title: "Race", test: (key) => key === "delegate" },
+    { title: "Body", test: (key) => key === "sex" || key === "look:Body" || key === "scales" || key === "obody" },
+    // Race is the race picker (racesex.js), and still holds RaceMenu's
+    // doors (delegate) that have no public way in yet (D125).
+    { title: "Race", test: (key) => key === "race" || key === "delegate" },
     { title: "Settings", footer: true, test: (key) => key === "debug" },
     { title: "Presets", quick: true, test: (key) => key === "presets" },
   ];
@@ -62,8 +62,8 @@ const LifecastGroups = (() => {
     "tints", "overlay:body", "overlay:hand", "overlay:foot", "face:paint",
     "morph:*",
     "look:Hair", "look:Features", "face:*",
-    "look:Body", "scales", "obody",
-    "delegate",
+    "sex", "look:Body", "scales", "obody",
+    "race", "delegate",
     "presets",
     "debug",
   ]);
