@@ -4,9 +4,11 @@
 // Two kinds of row live here, and they arrive from opposite directions.
 //
 // The FIXED rows below are deliberate handovers, each with its reason in D027.
-// Two of them are RaceMenu *modes* rather than categories (Face Presets,
-// Sculpt), so they have no entry in the category list at all and could never
-// come from the list.
+// One of them is a RaceMenu *mode* rather than a category (Sculpt), so it has
+// no entry in the category list at all and could never come from the list.
+// Face Presets was the other, and it is gone: the race's preset faces are a
+// section of their own now (racepresets.js, Edit/RacePresets.cpp), the second
+// door D125 brought inside. The War Paint Catalog left before it (D141).
 //
 // The rest arrive FROM THE GAME. RaceMenu's category list belongs to the
 // player, not to us: mods inject categories into it, so which ones exist is
@@ -19,7 +21,6 @@
 (() => {
   const ENTRIES = [
     ["race-sex", "Race & Sex", "Changing race or sex rebuilds every list here."],
-    ["presets", "Face Presets", "The race's preset faces."],
     ["face-sliders", "Extended Face Sliders", "RaceMenu's own face sliders, beyond the game's."],
     ["extra", "Extra Sliders", "The sliders RaceMenu files under its own Extra tab."],
     ["expressions", "Expressions", "The face expression sliders."],

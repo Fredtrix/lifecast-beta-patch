@@ -29,6 +29,7 @@
 #include "Edit/Session.h"
 #include "Edit/Light.h"
 #include "Edit/Overlays.h"
+#include "Edit/RacePresets.h"
 #include "Edit/Tints.h"
 #include "Edit/Undress.h"
 #include "Panel/Panel.h"
@@ -123,6 +124,7 @@ namespace
 			Lifecast::Edit::Session::Install();
 			Lifecast::Edit::FaceSliders::Install();
 			Lifecast::Edit::Appearance::Install();
+			Lifecast::Edit::RacePresets::Install();
 			Lifecast::Edit::BodyScales::Install();
 			Lifecast::Edit::BodyMorphs::Install();
 			Lifecast::Panel::RaceMenuTabs::Install();
