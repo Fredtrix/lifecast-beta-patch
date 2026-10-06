@@ -324,10 +324,68 @@
     stage.hidden = !(data && data.on);
   });
 
+  // ----- telling the DLL where the stage IS ------------------------------
+  // The camera has to centre the character in the stage - the window MINUS
+  // the panel - and not in the window, so somebody has to know where the
+  // stage's edges are. The page does: #stage is laid out from the panel's
+  // right edge to the window's right edge, so its own rect IS the answer,
+  // already including the panel's width, the panel scale the player set, the
+  // belt's narrow form and the resolution. The DLL is told rather than
+  // working it out, because none of those four are visible from C++ and any
+  // constant there would be a number that is right on one screen.
+  //
+  // Measured, never assumed: the same reason control.js reads this rect for
+  // the comparison instead of keeping it.
+  function frame() {
+    const width = window.innerWidth;
+    if (!stage || stage.hidden || !(width > 0)) {
+      return null;
+    }
+    const rect = stage.getBoundingClientRect();
+    if (!(rect.width > 0)) {
+      return null;
+    }
+    return { left: rect.left / width, right: rect.right / width };
+  }
+
+  // Resent only when the edges actually moved, and rounded to the fraction
+  // the comparison is worth before that test: the observers below fire on
+  // every frame of the panel's transition, and a solve per frame would be a
+  // camera chasing an animation instead of following a layout. A twentieth of
+  // a per cent of the window is far below the 2% the framing is judged by.
+  const FRAME_EPSILON = 0.0002;
+  let sentFrame = null;
+
+  function sendFrame() {
+    const where = frame();
+    if (!where) {
+      return;
+    }
+    if (sentFrame &&
+        Math.abs(where.left - sentFrame.left) < FRAME_EPSILON &&
+        Math.abs(where.right - sentFrame.right) < FRAME_EPSILON) {
+      return;
+    }
+    if (LifecastBridge.send("stage-frame", { on: true, left: where.left, right: where.right })) {
+      sentFrame = where;
+    }
+  }
+
+  // The panel opening and closing is an attribute on <html> and the stage's
+  // width follows it in CSS, so the attribute is not watched directly: the
+  // stage's own resize is, and that catches the scale and the window too
+  // without knowing about any of them. Same approach control.js uses to keep
+  // its bar out of the camera bar's way.
+  window.addEventListener("resize", sendFrame);
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(sendFrame).observe(stage);
+  }
+
   render();
   LifecastBridge.whenAttached((ok) => {
     if (ok) {
       LifecastBridge.send("stage-get");
+      sendFrame();
     }
   });
 })();

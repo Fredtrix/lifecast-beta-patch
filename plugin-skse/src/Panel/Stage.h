@@ -75,11 +75,22 @@
 //                                 "lift": units, "pan": units,
 //                                 "tilt": deg }  (deltas, any subset)
 //   page -> dll  "stage-reset"  {}
+//   page -> dll  "stage-frame"  { "on": bool, "left": frac, "right": frac }
+//                                 the character view's edges as a fraction of
+//                                 the window width, and whether the camera
+//                                 should keep the subject in the middle of
+//                                 THEM rather than of the window. "on" absent
+//                                 means true: the page sends this whenever
+//                                 the view is resized, and the common message
+//                                 should not have to carry the flag. See
+//                                 FrameOne below.
 //   dll -> page  "stage"        { "ready": false, "why": text }
 //                            or { "ready": true, "tilt": bool,
 //                                 "turn": deg, "distance": units,
 //                                 "lift": units, "pan": units,
 //                                 "tiltDeg": deg,
+//                                 "frame": { "on": bool, "left": frac,
+//                                            "right": frac },
 //                                 "limits": { "minDistance", "maxDistance",
 //                                             "liftMin", "liftMax",
 //                                             "panMin", "panMax",
@@ -162,6 +173,28 @@ namespace Lifecast::Panel::Stage
 	// it is the one number here that is pure taste. Nothing measures it.
 	LIFECAST_TUNABLE kPairSpan = 0.5;
 
+	// The ruler the single-figure framing rule measures the camera with: a
+	// world distance across the line of sight, projected either side of the
+	// subject and never occupied by anything. It buys one number - how many
+	// fractions of the window one world unit is worth at the camera the menu
+	// left - and nothing stands there.
+	//
+	// It is SMALL, and that is the whole point. The pair rule probes at
+	// kPairApart, and the archived logs say what that costs: at the distance
+	// the RaceSex camera actually opens at, 60 units to the side projects to
+	// x 2.27 with the depth almost halved against the subject's (boots 93 to
+	// 134, "[stage] pair on"). That point is nowhere near the subject, so the
+	// straight-line model fitted through it is not a model of the subject's
+	// neighbourhood. Five units either side is, and the probe is measured
+	// SYMMETRICALLY about the aim so the first-order error cancels instead of
+	// accumulating on one side.
+	//
+	// Not tunable, and deliberately not kPairApart: this is an instrument,
+	// not a taste knob. kPairApart is the author's to retune at OLHO DO AUTOR,
+	// and a ruler that changes length when a taste knob is turned would make
+	// this solve depend on a number with nothing to do with it.
+	inline constexpr double kProbeStep = 10.0;
+
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
@@ -211,6 +244,49 @@ namespace Lifecast::Panel::Stage
 	// Game thread, queued to the UI thread like every other move here. Off
 	// restores the view the menu opened with, which is what Reset does.
 	void FramePair(bool a_on, double a_frameLeft, double a_frameRight);
+
+	// THE FRAMING RULE FOR ONE FIGURE: puts the subject in the middle of the
+	// CHARACTER VIEW - the window minus the panel - instead of the middle of
+	// the window, and puts her there again whenever that view changes size.
+	//
+	// a_frameLeft and a_frameRight are the character view's own edges as a
+	// fraction of the window width, measured by the page from the stage
+	// element's own rect. The DLL is told rather than computing it, and that
+	// is the decision: the view's width moves with the panel opening and
+	// closing, with the panel scale the player sets, with the belt's narrow
+	// form and with the resolution. Any constant here would be a number that
+	// is right on one screen - and the one measurement that exists is on the
+	// author's (2560 CSS px), which is the single worst population to
+	// generalise a layout constant from.
+	//
+	// It moves PAN and nothing else, and that is also a decision rather than
+	// a simplification:
+	//
+	//   * V099 measured that backing away does not centre - the subject slides
+	//     to the border instead - and D105 says the same for the pair: the
+	//     view is centred on the player, so retreating from a centre that IS
+	//     the player keeps her where she was. Distance is not a centring tool.
+	//     It stays where the player's wheel left it.
+	//   * Pan is a pure sideways translation of the camera, which is the one
+	//     motion whose effect on screen x the projection model predicts
+	//     exactly. The pair rule moves distance too, and its own audit shows
+	//     what that costs: still 27% out after its one correction (boot 93 on).
+	//   * The camera distance CANCELS out of the answer. With
+	//       x = x0 + k * lateral / depth  and  k = sep * depth / step,
+	//     the solved pan is  pan + (aim - centre) * step / sep  - no depth in
+	//     it. So the one number V099 says the first reading of an opening gets
+	//     wrong cannot bend what this computes. (It can still be WRITTEN; that
+	//     is what the second reading of the frame is for - see Stage.cpp.)
+	//
+	// Off restores the view the menu opened with, which is what Reset does,
+	// and is also how the measurement's negative control is taken: the same
+	// DLL, the same boot, the same room, one message apart.
+	//
+	// Stands down while the PAIR rule is framing - two rules aiming the same
+	// camera is worse than either - and says so in the log.
+	//
+	// Game thread, queued to the UI thread like every other move here.
+	void FrameOne(bool a_on, double a_frameLeft, double a_frameRight);
 
 	// Where the second subject has to STAND for the rule above to be framing
 	// her and not an empty patch of floor: the player's own position, moved

@@ -107,6 +107,12 @@ namespace Lifecast::Panel::Stage
 			int    pair{ 0 };
 			double frameLeft{ 0.0 };
 			double frameRight{ 1.0 };
+			// The single-figure rule, the same three fields and for the same
+			// reason. Its own, not shared with the pair's: a message for one
+			// must never be read as a message for the other.
+			int    one{ 0 };
+			double oneLeft{ 0.0 };
+			double oneRight{ 1.0 };
 			// Whether the page is waiting for an answer. A tick is not: the
 			// state it would send is the target, and the target is exactly
 			// what a tick does not change.
@@ -126,6 +132,21 @@ namespace Lifecast::Panel::Stage
 		double g_pairLeft = 0.0;
 		double g_pairRight = 1.0;
 		int    g_pairSolves = 0;  // how many times the rule has solved for this pairing
+
+		// The single-figure framing rule (UI thread), kept apart from the pair's
+		// state rather than folded into it: the two rules answer different
+		// questions, only one may own the camera at a time, and sharing the
+		// fields would make "which rule is on" a thing to infer instead of a
+		// thing to read.
+		bool   g_oneOn = false;
+		double g_oneLeft = 0.0;
+		double g_oneRight = 1.0;
+		int    g_oneSolves = 0;  // how many times it has solved for this view
+
+		// Whether the kept frame has been read a SECOND time this opening, and
+		// what the first reading said. See Refresh().
+		bool   g_reread = false;
+		double g_firstDistance = 0.0;
 
 		// ----- small helpers ------------------------------------------------------
 
@@ -535,6 +556,180 @@ namespace Lifecast::Panel::Stage
 			g_pairSolves = 3;
 		}
 
+		// ----- the framing rule for ONE figure (UI thread, with the kept frame) ---
+
+		// Where the subject is aimed at, and the two probe points either side of
+		// her across the line of sight. NOTHING stands at the probes - they are
+		// projected to measure the camera's lateral scale and no more, which is
+		// also why this rule needs no second actor and reopens nothing of the
+		// paused comparison.
+		//
+		// They straddle the aim rather than reaching away from it on one side,
+		// so what comes out is the slope AT the subject. The pair rule's single
+		// far probe is what the archived logs show going wrong: a chord to a
+		// point with half the subject's depth is not the slope anywhere near her.
+		bool AimOne(RE::NiPoint3& a_aim, RE::NiPoint3& a_left, RE::NiPoint3& a_right)
+		{
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			if (!player) {
+				return false;
+			}
+			a_aim = player->GetLookingAtLocation();
+			// (-dirY, dirX) is the player-camera direction turned 90 degrees in
+			// the ground plane: the very axis pan moves along, so a world offset
+			// measured here is already in the quantity the solve has to answer in.
+			const double perpX = -g_frame.dirY;
+			const double perpY = g_frame.dirX;
+			const double half = kProbeStep / 2.0;
+			a_left = RE::NiPoint3(static_cast<float>(a_aim.x - perpX * half),
+				static_cast<float>(a_aim.y - perpY * half), a_aim.z);
+			a_right = RE::NiPoint3(static_cast<float>(a_aim.x + perpX * half),
+				static_cast<float>(a_aim.y + perpY * half), a_aim.z);
+			return true;
+		}
+
+		// Projects the aim and both probes. a_aimX is where the subject lands as
+		// a fraction of the window width; a_perUnit is how much of the window
+		// one world unit across the line of sight is worth at the camera as it
+		// stands RIGHT NOW. Neither is a constant of this file: field of view,
+		// resolution, the player's height and wherever RaceMenu left the camera
+		// all move them, and all of them come out of this one call.
+		bool MeasureOne(double& a_aimX, double& a_perUnit, const char* a_when)
+		{
+			auto* cam = RE::Main::WorldRootCamera();
+			if (!cam) {
+				spdlog::warn("[stage] frame {}: there is no world camera to ask - the rule does not move anything",
+					a_when);
+				return false;
+			}
+			RE::NiPoint3 aim;
+			RE::NiPoint3 left;
+			RE::NiPoint3 right;
+			if (!AimOne(aim, left, right)) {
+				spdlog::warn("[stage] frame {}: no player to aim at", a_when);
+				return false;
+			}
+			double ax = 0.0;
+			double ay = 0.0;
+			double ad = 0.0;
+			double lx = 0.0;
+			double ly = 0.0;
+			double ld = 0.0;
+			double rx = 0.0;
+			double ry = 0.0;
+			double rd = 0.0;
+			if (!ScreenX(cam, aim, ax, ay, ad) || !ScreenX(cam, left, lx, ly, ld) ||
+				!ScreenX(cam, right, rx, ry, rd)) {
+				spdlog::warn("[stage] frame {}: the camera would not project the aim or one of the two probes",
+					a_when);
+				return false;
+			}
+			const double sep = rx - lx;
+			const auto&  port = cam->GetRuntimeData2().port;
+			spdlog::info("[stage] frame {}: aim at x {:.4f} y {:.4f} depth {:.3f} | probes at x {:.4f} and {:.4f} "
+						 "(depth {:.3f} and {:.3f}) | {:.4f} of the window for {:.1f} units | port {:.1f} x {:.1f}",
+				a_when, ax, ay, ad, lx, rx, ld, rd, sep, kProbeStep, port.GetWidth(), port.GetHeight());
+			if (std::abs(sep) < 1e-6) {
+				spdlog::warn("[stage] frame {}: the two probes project to the same point ({:.8f} apart) - there is no "
+							 "lateral scale to solve with, and a rule that cannot measure leaves the camera alone",
+					a_when, sep);
+				return false;
+			}
+			a_aimX = ax;
+			a_perUnit = sep / kProbeStep;
+			return true;
+		}
+
+		// Solves for PAN alone and writes it on the target. Stage.h sets out why
+		// pan alone, and why the camera distance is absent from the arithmetic.
+		bool SolveOne(const char* a_when)
+		{
+			const double span = g_oneRight - g_oneLeft;
+			if (span <= 0.0) {
+				spdlog::warn("[stage] frame {}: the page gave a character view {:.4f} wide - nothing to frame into",
+					a_when, span);
+				return false;
+			}
+			double aimX = 0.0;
+			double perUnit = 0.0;
+			if (!MeasureOne(aimX, perUnit, a_when)) {
+				return false;
+			}
+			const double centre = (g_oneLeft + g_oneRight) / 2.0;
+			const double off = aimX - centre;
+			// Moving the camera one unit along +perp carries a fixed world point
+			// perUnit of the window the OTHER way, so the camera travels the same
+			// way the subject is currently off by. The sign works out whichever
+			// way round perUnit came, which is why it is never assumed.
+			const double wantedPan = g_at.pan + off / perUnit;
+			const double pan = ClampSaid(wantedPan, -kPanMax, kPanMax, "pan");
+
+			spdlog::info("[stage] frame {}: view {:.4f}..{:.4f}, centre {:.4f}; the aim sits at {:.4f}, off by "
+						 "{:+.4f} of the window - {:+.2f}% of the character view. Scale {:.6f} of the window per "
+						 "unit, so {:.2f} units to the fraction",
+				a_when, g_oneLeft, g_oneRight, centre, aimX, off, off / span * 100.0, perUnit, 1.0 / perUnit);
+			spdlog::info("[stage] frame {}: pan {:.2f} -> {:.2f} (wanted {:.2f}). Distance is NOT touched and stays "
+						 "{:.2f} - this rule REMIRA and never recua (V099){}",
+				a_when, g_at.pan, pan, wantedPan, g_target.distance,
+				pan != wantedPan
+					? " - THE PAN LIMIT WAS HIT, so the figure comes out short of the centre. kPanMax is the "
+					  "author's number (E4, Fase 6.5) and is not retuned here; the 'wanted' above is what the rule "
+					  "would have needed"
+					: "");
+
+			g_target.pan = pan;
+			++g_oneSolves;
+			return true;
+		}
+
+		// What the slide actually produced, projected again at the camera it
+		// arrived at. Everything SolveOne does is a model of a camera, and the
+		// model is not the camera: this is where the two are compared.
+		//
+		// At most ONE correction follows, for the same reason the pair rule caps
+		// itself: a rule that keeps correcting towards a target it never reaches
+		// is hunting, not converging, and the third small variation of the same
+		// attempt is where a wrong premise stops being worth another try. A
+		// second miss is left standing in the log, which IS the measurement.
+		void AuditOne()
+		{
+			if (!g_oneOn || g_oneSolves < 1 || g_oneSolves > 2) {
+				return;
+			}
+			double aimX = 0.0;
+			double perUnit = 0.0;
+			if (!MeasureOne(aimX, perUnit, g_oneSolves == 1 ? "arrived" : "arrived after the correction")) {
+				g_oneSolves = 3;
+				return;
+			}
+			const double span = g_oneRight - g_oneLeft;
+			const double centre = (g_oneLeft + g_oneRight) / 2.0;
+			const double off = aimX - centre;
+			// The criterion this rule is judged by is 2% of the character view
+			// (Fase 7, E4c). The rule corrects at ONE per cent - half of it - so
+			// that it is not a rule tuned to stop exactly where the criterion
+			// starts failing. The two numbers are independent on purpose: this
+			// one is the rule's, the other is the judge's.
+			const double tolerance = span * 0.01;
+			spdlog::info("[stage] frame check: the aim came out at {:.4f} against {:.4f} asked - {:+.4f} of the "
+						 "window, {:+.2f}% of the character view, against a tolerance of {:.2f}%",
+				aimX, centre, off, span > 0.0 ? off / span * 100.0 : 0.0, 1.0);
+			if (g_oneSolves == 1 && std::abs(off) > tolerance) {
+				spdlog::info("[stage] frame check: outside tolerance - solving once more, and only once");
+				if (SolveOne("correction")) {
+					// The tick stopped when the slide arrived; this target is
+					// new, so it has to be told to start again.
+					g_moving.store(true, std::memory_order_relaxed);
+					return;
+				}
+			}
+			if (g_oneSolves == 2 && std::abs(off) > tolerance) {
+				spdlog::warn("[stage] frame check: still outside tolerance after the one correction. The rule stops "
+							 "here on purpose - this line is the measurement, not a failure to retry");
+			}
+			g_oneSolves = 3;
+		}
+
 		// ----- the work (UI thread) -------------------------------------------------
 
 		bool Capture(RE::RaceSexMenu* a_menu, RE::GFxValue& a_cg)
@@ -566,6 +761,9 @@ namespace Lifecast::Panel::Stage
 				f.cameraRot = node->local.rotate;
 			}
 			f.have = true;
+			if (g_firstDistance == 0.0) {
+				g_firstDistance = f.distance;
+			}
 			g_frame = f;
 			g_at = At{};
 			g_at.distance = f.distance;
@@ -577,6 +775,64 @@ namespace Lifecast::Panel::Stage
 				P(f.camera), P(f.player), f.distance, static_cast<double>(f.camera.z) - f.player.z,
 				f.node ? "present" : "ABSENT (no tilt)");
 			return true;
+		}
+
+		// V099's countermeasure, and the reason it lives here rather than inside
+		// Capture: RaceMenu's FIRST GetRaceSexCameraPos of an opening is STALE.
+		// Measured 2026-09-30 - it reported distance 229 with the camera at 38 -
+		// and the archived pair logs show the same number, 228.77, being solved
+		// with in boots 93 to 134 while the camera was really an order of
+		// magnitude closer.
+		//
+		// It never bit before because a move that changes nothing writes nothing,
+		// and until now only the player moved this view. A framing rule DOES
+		// write: it moves pan, and WriteCameraPos writes the whole position,
+		// distance included - so a stale distance becomes a real 190-unit shove
+		// backwards the first time the rule fires. Which is precisely the
+		// "recuar" V099 says does not frame, arrived by accident.
+		//
+		// So the frame is read a SECOND time before the first solve, and both
+		// readings go in the log: that pair of numbers is what the criterion
+		// asks for, and it is also the check on this very countermeasure - if
+		// the second reading comes back equal to the first, the staleness is
+		// not what this assumes and the line says so instead of hiding it.
+		//
+		// Only while the view is still exactly where the frame put it. A refresh
+		// that threw away a move the player had already made would be a worse
+		// defect than the one it repairs.
+		void Refresh(RE::RaceSexMenu* a_menu, RE::GFxValue& a_cg, const char* a_why)
+		{
+			if (g_reread || !g_frame.have) {
+				return;
+			}
+			const bool untouched = g_at.turn == 0.0 && g_at.lift == 0.0 && g_at.pan == 0.0 && g_at.tilt == 0.0 &&
+			                       g_at.distance == g_frame.distance && g_target.distance == g_frame.distance &&
+			                       g_target.turn == 0.0 && g_target.lift == 0.0 && g_target.pan == 0.0 &&
+			                       g_target.tilt == 0.0;
+			if (!untouched) {
+				g_reread = true;
+				spdlog::info("[stage] {}: the view has already been moved, so the kept frame is NOT read again - the "
+							 "first reading stands at distance {:.2f}, and if it was stale that error is now part of "
+							 "where the player put the camera",
+					a_why, g_frame.distance);
+				return;
+			}
+			const double first = g_frame.distance;
+			if (!Capture(a_menu, a_cg)) {
+				spdlog::warn("[stage] {}: the second reading of the frame FAILED - the first stands at {:.2f}", a_why,
+					first);
+				return;
+			}
+			g_reread = true;
+			const double now = g_frame.distance;
+			spdlog::info("[stage] {}: the frame was read AGAIN - distance FIRST {:.2f}, NOW {:.2f} ({:+.2f}). This is "
+						 "the number that gets PLACED, and the rule is about to write the whole camera position. {}",
+				a_why, first, now, now - first,
+				std::abs(now - first) < 1.0
+					? "The two readings agree, so this opening had no stale first value - V099's defect did not "
+					  "appear here and nothing was corrected"
+					: "The two DISAGREE, which is V099's stale first reading caught in the act; the second is the "
+					  "one used");
 		}
 
 		bool WriteCameraPos(RE::GFxMovieView* a_movie, RE::GFxValue& a_cg)
@@ -629,6 +885,9 @@ namespace Lifecast::Panel::Stage
 			json state = { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
 				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_target.pan },
 				{ "tiltDeg", g_target.tilt },
+				// What the camera is framing into, so the page - and the bench
+				// driving it - can read the rule's state instead of assuming it.
+				{ "frame", { { "on", g_oneOn }, { "left", g_oneLeft }, { "right", g_oneRight } } },
 				{ "limits", { { "minDistance", DistanceMin() }, { "maxDistance", kMaxDistance }, { "liftMin", LiftMin() },
 								{ "liftMax", kLiftUp }, { "panMin", -kPanMax }, { "panMax", kPanMax },
 								{ "tiltMax", kTiltMax } } } };
@@ -733,6 +992,35 @@ namespace Lifecast::Panel::Stage
 				g_target.distance = g_frame.distance;
 			}
 
+			// The single-figure rule, after the pair's: if both arrive in one
+			// pass the pair owns the camera, and standing down is said out loud
+			// rather than left for a reader to work out from the order.
+			if (p.one == 1) {
+				if (g_pairOn) {
+					spdlog::warn("[stage] frame on: the PAIR rule is already framing this camera - the "
+								 "single-figure rule stands down rather than fight it for the same axis");
+				} else {
+					const bool again = g_oneOn;
+					const bool moved = p.oneLeft != g_oneLeft || p.oneRight != g_oneRight;
+					g_oneLeft = p.oneLeft;
+					g_oneRight = p.oneRight;
+					// Before the measurement, because the measurement is of the
+					// camera the write is about to be based on.
+					Refresh(menu.get(), cg, "frame on");
+					g_oneSolves = 0;
+					g_oneOn = SolveOne(!again ? "on" : (moved ? "the view resized" : "again"));
+				}
+			} else if (p.one == 2) {
+				if (g_oneOn) {
+					spdlog::info("[stage] frame off: back to the view the menu opened with. This is also how the "
+								 "negative control of the measurement is taken - same DLL, same boot, same room");
+				}
+				g_oneOn = false;
+				g_oneSolves = 0;
+				g_target = At{};
+				g_target.distance = g_frame.distance;
+			}
+
 			// And the tick moves what is written, one step closer.
 			const bool turnMoved = StepAngle(g_at.turn, g_target.turn, kSnapDegrees);
 			const bool distanceMoved = Step(g_at.distance, g_target.distance, kSnapUnits);
@@ -804,6 +1092,7 @@ namespace Lifecast::Panel::Stage
 								 "{:.0f} us",
 						g_ticks, ms.count(), g_workUs, g_worstUs);
 					AuditPair();
+					AuditOne();
 					// After the audit on purpose: when it corrects, it has
 					// already written the new target, and that is the number
 					// the page should be showing.
@@ -833,6 +1122,14 @@ namespace Lifecast::Panel::Stage
 					g_pending.pair = a_add.pair;
 					g_pending.frameLeft = a_add.frameLeft;
 					g_pending.frameRight = a_add.frameRight;
+				}
+				// Same folding, same reason - and the LAST edges win, which is
+				// what a burst of resize messages during a panel transition
+				// should collapse to.
+				if (a_add.one != 0) {
+					g_pending.one = a_add.one;
+					g_pending.oneLeft = a_add.oneLeft;
+					g_pending.oneRight = a_add.oneRight;
 				}
 				g_pending.any = g_pending.any || a_add.any;
 				g_pending.answer = g_pending.answer || a_add.answer;
@@ -884,6 +1181,30 @@ namespace Lifecast::Panel::Stage
 		void OnReset(const json&)
 		{
 			Reset();
+		}
+
+		// Absent "on" means TRUE: the page sends this every time the character
+		// view is resized, and the common message should not have to carry the
+		// flag. Only the negative control, and whoever wants the camera left
+		// alone, says false. Number() cannot be used for the two edges - it
+		// answers 0.0 for a missing key, and 0.0 is a meaningful left edge.
+		void OnFrame(const json& a_data)
+		{
+			bool   on = true;
+			double left = 0.0;
+			double right = 1.0;
+			if (a_data.is_object()) {
+				if (a_data.contains("on") && a_data["on"].is_boolean()) {
+					on = a_data["on"].get<bool>();
+				}
+				if (a_data.contains("left") && a_data["left"].is_number()) {
+					left = a_data["left"].get<double>();
+				}
+				if (a_data.contains("right") && a_data["right"].is_number()) {
+					right = a_data["right"].get<double>();
+				}
+			}
+			FrameOne(on, left, right);
 		}
 
 #ifdef LIFECAST_TUNING
@@ -981,6 +1302,12 @@ namespace Lifecast::Panel::Stage
 					g_why.clear();
 					g_pairOn = false;
 					g_pairSolves = 0;
+					g_oneOn = false;
+					g_oneSolves = 0;
+					// The next opening gets its own first reading, and its own
+					// second one: staleness is a property of an opening.
+					g_reread = false;
+					g_firstDistance = 0.0;
 				});
 			}
 		}
@@ -1038,6 +1365,28 @@ namespace Lifecast::Panel::Stage
 		Queue(p);
 	}
 
+	void FrameOne(bool a_on, double a_frameLeft, double a_frameRight)
+	{
+		Pending p;
+		p.one = a_on ? 1 : 2;
+		// A view the page did not send, or sent inside out, is the whole window:
+		// the rule still frames, it just has no way to know that the panel is
+		// covering part of its result. Said out loud, because a camera centring
+		// on the window instead of the stage is exactly the failure this etapa
+		// exists to remove, and it must not look like success.
+		const bool usable = std::isfinite(a_frameLeft) && std::isfinite(a_frameRight) && a_frameRight > a_frameLeft;
+		if (!usable && a_on) {
+			spdlog::warn("[stage] frame: {:.4f}..{:.4f} is not a usable character view - falling back to the WHOLE "
+						 "WINDOW, which centres the subject behind the panel rather than beside it",
+				a_frameLeft, a_frameRight);
+		}
+		p.oneLeft = usable ? Clamp(a_frameLeft, 0.0, 1.0) : 0.0;
+		p.oneRight = usable ? Clamp(a_frameRight, 0.0, 1.0) : 1.0;
+		p.any = true;
+		p.answer = true;
+		Queue(p);
+	}
+
 	void Tick()
 	{
 		if (!g_moving.load(std::memory_order_relaxed)) {
@@ -1056,6 +1405,7 @@ namespace Lifecast::Panel::Stage
 		Panel::Bridge::On("stage-get", &OnGet);
 		Panel::Bridge::On("stage-move", &OnMove);
 		Panel::Bridge::On("stage-reset", &OnReset);
+		Panel::Bridge::On("stage-frame", &OnFrame);
 #ifdef LIFECAST_TUNING
 		Panel::Bridge::On("stage-tune", &OnTune);
 #endif
