@@ -53,4 +53,10 @@ namespace Lifecast::Edit::RacePresets
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
+
+	// Puts the player on the first preset the race lists for the current sex, as
+	// the game does when the sex is swapped: morphs, face parts, head parts,
+	// hair colour and complexion, but not the weight. Returns false when there
+	// is nothing to apply. Does not redraw by itself beyond what a preset pick does.
+	bool ApplyDefault(const char* a_why);
 }

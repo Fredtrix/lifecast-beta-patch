@@ -160,6 +160,67 @@ namespace Lifecast::Edit::RacePresets
 			return out;
 		}
 
+		// The write itself, shared by the page's pick and the sex swap's reset.
+		// a_setWeight: the sex swap does not touch the weight in the game, a
+		// preset picked by hand does set it.
+		void ApplyTo(RE::TESNPC* npc, RE::TESNPC* preset, int index, const std::string& name, bool a_setWeight)
+		{
+			spdlog::info("[race-presets] applying [{}] {} {:08X}", index, name, preset->GetFormID());
+			spdlog::info("[race-presets]   morphs before: {}", MorphLine(npc->faceData));
+			spdlog::info("[race-presets]   parts before:  {}", PartLine(npc));
+			for (int i = 0; i < FaceSliders::kUsableMorphs; ++i) {
+				npc->faceData->morphs[i] = preset->faceData->morphs[i];
+			}
+			// The three slots the game names, and only those. The fourth
+			// (Parts::kUnknown) held -1 on every preset read, and nothing here
+			// knows what it is for: copying a field no one understands is not
+			// fidelity to the preset, it is a write without a reason.
+			npc->faceData->parts[FaceData::Parts::kNose] = preset->faceData->parts[FaceData::Parts::kNose];
+			npc->faceData->parts[FaceData::Parts::kEyes] = preset->faceData->parts[FaceData::Parts::kEyes];
+			npc->faceData->parts[FaceData::Parts::kMouth] = preset->faceData->parts[FaceData::Parts::kMouth];
+
+			int swapped = 0;
+			for (const auto type : kPartTypes) {
+				auto* wanted = preset->GetHeadPartByType(type);
+				if (!wanted) {
+					continue;
+				}
+				if (npc->GetCurrentHeadPartByType(type) == wanted) {
+					continue;
+				}
+				npc->ChangeHeadPart(wanted);
+				++swapped;
+			}
+
+			const auto* hrd = preset->headRelatedData;
+			if (hrd && hrd->hairColor) {
+				npc->SetHairColor(hrd->hairColor);
+			}
+			if (hrd && hrd->faceDetails) {
+				npc->SetFaceTexture(hrd->faceDetails);
+			}
+			const float weightBefore = npc->weight;
+			if (a_setWeight) {
+				npc->weight = preset->weight;
+			}
+
+			++g_applied;
+			// DoReset3D(true) is what makes all of this show (Edit/Session.h);
+			// a_now, because applying a preset is a finished edit and not a
+			// drag. Replaced runs first so every section drops the values it
+			// kept from this session's edits before it re-reads.
+			Session::Replaced("a race preset was applied");
+			Session::RequestRedraw(true);
+
+			// Read back out of the structure, not echoed from the preset.
+			spdlog::info("[race-presets]   morphs after:  {}", MorphLine(npc->faceData));
+			spdlog::info("[race-presets]   parts after:   {}", PartLine(npc));
+			spdlog::info("[race-presets] applied [{}] {}: {} head parts swapped, weight {:.1f} -> {:.1f}, "
+				"hair colour {}, complexion {}",
+				index, name, swapped, weightBefore, npc->weight, hrd && hrd->hairColor ? "set" : "unchanged",
+				hrd && hrd->faceDetails ? "set" : "unchanged");
+		}
+
 		void OnApply(const nlohmann::json& a_data)
 		{
 			if (!Session::MenuOpen()) {
@@ -196,59 +257,7 @@ namespace Lifecast::Edit::RacePresets
 			}
 
 			const auto name = NameOf(preset);
-			spdlog::info("[race-presets] applying [{}] {} {:08X}", index, name, preset->GetFormID());
-			spdlog::info("[race-presets]   morphs before: {}", MorphLine(npc->faceData));
-			spdlog::info("[race-presets]   parts before:  {}", PartLine(npc));
-
-			for (int i = 0; i < FaceSliders::kUsableMorphs; ++i) {
-				npc->faceData->morphs[i] = preset->faceData->morphs[i];
-			}
-			// The three slots the game names, and only those. The fourth
-			// (Parts::kUnknown) held -1 on every preset read, and nothing here
-			// knows what it is for: copying a field no one understands is not
-			// fidelity to the preset, it is a write without a reason.
-			npc->faceData->parts[FaceData::Parts::kNose] = preset->faceData->parts[FaceData::Parts::kNose];
-			npc->faceData->parts[FaceData::Parts::kEyes] = preset->faceData->parts[FaceData::Parts::kEyes];
-			npc->faceData->parts[FaceData::Parts::kMouth] = preset->faceData->parts[FaceData::Parts::kMouth];
-
-			int swapped = 0;
-			for (const auto type : kPartTypes) {
-				auto* wanted = preset->GetHeadPartByType(type);
-				if (!wanted) {
-					continue;
-				}
-				if (npc->GetCurrentHeadPartByType(type) == wanted) {
-					continue;
-				}
-				npc->ChangeHeadPart(wanted);
-				++swapped;
-			}
-
-			const auto* hrd = preset->headRelatedData;
-			if (hrd && hrd->hairColor) {
-				npc->SetHairColor(hrd->hairColor);
-			}
-			if (hrd && hrd->faceDetails) {
-				npc->SetFaceTexture(hrd->faceDetails);
-			}
-			const float weightBefore = npc->weight;
-			npc->weight = preset->weight;
-
-			++g_applied;
-			// DoReset3D(true) is what makes all of this show (Edit/Session.h);
-			// a_now, because applying a preset is a finished edit and not a
-			// drag. Replaced runs first so every section drops the values it
-			// kept from this session's edits before it re-reads.
-			Session::Replaced("a race preset was applied");
-			Session::RequestRedraw(true);
-
-			// Read back out of the structure, not echoed from the preset.
-			spdlog::info("[race-presets]   morphs after:  {}", MorphLine(npc->faceData));
-			spdlog::info("[race-presets]   parts after:   {}", PartLine(npc));
-			spdlog::info("[race-presets] applied [{}] {}: {} head parts swapped, weight {:.1f} -> {:.1f}, "
-						 "hair colour {}, complexion {}",
-				index, name, swapped, weightBefore, npc->weight, hrd && hrd->hairColor ? "set" : "unchanged",
-				hrd && hrd->faceDetails ? "set" : "unchanged");
+			ApplyTo(npc, preset, index, name, true);
 			Answer(index, true, name);
 		}
 
@@ -268,6 +277,30 @@ namespace Lifecast::Edit::RacePresets
 		}
 
 		bool g_installed = false;
+	}
+
+	bool ApplyDefault(const char* a_why)
+	{
+		auto* npc = Npc();
+		if (!npc || !npc->faceData || !EnsureList(a_why) || g_lists.presets.empty()) {
+			spdlog::warn("[race-presets] default preset ({}): nothing to apply (no player, no face data or no presets)",
+				a_why);
+			return false;
+		}
+		// What the race lists first is the one a fresh character starts on.
+		auto* preset = g_lists.presets.front();
+		if (!preset || !preset->faceData) {
+			spdlog::warn("[race-presets] default preset ({}): the first preset has no face data", a_why);
+			return false;
+		}
+		for (std::size_t i = 0; i < g_lists.presets.size(); ++i) {
+			if (g_lists.presets[i] && g_lists.presets[i]->faceData) {
+				spdlog::info("[race-presets]   candidate [{}] {}: {}", i, NameOf(g_lists.presets[i]),
+					MorphLine(g_lists.presets[i]->faceData));
+			}
+		}
+		ApplyTo(npc, preset, 0, NameOf(preset), false);
+		return true;
 	}
 
 	void Install()

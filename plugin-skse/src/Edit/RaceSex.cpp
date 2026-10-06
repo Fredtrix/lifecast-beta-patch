@@ -4,6 +4,7 @@
 #include "Edit/RaceSex.h"
 
 #include "Edit/Appearance.h"
+#include "Edit/RacePresets.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
@@ -207,6 +208,9 @@ namespace Lifecast::Edit::RaceSex
 			spdlog::info("[race-sex]   before: {}", State());
 			npc->SetActorBaseFlag(RE::ACTOR_BASE_DATA::Flag::kFemale, female, true);
 			spdlog::info("[race-sex]   flag:   {}", State());
+			// What a fresh character of this sex starts on, then the fit for whatever
+			// the preset does not name (face, misc).
+			RacePresets::ApplyDefault("the sex was changed");
 			Appearance::FitToRace("the sex was changed");
 			Finish("the sex was changed");
 			Answer("sex", true, female ? "female" : "male");
