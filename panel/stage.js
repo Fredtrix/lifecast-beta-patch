@@ -12,11 +12,20 @@
 // disabled buttons show. A drag sends at most one message per SEND_MS, with
 // everything moved since the last one.
 //
-// In the frame, with the mouse:
+// TWO MODES (D152). STANDARD is what the menu opens in: RaceMenu's own camera,
+// two fixed positions - far, the body, and near, the face - swapped by LAlt or
+// the Near/Far button. The wheel and the right button do nothing, and the left
+// button turns the character's body, which is the one thing that differs from
+// RaceMenu. FREE is the camera as it was before the modes, with every move
+// below. A switch under the frame changes between them; the comparison forces
+// FREE on and the switch shows it, locked, until the comparison closes.
+//
+// In the frame, with the mouse, in FREE:
 //   drag                  turn the character
 //   drag, right button    move the camera, up/down and left/right
 //   drag, Ctrl held       tilt the camera (when the DLL can)
 //   wheel                 closer and farther
+// In STANDARD only the first of those, the drag, is alive.
 // The buttons under the frame repeat the turn, the distance, the height and
 // the tilt, so none of THOSE depends on knowing a mouse gesture.
 //
@@ -120,13 +129,21 @@
     button("\u25C0", "Turn left", () => move("turn", -TURN_STEP), null),
     button("\u25B6", "Turn right", () => move("turn", TURN_STEP), null),
   ]);
-  group("Zoom", [
+  const modeSwitch = button("Free camera: off",
+    "Standard is RaceMenu's two positions; free is every move", () => {
+      if (state && state.ready && !state.forced) {
+        LifecastBridge.send("stage-mode", { free: !state.free });
+      }
+    }, (s) => !!s.forced);
+  const nearButton = button("Near", "Swap far and near (LAlt)", () => sendZoom(), null);
+  group("Camera", [modeSwitch, nearButton]);
+  const zoomGroup = group("Zoom", [
     button("+", "Closer", () => move("distance", -DISTANCE_STEP),
       (s) => s.distance <= s.limits.minDistance + near),
     button("\u2212", "Farther", () => move("distance", DISTANCE_STEP),
       (s) => s.distance >= s.limits.maxDistance - near),
   ]);
-  group("Height", [
+  const heightGroup = group("Height", [
     button("\u25B2", "Camera up", () => move("lift", LIFT_STEP),
       (s) => s.lift >= s.limits.liftMax - near),
     button("\u25BC", "Camera down", () => move("lift", -LIFT_STEP),
@@ -160,7 +177,9 @@
     if (onControls(e.target) || !state || !state.ready) {
       return;
     }
-    const mode = e.button === 2 ? "lift" : (e.ctrlKey ? "tilt" : (e.button === 0 ? "turn" : null));
+    // Standard: the left button turns, and nothing else answers.
+    const mode = !state.free ? (e.button === 0 && !e.ctrlKey ? "turn" : null)
+      : (e.button === 2 ? "lift" : (e.ctrlKey ? "tilt" : (e.button === 0 ? "turn" : null)));
     if (!mode) {
       return;
     }
@@ -207,9 +226,32 @@
     if (onControls(e.target)) {
       return;
     }
+    if (state && state.ready && !state.free) {
+      e.preventDefault();  // the wheel is inert in standard
+      return;
+    }
     move("distance", e.deltaY * DISTANCE_PER_WHEEL);
     e.preventDefault();
   }, { passive: false });
+
+  // LAlt swaps far and near in standard. The altKey reaches the DOM with the
+  // panel focused (measured 2026-09-28), so nothing has to be routed to the
+  // game. preventDefault keeps the browser from taking the key for a menu.
+  function sendZoom() {
+    if (state && state.ready && !state.free) {
+      LifecastBridge.send("stage-zoom");
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.code !== "AltLeft" || e.repeat) {
+      return;
+    }
+    if (state && state.ready && !state.free) {
+      e.preventDefault();
+      sendZoom();
+    }
+  });
 
   // ----- the tuning knobs (development builds only) ---------------------------
 
@@ -324,14 +366,23 @@
       return;
     }
     note.hidden = true;
-    tiltGroup.hidden = !state.tilt;
+    const free = !!state.free;
+    modeSwitch.textContent = "Free camera: " + (free ? "on" : "off") + (state.forced ? " (comparison)" : "");
+    modeSwitch.classList.toggle("is-on", free);
+    nearButton.hidden = free;
+    nearButton.textContent = state.near ? "Far" : "Near";
+    zoomGroup.hidden = !free;
+    heightGroup.hidden = !free;
+    reframe.hidden = !free;
+    tiltGroup.hidden = !free || !state.tilt;
     for (const b of buttons) {
       b.el.disabled = b.isAtLimit ? b.isAtLimit(state) : false;
     }
-    readout.textContent =
-      "turn " + Math.round(state.turn) + " deg  |  distance " + Math.round(state.distance) +
-      "  |  height " + Math.round(state.lift) + "  |  pan " + Math.round(state.pan) +
-      (state.tilt ? "  |  tilt " + Math.round(state.tiltDeg) + " deg" : "");
+    readout.textContent = free
+      ? "turn " + Math.round(state.turn) + " deg  |  distance " + Math.round(state.distance) +
+        "  |  height " + Math.round(state.lift) + "  |  pan " + Math.round(state.pan) +
+        (state.tilt ? "  |  tilt " + Math.round(state.tiltDeg) + " deg" : "")
+      : "turn " + Math.round(state.turn) + " deg  |  " + (state.near ? "near" : "far");
   }
 
   LifecastBridge.on("stage", (data) => {

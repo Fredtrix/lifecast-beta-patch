@@ -151,6 +151,10 @@ namespace Lifecast::Panel::Stage
 			double tilt{ 0.0 };
 			bool   reset{ false };
 			bool   any{ false };
+			// 0 nothing, 1 standard, 2 free; the last one wins. And how many
+			// far <-> near swaps were asked (they add up: two are none).
+			int    mode{ 0 };
+			int    zoom{ 0 };
 			// The framing rule: 0 nothing, 1 frame the pair, 2 stop framing
 			// it. Not a bool, because "no request" and "turn it off" are
 			// different things and folding them loses the second.
@@ -205,6 +209,7 @@ namespace Lifecast::Panel::Stage
 		// that was written and never acted.
 		int               g_oneTracks = 0;
 		Clock::time_point g_trackAt{};
+		Clock::time_point g_holdAt{};
 
 		// g_oneOn, as an atomic, for Tick() alone. Tick() runs on the INPUT
 		// thread - that is why g_moving is an atomic and not a bool - and it
@@ -228,6 +233,16 @@ namespace Lifecast::Panel::Stage
 			g_oneOn = a_on;
 			g_oneTracking.store(a_on, std::memory_order_relaxed);
 		}
+
+		// THE MODE (Acabamento 4, D152). Standard is what the menu opens in: RaceMenu's
+		// own two camera positions, swapped by LAlt, with only the turn of the body
+		// and the pan the framing rule needs on top. Free is the camera of before,
+		// all five moves. g_near is which of the two standard positions is showing;
+		// g_freeBefore is what the comparison gives back when it closes. All UI thread.
+		bool g_free = false;
+		bool g_near = false;
+		bool g_freeBefore = false;
+		bool g_pairForced = false;  // the comparison is what made it free
 
 		// Whether the kept frame has been read a SECOND time this opening, and
 		// what the first reading said. See Refresh().
@@ -1162,7 +1177,7 @@ namespace Lifecast::Panel::Stage
 			}
 			json state = { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
 				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_target.pan },
-				{ "tiltDeg", g_target.tilt },
+				{ "tiltDeg", g_target.tilt }, { "free", g_free }, { "near", g_near }, { "forced", g_pairForced },
 				// What the camera is framing into, so the page - and the bench
 				// driving it - can read the rule's state instead of assuming it.
 				{ "frame", { { "on", g_oneOn }, { "left", g_oneLeft }, { "right", g_oneRight } } },
@@ -1199,6 +1214,74 @@ namespace Lifecast::Panel::Stage
 			}
 		}
 
+		// The standard camera's two fixed positions (D152). FAR is the frame the
+		// menu opened with: the kept distance and no lift. NEAR is OURS - the
+		// header exposes no zoom state, so kNearDistance and kNearLiftOffset are
+		// constants, and the eye is read here, at the swap, so the lift follows
+		// whatever race and sex are on screen. Only the target is set: the same
+		// easing and the same write that carry every other move carry this one.
+		void PlaceStandard(const char* a_why)
+		{
+			double distance = g_frame.distance;
+			double lift = 0.0;
+			if (g_near) {
+				distance = ClampSaid(kNearDistance, DistanceMin(), kMaxDistance, "near distance");
+				RE::NiPoint3 eye;
+				const char*  from = "none";
+				if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+					from = AimNode(player, eye);
+					lift = ClampSaid(eye.z - g_frame.camera.z + kNearLiftOffset, LiftMin(), kLiftUp, "near height");
+				}
+				spdlog::info("[stage] standard near ({}): the eye is {} - the NEAR numbers are ours, not RaceMenu's", a_why, from);
+			}
+			g_target.distance = distance;
+			g_target.lift = lift;
+			g_target.tilt = 0.0;
+			spdlog::info("[stage] standard {} ({}): target distance {:.2f}, lift {:.2f}", g_near ? "near" : "far", a_why,
+				g_target.distance, g_target.lift);
+		}
+
+		// V166's instrument, and it reports a VALUE, never a count of writes: once
+		// a second in the standard camera, with the camera the ENGINE reports
+		// (not the one we wrote) against the target, in the quantities the
+		// limiars are stated in. A line that goes silent when nothing is wrong
+		// is the trap that made the Acabamento 3 limiar 4 measure nothing, so
+		// this one is written whether or not anything moved.
+		void LogHold(RE::GFxValue& a_cg, Clock::time_point a_now)
+		{
+			if (g_free || g_pairOn || g_moving.load(std::memory_order_relaxed)) {
+				return;
+			}
+			if (std::chrono::duration_cast<std::chrono::milliseconds>(a_now - g_holdAt).count() < 1000) {
+				return;
+			}
+			g_holdAt = a_now;
+			RE::NiPoint3 cam;
+			if (!GetPoint(a_cg, "GetRaceSexCameraPos", cam)) {
+				return;
+			}
+			const double perpX = -g_frame.dirY;
+			const double perpY = g_frame.dirX;
+			const double dx = cam.x - g_frame.player.x;
+			const double dy = cam.y - g_frame.player.y;
+			const double distance = dx * g_frame.dirX + dy * g_frame.dirY;
+			const double pan = dx * perpX + dy * perpY;
+			const double lift = cam.z - g_frame.camera.z;
+			double       aim = 0.0;
+			bool         haveAim = false;
+			if (g_oneOn && g_oneRight > g_oneLeft) {
+				Look look;
+				if (MeasureOne(look, "hold", true)) {
+					aim = (look.aimX - (g_oneLeft + g_oneRight) / 2.0) / (g_oneRight - g_oneLeft) * 100.0;
+					haveAim = true;
+				}
+			}
+			spdlog::info("[stage] hold {}: engine distance {:.2f} lift {:.2f} pan {:.2f} | target distance {:.2f} lift {:.2f} "
+						 "pan {:.2f} tilt {:.2f} | aim {}{:+.2f}% of the view",
+				g_near ? "near" : "far", distance, lift, pan, g_target.distance, g_target.lift, g_target.pan, g_target.tilt,
+				haveAim ? "" : "n/a ", aim);
+		}
+
 		void Work()
 		{
 			const auto startedAt = Clock::now();
@@ -1232,10 +1315,46 @@ namespace Lifecast::Panel::Stage
 				return;
 			}
 
+			// The comparison forces the free camera and gives the mode back. Said
+			// before the gate below, so the very pass that opens it is not gated.
+			if (p.pair == 1 && !g_pairForced) {
+				g_pairForced = true;
+				g_freeBefore = g_free;
+				g_free = true;
+				spdlog::info("[stage] comparison opens: the free camera is forced on (was {})", g_freeBefore ? "free" : "standard");
+			}
+			if (p.mode != 0) {
+				if (g_pairForced) {
+					spdlog::info("[stage] mode change ignored: the comparison holds the free camera");
+				} else if ((p.mode == 2) != g_free) {
+					g_free = p.mode == 2;
+					g_near = false;
+					if (!g_free) {
+						g_target.pan = 0.0;
+						PlaceStandard("mode");
+					}
+					spdlog::info("[stage] mode: {}", g_free ? "free" : "standard");
+				}
+			}
+			// STANDARD drops every move the page could still send except the
+			// turn. The pan that survives is the tracker's, and that goes on
+			// the target directly, not through here.
+			if (!g_free) {
+				p.distance = 0.0;
+				p.lift = 0.0;
+				p.pan = 0.0;
+				p.tilt = 0.0;
+				if (p.zoom % 2 != 0) {
+					g_near = !g_near;
+					PlaceStandard("LAlt");
+				}
+			}
+
 			// The move goes on the target, and the clamp with it.
 			if (p.reset) {
 				g_target = At{};
 				g_target.distance = g_frame.distance;
+				g_near = false;
 			}
 			if (p.turn != 0.0) {
 				g_target.turn = Wrap(g_target.turn + p.turn);
@@ -1269,6 +1388,14 @@ namespace Lifecast::Panel::Stage
 				g_pairSolves = 0;
 				g_target = At{};
 				g_target.distance = g_frame.distance;
+				if (g_pairForced) {
+					g_pairForced = false;
+					g_free = g_freeBefore;
+					spdlog::info("[stage] comparison closes: back to the {} camera", g_free ? "free" : "standard");
+				}
+				if (!g_free && g_near) {
+					PlaceStandard("comparison closed");
+				}
 			}
 
 			// The single-figure rule, after the pair's: if both arrive in one
@@ -1305,6 +1432,9 @@ namespace Lifecast::Panel::Stage
 				g_oneTracks = 0;
 				g_target = At{};
 				g_target.distance = g_frame.distance;
+				if (!g_free && g_near) {
+					PlaceStandard("frame off");
+				}
 			}
 
 			// And the tick moves what is written, one step closer.
@@ -1396,6 +1526,7 @@ namespace Lifecast::Panel::Stage
 			// is what moves - the camera glides at the speed the subject drifts
 			// (~17 px/s on screen, E4d) instead of stepping.
 			TrackOne(startedAt);
+			LogHold(cg, startedAt);
 
 			if (!wasMoving && !moving) {
 				++g_restTicks;
@@ -1421,6 +1552,10 @@ namespace Lifecast::Panel::Stage
 				g_pending.pan += a_add.pan;
 				g_pending.tilt += a_add.tilt;
 				g_pending.reset = g_pending.reset || a_add.reset;
+				if (a_add.mode != 0) {
+					g_pending.mode = a_add.mode;
+				}
+				g_pending.zoom += a_add.zoom;
 				// A toggle does not add up: two presses folded into one pass
 				// are the last one, not both.
 				if (a_add.pair != 0) {
@@ -1486,6 +1621,29 @@ namespace Lifecast::Panel::Stage
 		void OnReset(const json&)
 		{
 			Reset();
+		}
+
+		// "free": bool. Absent is standard, the safe side.
+		void OnMode(const json& a_data)
+		{
+			bool free = false;
+			if (a_data.is_object() && a_data.contains("free") && a_data["free"].is_boolean()) {
+				free = a_data["free"].get<bool>();
+			}
+			Pending p;
+			p.mode = free ? 2 : 1;
+			p.any = true;
+			p.answer = true;
+			Queue(p);
+		}
+
+		void OnZoom(const json&)
+		{
+			Pending p;
+			p.zoom = 1;
+			p.any = true;
+			p.answer = true;
+			Queue(p);
 		}
 
 		// Absent "on" means TRUE: the page sends this every time the character
@@ -1691,6 +1849,10 @@ namespace Lifecast::Panel::Stage
 					g_why.clear();
 					g_pairOn = false;
 					g_pairSolves = 0;
+					g_free = false;
+					g_near = false;
+					g_freeBefore = false;
+					g_pairForced = false;
 					SetOneOn(false);
 					g_oneSolves = 0;
 					g_oneTracks = 0;
@@ -1802,6 +1964,8 @@ namespace Lifecast::Panel::Stage
 		Panel::Bridge::On("stage-get", &OnGet);
 		Panel::Bridge::On("stage-move", &OnMove);
 		Panel::Bridge::On("stage-reset", &OnReset);
+		Panel::Bridge::On("stage-mode", &OnMode);
+		Panel::Bridge::On("stage-zoom", &OnZoom);
 		Panel::Bridge::On("stage-frame", &OnFrame);
 #ifdef LIFECAST_TUNING
 		Panel::Bridge::On("stage-tune", &OnTune);
