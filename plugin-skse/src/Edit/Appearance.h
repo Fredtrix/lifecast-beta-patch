@@ -45,4 +45,11 @@ namespace Lifecast::Edit::Appearance
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
+
+	// After the player's race or sex was changed: for each of the seven head
+	// part types, the hair colour and the complexion, what the new race and sex
+	// accept stays, and what they do not becomes the race's default (the first
+	// of its list when it declares none). Not a reset: a value the race would
+	// have taken is the player's choice and is kept. The caller redraws.
+	void FitToRace(const char* a_why);
 }

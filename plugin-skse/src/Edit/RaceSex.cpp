@@ -3,6 +3,7 @@
 
 #include "Edit/RaceSex.h"
 
+#include "Edit/Appearance.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
@@ -176,6 +177,7 @@ namespace Lifecast::Edit::RaceSex
 			spdlog::info("[race-sex]   before: {}", State());
 			player->SwitchRace(race, true);
 			spdlog::info("[race-sex]   switched: {}", State());
+			Appearance::FitToRace("the race was changed");
 			Finish("the race was changed");
 			Answer("race", true, RaceName(race));
 			Push("after a race change");
@@ -205,6 +207,7 @@ namespace Lifecast::Edit::RaceSex
 			spdlog::info("[race-sex]   before: {}", State());
 			npc->SetActorBaseFlag(RE::ACTOR_BASE_DATA::Flag::kFemale, female, true);
 			spdlog::info("[race-sex]   flag:   {}", State());
+			Appearance::FitToRace("the sex was changed");
 			Finish("the sex was changed");
 			Answer("sex", true, female ? "female" : "male");
 			Push("after a sex change");

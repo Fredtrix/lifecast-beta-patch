@@ -82,29 +82,37 @@ namespace Lifecast::Edit::Appearance
 			return sex < RE::SEXES::kTotal ? race->faceRelatedData[sex] : nullptr;
 		}
 
+		// Whether the game offers this head part to the NPC's race and sex:
+		// playable, not an extra part, made for the sex, and its valid races
+		// include the race. The same test the lists below are built with, and
+		// the one the race change checks what the player wears against.
+		bool PartValidFor(RE::TESNPC* a_npc, const HeadPart* a_part)
+		{
+			auto* race = a_npc ? a_npc->GetRace() : nullptr;
+			if (!race || !a_part) {
+				return false;
+			}
+			const auto sexFlag = a_npc->GetSex() == RE::SEX::kFemale ? HeadPart::Flag::kFemale : HeadPart::Flag::kMale;
+			if (!a_part->flags.any(HeadPart::Flag::kPlayable) || a_part->flags.any(HeadPart::Flag::kIsExtraPart)) {
+				return false;
+			}
+			if (!a_part->flags.any(sexFlag)) {
+				return false;
+			}
+			return a_part->validRaces && a_part->validRaces->HasForm(race);
+		}
+
 		std::vector<HeadPart*> PartsOf(RE::TESNPC* a_npc, HPType a_type)
 		{
 			std::vector<HeadPart*> out;
 			auto*                  data = RE::TESDataHandler::GetSingleton();
-			auto*                  race = a_npc->GetRace();
-			if (!data || !race) {
+			if (!data || !a_npc || !a_npc->GetRace()) {
 				return out;
 			}
-			const auto sexFlag = a_npc->GetSex() == RE::SEX::kFemale ? HeadPart::Flag::kFemale : HeadPart::Flag::kMale;
 			for (auto* part : data->GetFormArray<HeadPart>()) {
-				if (!part || part->type.get() != a_type) {
-					continue;
+				if (part && part->type.get() == a_type && PartValidFor(a_npc, part)) {
+					out.push_back(part);
 				}
-				if (!part->flags.any(HeadPart::Flag::kPlayable) || part->flags.any(HeadPart::Flag::kIsExtraPart)) {
-					continue;
-				}
-				if (!part->flags.any(sexFlag)) {
-					continue;
-				}
-				if (!part->validRaces || !part->validRaces->HasForm(race)) {
-					continue;
-				}
-				out.push_back(part);
 			}
 			return out;
 		}
@@ -404,12 +412,81 @@ namespace Lifecast::Edit::Appearance
 			}
 		}
 
+		// The nine values a race or sex change has to leave valid: seven head
+		// parts, the hair colour and the complexion. Each is read from the game,
+		// and the line says where it was found - the FormID and the size of the
+		// list - because "it changed" is not what is asked, "the race accepts it"
+		// is. Head parts are checked twice: against what the game offers the race
+		// and sex (the data handler) and against the list the panel shows. A part
+		// that nobody wears (no scar) is absent, not wrong. Returns how many of
+		// the nine belong.
+		struct FitType
+		{
+			const char* key;
+			HPType      type;
+		};
+
+		constexpr FitType kFitTypes[] = {
+			{ "misc", HPType::kMisc },
+			{ "face", HPType::kFace },
+			{ "eyes", HPType::kEyes },
+			{ "hair", HPType::kHair },
+			{ "facial-hair", HPType::kFacialHair },
+			{ "scar", HPType::kScar },
+			{ "brows", HPType::kEyebrows },
+		};
+
+		bool g_fitPending = false;
+
+		int FitReport(const char* a_tag)
+		{
+			auto* npc = Npc();
+			if (!npc) {
+				return -1;
+			}
+			int belong = 0;
+			for (const auto& t : kFitTypes) {
+				auto*       current = npc->GetCurrentHeadPartByType(t.type);
+				const auto  valid = PartsOf(npc, t.type);
+				const auto  it = g_lists.parts.find(t.key);
+				const bool  hasPanel = it != g_lists.parts.end();
+				const int   inGame = current ? IndexOf(valid, current) : -1;
+				const int   inPanel = current && hasPanel ? IndexOf(it->second, current) : -1;
+				const bool  ok = !current || (inGame >= 0 && (!hasPanel || inPanel >= 0));
+				belong += ok ? 1 : 0;
+				spdlog::info("[fit] {} {}: {:08X} '{}' | game list {} idx {} | panel list {} idx {} | {}", a_tag, t.key,
+					current ? current->GetFormID() : 0u,
+					current && current->GetFormEditorID() ? current->GetFormEditorID() : "",
+					valid.size(), inGame, hasPanel ? static_cast<int>(it->second.size()) : -1, inPanel,
+					!current ? "ABSENT (none worn)" : ok ? "BELONGS" : "DOES NOT BELONG");
+			}
+			const auto* hrd = npc->headRelatedData;
+			auto*       color = hrd ? hrd->hairColor : nullptr;
+			const int   colorIdx = color ? IndexOf(g_lists.hairColors, color) : -1;
+			belong += colorIdx >= 0 ? 1 : 0;
+			spdlog::info("[fit] {} hair-color: {:08X} {} | list {} idx {} | {}", a_tag, color ? color->GetFormID() : 0u,
+				color ? Hex(color->color) : "-", g_lists.hairColors.size(), colorIdx,
+				colorIdx >= 0 ? "BELONGS" : "DOES NOT BELONG");
+			auto*     set = hrd ? hrd->faceDetails : nullptr;
+			const int setIdx = set ? IndexOf(g_lists.complexions, set) : -1;
+			belong += setIdx >= 0 ? 1 : 0;
+			spdlog::info("[fit] {} complexion: {:08X} | list {} idx {} | {}", a_tag, set ? set->GetFormID() : 0u,
+				g_lists.complexions.size(), setIdx, setIdx >= 0 ? "BELONGS" : "DOES NOT BELONG");
+			spdlog::info("[fit] {}: {} of 9 belong", a_tag, belong);
+			return belong;
+		}
+
 		// A DoReset3D rebuilt the actor from its data: what was pending is on
-		// screen already.
+		// screen already. After a race or sex change this is also where the nine
+		// values are read again, from the game and not from what was written.
 		void OnRedrawn()
 		{
 			g_pendingParts.clear();
 			g_pendingWeight = false;
+			if (g_fitPending) {
+				g_fitPending = false;
+				FitReport("after the redraw");
+			}
 		}
 
 		// A nose, eye or mouth type or the complexion goes to RaceMenu's own
@@ -639,6 +716,97 @@ namespace Lifecast::Edit::Appearance
 		}
 
 		bool g_installed = false;
+	}
+
+	void FitToRace(const char* a_why)
+	{
+		auto* npc = Npc();
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		auto* race = npc ? npc->GetRace() : nullptr;
+		if (!npc || !player || !race) {
+			return;
+		}
+		// The lists are the new race's and sex's own, never the ones the page was
+		// last sent.
+		g_lists = {};
+		if (!EnsureLists(a_why)) {
+			return;
+		}
+		spdlog::info("[fit] {}: race {:08X}, sex {} - what the race accepts stays, what it does not becomes the "
+					 "race's default, or the first of its list when it declares none",
+			a_why, race->GetFormID(), static_cast<std::uint32_t>(npc->GetSex()));
+		FitReport("before the fit");
+
+		int changed = 0;
+		for (const auto& t : kFitTypes) {
+			auto* current = npc->GetCurrentHeadPartByType(t.type);
+			if (!current) {
+				continue;
+			}
+			const auto valid = PartsOf(npc, t.type);
+			const auto it = g_lists.parts.find(t.key);
+			const bool inPanel = it == g_lists.parts.end() || IndexOf(it->second, current) >= 0;
+			if (IndexOf(valid, current) >= 0 && inPanel) {
+				continue;
+			}
+			HeadPart* pick = nullptr;
+			if (it != g_lists.parts.end()) {
+				for (auto* p : it->second) {
+					if (p && IndexOf(valid, p) >= 0) {
+						pick = p;
+						break;
+					}
+				}
+			}
+			if (!pick && !valid.empty()) {
+				pick = valid.front();
+			}
+			if (!pick) {
+				spdlog::warn("[fit] {}: {:08X} is not valid for this race and sex, and the race offers none - left", t.key,
+					current->GetFormID());
+				continue;
+			}
+			// A type can hold several parts (misc does) and ChangeHeadPart replaces
+			// the first of its type: only a part that does not belong is touched.
+			spdlog::info("[fit] {}: {:08X} '{}' -> {:08X} '{}'{}", t.key, current->GetFormID(),
+				current->GetFormEditorID() ? current->GetFormEditorID() : "", pick->GetFormID(),
+				pick->GetFormEditorID() ? pick->GetFormEditorID() : "",
+				t.type == HPType::kMisc ? " (misc: a type that holds several parts - check the mouth)" : "");
+			npc->ChangeHeadPart(pick);
+			++changed;
+		}
+
+		auto* rf = RaceFaceOf(npc);
+		const auto* hrd = npc->headRelatedData;
+		auto*       color = hrd ? hrd->hairColor : nullptr;
+		if (!g_lists.hairColors.empty() && (!color || IndexOf(g_lists.hairColors, color) < 0)) {
+			auto* pick = rf && rf->defaultHairColor ? rf->defaultHairColor : g_lists.hairColors.front();
+			spdlog::info("[fit] hair-color: {:08X} -> {:08X} ({}; default of the race {:08X}, in its list at {})",
+				color ? color->GetFormID() : 0u, pick->GetFormID(),
+				rf && rf->defaultHairColor ? "the race's default" : "first of the list",
+				rf && rf->defaultHairColor ? rf->defaultHairColor->GetFormID() : 0u,
+				rf && rf->defaultHairColor ? IndexOf(g_lists.hairColors, rf->defaultHairColor) : -1);
+			npc->SetHairColor(pick);
+			player->UpdateHairColor();
+			Core::RaceMenuSync::HairPresetChanged();
+			++changed;
+		}
+		const auto* hrd2 = npc->headRelatedData;
+		auto*       set = hrd2 ? hrd2->faceDetails : nullptr;
+		if (!g_lists.complexions.empty() && (!set || IndexOf(g_lists.complexions, set) < 0)) {
+			auto* pick = rf && rf->defaultFaceDetailsTextureSet ? rf->defaultFaceDetailsTextureSet
+			                                                    : g_lists.complexions.front();
+			spdlog::info("[fit] complexion: {:08X} -> {:08X} ({}; default of the race {:08X}, in its list at {})",
+				set ? set->GetFormID() : 0u, pick->GetFormID(),
+				rf && rf->defaultFaceDetailsTextureSet ? "the race's default" : "first of the list",
+				rf && rf->defaultFaceDetailsTextureSet ? rf->defaultFaceDetailsTextureSet->GetFormID() : 0u,
+				rf && rf->defaultFaceDetailsTextureSet ? IndexOf(g_lists.complexions, rf->defaultFaceDetailsTextureSet) : -1);
+			npc->SetFaceTexture(pick);
+			++changed;
+		}
+		spdlog::info("[fit] {} values replaced; the caller redraws, and the nine are read again after it", changed);
+		FitReport("after the write");
+		g_fitPending = true;
 	}
 
 	void Install()

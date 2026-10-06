@@ -47,6 +47,17 @@ namespace Lifecast::Panel::Stage
 		// camera is already inside, a pair that is off - looks exactly like a number
 		// that was ignored; this is what tells the two apart. Read by State().
 		nlohmann::json g_tuneSaid = nlohmann::json::object();
+
+		// What the last SolvePair wanted against what it got, for the same
+		// "A LIMIT WAS HIT" the log carries. Written by SolvePair, read by OnTune
+		// right after it, so the box can say the pair was cut and by how much.
+		struct PairCut
+		{
+			double wantedDistance = 0.0;
+			double distance = 0.0;
+			double wantedPan = 0.0;
+			double pan = 0.0;
+		} g_pairCut;
 #endif
 		constexpr double kSnapUnits = 0.05;
 		constexpr double kSnapDegrees = 0.05;
@@ -572,6 +583,9 @@ namespace Lifecast::Panel::Stage
 					  "asked for, and the number the rule would have needed is the 'wanted' above"
 					: "");
 
+#ifdef LIFECAST_TUNING
+			g_pairCut = { wantedDistance, distance, wantedPan, pan };
+#endif
 			g_target.distance = distance;
 			g_target.pan = pan;
 			++g_pairSolves;
@@ -1612,13 +1626,26 @@ namespace Lifecast::Panel::Stage
 									 "world was placed at the previous separation and does NOT move; toggle "
 									 "the comparison off and on to place her at the new one");
 						g_pairSolves = 0;
+						g_pairCut = {};
 						g_pairOn = SolvePair("after tune");
+						// The same test the log line applies. A limit that cut the pair is said
+						// first, with the number the rule wanted, because "solved again" alone
+						// reads as "did what you asked".
+						std::string cut;
+						if (g_pairCut.distance != g_pairCut.wantedDistance) {
+							cut += fmt::format(" A LIMIT CUT THE PAIR: the rule wanted distance {:.2f} and the camera got {:.2f}.",
+								g_pairCut.wantedDistance, g_pairCut.distance);
+						}
+						if (g_pairCut.pan != g_pairCut.wantedPan) {
+							cut += fmt::format(" A LIMIT CUT THE PAIR: the rule wanted pan {:.2f} and the camera got {:.2f}.",
+								g_pairCut.wantedPan, g_pairCut.pan);
+						}
 						if (Stored("pairApart")) {
 							g_tuneSaid["pairApart"] = "stored - the second figure does NOT move: turn the comparison off and on "
-													  "to place her at the new separation";
+													  "to place her at the new separation." + cut;
 						}
 						if (Stored("pairSpan")) {
-							g_tuneSaid["pairSpan"] = "stored - the pair is on, and the framing was solved again with it";
+							g_tuneSaid["pairSpan"] = "stored - the pair is on, and the framing was solved again with it." + cut;
 						}
 					} else {
 						if (Stored("pairApart")) {
