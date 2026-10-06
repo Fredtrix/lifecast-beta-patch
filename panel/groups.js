@@ -33,7 +33,7 @@ const LifecastGroups = (() => {
     // Race is the race picker (racesex.js), and still holds RaceMenu's
     // doors (delegate) that have no public way in yet (D125).
     { title: "Race", test: (key) => key === "race" || key === "delegate" },
-    { title: "Settings", footer: true, test: (key) => key === "debug" },
+    { title: "Settings", footer: true, test: (key) => key === "debug" || key === "debug:tuning" },
     { title: "Presets", quick: true, test: (key) => key === "presets" },
   ];
 
@@ -66,6 +66,7 @@ const LifecastGroups = (() => {
     "race", "delegate",
     "presets",
     "debug",
+    "debug:tuning",
   ]);
 
   return {

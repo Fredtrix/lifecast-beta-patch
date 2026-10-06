@@ -44,6 +44,7 @@ namespace Lifecast::Edit::Compare
 		std::string g_why;         // why the last request refused, for the page
 		bool        g_arm = false;  // make her on the next tick with the menu closed
 		bool        g_cull = false;  // cull her as soon as she has a body to cull
+		bool        g_bornBodyless = false;  // g_cull was set when she had no 3D at all
 
 		// E19: she is GONE while the editor is closed, and these are the state of
 		// that. Culled is not gone - a culled actor is still in the world with
@@ -722,6 +723,11 @@ namespace Lifecast::Edit::Compare
 			return (name && *name) ? name : "(no name)";
 		}
 
+		std::uint32_t FormIdOf(const RE::TESForm* a_form)
+		{
+			return a_form ? a_form->GetFormID() : 0u;
+		}
+
 		void CopyFace(RE::TESNPC* a_from, RE::TESNPC* a_to)
 		{
 			// pointers first: shared or distinct decides what may be written
@@ -736,13 +742,19 @@ namespace Lifecast::Edit::Compare
 				spdlog::info("[face] headRelatedData: NOT written (player {}, copy {})",
 					static_cast<const void*>(a_from->headRelatedData), static_cast<const void*>(a_to->headRelatedData));
 			} else if (a_from->headRelatedData == a_to->headRelatedData) {
-				spdlog::info("[face] headRelatedData: SHARED with the player's base - not written (hair colour '{}', face texture '{}')",
-					FormLabel(a_from->headRelatedData->hairColor), FormLabel(a_from->headRelatedData->faceDetails));
+				spdlog::info("[face] headRelatedData: SHARED with the player's base - not written (hair colour '{}' ({:08X}), face texture '{}')",
+					FormLabel(a_from->headRelatedData->hairColor), FormIdOf(a_from->headRelatedData->hairColor),
+					FormLabel(a_from->headRelatedData->faceDetails));
 			} else {
-				spdlog::info("[face] hairColor: copy '{}' -> player's '{}'", FormLabel(a_to->headRelatedData->hairColor),
-					FormLabel(a_from->headRelatedData->hairColor));
+				// The id beside the name, as the head part lines below do: a name alone
+				// cannot say WHICH form this is, and 'HairColor' is both a vanilla colour
+				// and the name RaceMenu gives its one mutable one.
+				spdlog::info("[face] hairColor: copy '{}' ({:08X}) -> player's '{}' ({:08X})",
+					FormLabel(a_to->headRelatedData->hairColor), FormIdOf(a_to->headRelatedData->hairColor),
+					FormLabel(a_from->headRelatedData->hairColor), FormIdOf(a_from->headRelatedData->hairColor));
 				a_to->SetHairColor(a_from->headRelatedData->hairColor);
-				spdlog::info("[face] hairColor: copy now reads '{}'", FormLabel(a_to->headRelatedData->hairColor));
+				spdlog::info("[face] hairColor: copy now reads '{}' ({:08X})", FormLabel(a_to->headRelatedData->hairColor),
+					FormIdOf(a_to->headRelatedData->hairColor));
 				spdlog::info("[face] faceDetails: copy '{}' -> player's '{}'", FormLabel(a_to->headRelatedData->faceDetails),
 					FormLabel(a_from->headRelatedData->faceDetails));
 				a_to->SetFaceTexture(a_from->headRelatedData->faceDetails);
@@ -1097,6 +1109,7 @@ namespace Lifecast::Edit::Compare
 				// between the two is logged, because that gap is exactly how
 				// long a copy of the player is visible standing in the world.
 				g_cull = true;
+				g_bornBodyless = true;
 				spdlog::info("[compare] park ({}): no 3D yet - she is culled on the first tick that has one", a_why);
 				return;
 			}
@@ -1363,6 +1376,7 @@ namespace Lifecast::Edit::Compare
 			// Her body comes back not culled. The tick culls it as soon as there is
 			// one, exactly as it does for a figure that was just born.
 			g_cull = true;
+			g_bornBodyless = false;
 			g_bornAt = Clock::now();
 			spdlog::info("[compare] return ({}): Enable(false), SetActivationBlocked(false), EnableAI(false) called - right "
 						 "after: {}",
@@ -1510,9 +1524,19 @@ namespace Lifecast::Edit::Compare
 				if (actor && actor->Get3D(false)) {
 					const auto flash =
 						std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_bornAt).count();
-					spdlog::info("[compare] the body arrived {} ms after she was placed - that gap is how long a copy "
-								 "of the player stood visible in the world",
-						flash);
+					if (g_bornBodyless) {
+						// Placed with no 3D: nothing of her existed to draw during the gap, so
+						// it is how long she existed WITHOUT a body, not how long she showed.
+						spdlog::info("[compare] the body arrived {} ms after she was placed - she had no 3D until then, "
+									 "so nothing of her was drawn during the gap",
+							flash);
+					} else {
+						// Brought back by Enable with a body already in the world: whether she
+						// drew during the gap is NOT measured by this line.
+						spdlog::info("[compare] the culling tick came {} ms after she was brought back - she had a body, so "
+									 "this is the longest she can have stood visible (not measured)",
+							flash);
+					}
 					spdlog::info("[compare] the body arrived - {}", Read(actor));
 					Park("the body finally loaded");
 					g_settleUntil = Clock::now() + kSettle;

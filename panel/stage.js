@@ -32,8 +32,8 @@
 // controls go away; nothing else in the panel changes.
 //
 // A development build of the DLL also sends "tuning", and then a section of
-// number boxes appears under the readout: the seven numbers of the view the
-// author retunes at OLHO DO AUTOR. A release DLL never sends that key, so the
+// number boxes appears under Settings (D132): the seven numbers of the view the
+// author retunes at OLHO DO AUTOR, each with what the DLL said it did. A release DLL never sends that key, so the
 // section is never built - there is no flag here to set, and nothing to
 // remember to turn off. Said here because the comment above this one was once
 // left behind by a feature that arrived later (the pan axis), and a reader who
@@ -151,11 +151,9 @@
 
   let drag = null;
 
-  // Controls that sit inside the frame and must keep their own mouse. The
-  // tuning box is one: a drag started on it would capture the pointer and
-  // swallow the mousedown, so its inputs could never take focus.
+  // Controls that sit inside the frame and must keep their own mouse.
   function onControls(t) {
-    return bar.contains(t) || (tuningBox !== null && tuningBox.contains(t));
+    return bar.contains(t);
   }
 
   stage.addEventListener("pointerdown", (e) => {
@@ -233,13 +231,19 @@
     ["ease", "Easing", "Share of the remaining gap covered per frame; 1 is no easing", 0.01],
   ];
 
+  // The section lives under Settings (D132: every debug or configuration
+  // control goes there), mounted the first time the DLL sends "tuning" - so a
+  // release build never has an empty one. Each row has a line under it that
+  // says what the DLL DID with the number: a limit the camera is already
+  // inside moves nothing, and without the line that looks like a number that
+  // was ignored (Acabamento 2).
   let tuningBox = null;
   const tuningInputs = new Map();
+  const tuningSaid = new Map();
+  let tuningNone = null;
 
   function buildTuning() {
-    tuningBox = LifecastControls.el("div", "stage-tuning");
-    tuningBox.appendChild(
-      LifecastControls.el("span", "stage-group-title", "Tuning (development build)"));
+    tuningBox = LifecastControls.section("Tuning (development build)", { open: true });
     for (const [key, label, title, step] of TUNABLES) {
       const row = LifecastControls.el("label", "stage-tuning-row");
       row.title = title;
@@ -260,9 +264,16 @@
       });
       tuningInputs.set(key, input);
       row.appendChild(input);
-      tuningBox.appendChild(row);
+      tuningBox.body.appendChild(row);
+      const said = LifecastControls.el("span", "stage-tuning-said");
+      said.hidden = true;
+      tuningSaid.set(key, said);
+      tuningBox.body.appendChild(said);
     }
-    bar.parentNode.insertBefore(tuningBox, readout.nextSibling);
+    tuningNone = LifecastControls.el("span", "stage-tuning-said");
+    tuningNone.hidden = true;
+    tuningBox.body.appendChild(tuningNone);
+    LifecastControls.mount(tuningBox, "debug:tuning");
   }
 
   function renderTuning() {
@@ -277,6 +288,7 @@
       buildTuning();
     }
     tuningBox.hidden = false;
+    const said = (state && state.tuneSaid) || {};
     for (const [key] of TUNABLES) {
       const input = tuningInputs.get(key);
       // Never overwrite the box he is typing in. The DLL echoes the whole set
@@ -284,7 +296,16 @@
       if (input && document.activeElement !== input && typeof t[key] === "number") {
         input.value = String(t[key]);
       }
+      const line = tuningSaid.get(key);
+      if (line) {
+        const text = typeof said[key] === "string" ? said[key] : "";
+        line.textContent = text;
+        line.hidden = text === "";
+      }
     }
+    const none = typeof said.none === "string" ? said.none : "";
+    tuningNone.textContent = none;
+    tuningNone.hidden = none === "";
   }
 
   // ----- what the DLL says ----------------------------------------------------

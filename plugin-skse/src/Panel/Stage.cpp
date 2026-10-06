@@ -41,6 +41,13 @@ namespace Lifecast::Panel::Stage
 		// internal linkage. The two snap epsilons are NOT tunable: they decide
 		// when a slide has ARRIVED, which is correctness and not taste.
 		LIFECAST_TUNABLE kEase = 0.25;
+#ifdef LIFECAST_TUNING
+		// What the DLL did with each number the page last sent, in words, one entry
+		// per key. A number that is accepted and then changes nothing - a limit the
+		// camera is already inside, a pair that is off - looks exactly like a number
+		// that was ignored; this is what tells the two apart. Read by State().
+		nlohmann::json g_tuneSaid = nlohmann::json::object();
+#endif
 		constexpr double kSnapUnits = 0.05;
 		constexpr double kSnapDegrees = 0.05;
 
@@ -1154,6 +1161,7 @@ namespace Lifecast::Panel::Stage
 			// and the page reads "limits" to decide what to disable.
 			state["tuning"] = { { "maxDistance", kMaxDistance }, { "liftUp", kLiftUp }, { "panMax", kPanMax },
 				{ "tiltMax", kTiltMax }, { "pairApart", kPairApart }, { "pairSpan", kPairSpan }, { "ease", kEase } };
+			state["tuneSaid"] = g_tuneSaid;
 #endif
 			return state;
 		}
@@ -1501,17 +1509,43 @@ namespace Lifecast::Panel::Stage
 		// number the author did not type is worse than ignoring him.
 		bool Tuned(const json& a_data, const char* a_key, double& a_out)
 		{
-			if (!a_data.is_object() || !a_data.contains(a_key) || !a_data[a_key].is_number()) {
+			if (!a_data.is_object() || !a_data.contains(a_key)) {
+				return false;
+			}
+			if (!a_data[a_key].is_number()) {
+				g_tuneSaid[a_key] = "not a number - ignored, nothing changed";
 				return false;
 			}
 			const double v = a_data[a_key].get<double>();
 			if (!std::isfinite(v)) {
 				spdlog::warn("[stage] tune: \"{}\" is not a finite number - ignored", a_key);
+				g_tuneSaid[a_key] = "not a finite number - ignored, nothing changed";
 				return false;
 			}
 			spdlog::info("[stage] tune: {} {:.4f} -> {:.4f}", a_key, a_out, v);
 			a_out = v;
 			return true;
+		}
+
+		// True while the entry for a key still says only "stored": the number was
+		// accepted and nothing has described its effect yet. A rejected number keeps
+		// its own message and must not be overwritten by a later, rosier one.
+		bool Stored(const char* a_key)
+		{
+			return g_tuneSaid.contains(a_key) && g_tuneSaid[a_key] == "stored";
+		}
+
+		// One line for the box: the number is stored, and then what it did to the
+		// camera - the TARGET before and after the same ClampSaid every move uses.
+		void SaidLimit(const char* a_key, double a_before, double a_after)
+		{
+			if (!Stored(a_key)) {
+				return;
+			}
+			g_tuneSaid[a_key] = a_after != a_before
+				? fmt::format("limit stored - the camera was at {:.2f}, outside it, and was moved to {:.2f}", a_before, a_after)
+				: fmt::format("limit stored - the camera is at {:.2f}, inside it, so nothing moves; it only stops "
+							  "the camera when it would go past", a_before);
 		}
 
 		// The page asked for a different number. UI thread, because these are
@@ -1529,6 +1563,13 @@ namespace Lifecast::Panel::Stage
 			}
 			const json data = a_data;
 			tasks->AddUITask([data]() {
+				// A fresh answer replaces the old one for the keys it carries; the others
+				// keep what they last said.
+				for (const char* key : { "maxDistance", "liftUp", "panMax", "tiltMax", "pairApart", "pairSpan", "ease" }) {
+					if (data.is_object() && data.contains(key)) {
+						g_tuneSaid.erase(key);
+					}
+				}
 				bool any = Tuned(data, "maxDistance", kMaxDistance);
 				any = Tuned(data, "liftUp", kLiftUp) || any;
 				any = Tuned(data, "panMax", kPanMax) || any;
@@ -1538,13 +1579,27 @@ namespace Lifecast::Panel::Stage
 				any = Tuned(data, "ease", kEase) || any;
 				if (!any) {
 					spdlog::warn("[stage] tune: no usable number in the message - nothing changed");
+					g_tuneSaid["none"] = "no usable number in the message - nothing changed";
+					Queue(Asked());
 					return;
 				}
+				g_tuneSaid.erase("none");
+				// "stored" is the base answer for a number that was accepted.
+				for (const char* key : { "maxDistance", "liftUp", "panMax", "tiltMax", "pairApart", "pairSpan", "ease" }) {
+					if (data.is_object() && data.contains(key) && !g_tuneSaid.contains(key)) {
+						g_tuneSaid[key] = "stored";
+					}
+				}
 				if (g_frame.have) {
+					const At before = g_target;
 					g_target.distance = ClampSaid(g_target.distance, DistanceMin(), kMaxDistance, "distance");
 					g_target.lift = ClampSaid(g_target.lift, LiftMin(), kLiftUp, "height");
 					g_target.pan = ClampSaid(g_target.pan, -kPanMax, kPanMax, "pan");
 					g_target.tilt = ClampSaid(g_target.tilt, -kTiltMax, kTiltMax, "tilt");
+					SaidLimit("maxDistance", before.distance, g_target.distance);
+					SaidLimit("liftUp", before.lift, g_target.lift);
+					SaidLimit("panMax", before.pan, g_target.pan);
+					SaidLimit("tiltMax", before.tilt, g_target.tilt);
 					// A pairing already on the screen was solved with the OLD
 					// numbers, so it is solved again. The twin herself does not
 					// move: Edit/Compare placed her at the old kPairApart and
@@ -1558,7 +1613,31 @@ namespace Lifecast::Panel::Stage
 									 "the comparison off and on to place her at the new one");
 						g_pairSolves = 0;
 						g_pairOn = SolvePair("after tune");
+						if (Stored("pairApart")) {
+							g_tuneSaid["pairApart"] = "stored - the second figure does NOT move: turn the comparison off and on "
+													  "to place her at the new separation";
+						}
+						if (Stored("pairSpan")) {
+							g_tuneSaid["pairSpan"] = "stored - the pair is on, and the framing was solved again with it";
+						}
+					} else {
+						if (Stored("pairApart")) {
+							g_tuneSaid["pairApart"] = "stored - the comparison is off; it shows when the comparison is turned on";
+						}
+						if (Stored("pairSpan")) {
+							g_tuneSaid["pairSpan"] = "stored - the comparison is off; it frames the pair when it is turned on";
+						}
 					}
+				} else {
+					for (const char* key : { "maxDistance", "liftUp", "panMax", "tiltMax" }) {
+						if (Stored(key)) {
+							g_tuneSaid[key] = "stored - there is no view yet, so it limits the next move";
+						}
+					}
+				}
+				if (Stored("ease")) {
+					g_tuneSaid["ease"] = "stored - it changes how fast the camera slides, so it shows only while the "
+										 "camera is moving";
 				}
 				g_moving.store(true, std::memory_order_relaxed);
 				Queue(Asked());
