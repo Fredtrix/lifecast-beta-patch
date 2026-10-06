@@ -6,6 +6,7 @@
 #include "Core/RaceMenuSync.h"
 #include "Core/SkeeLink.h"
 #include "Edit/Session.h"
+#include "Edit/Tints.h"
 #include "Panel/Bridge.h"
 
 namespace Lifecast::Edit::Overlays
@@ -319,16 +320,18 @@ namespace Lifecast::Edit::Overlays
 				}
 			}
 
-			// The war paint catalog (index 0) is counted and not used: it is a
-			// tint mask, edited through Edit/Tints, and the count is the
-			// measurement that says whether offering it there would be worth
-			// anything. See D084.
+			// The war paint catalog (index 0) is not offered by this file: it is
+			// a tint mask, and Edit/Tints offers it on its War Paint layer
+			// (WarPaintCatalog below). See D084.
 			spdlog::info("[overlays] paint catalogs read: war {}, body {}, hand {}, feet {}, face {}",
 				found[0].size(), found[1].size(), found[2].size(), found[3].size(), found[4].size());
 
-			std::scoped_lock lock(g_catalogLock);
-			g_catalog = std::move(found);
-			g_catalogRead = true;
+			{
+				std::scoped_lock lock(g_catalogLock);
+				g_catalog = std::move(found);
+				g_catalogRead = true;
+			}
+			Tints::Resend("the war paint catalog was read");
 		}
 
 		void ReadCatalog()
@@ -706,5 +709,16 @@ namespace Lifecast::Edit::Overlays
 		Panel::Bridge::On("overlay-set", &OnOverlaySet);
 		g_installed = true;
 		spdlog::info("[overlays] installed");
+	}
+
+	std::vector<WarPaint> WarPaintCatalog()
+	{
+		std::vector<WarPaint> out;
+		std::scoped_lock      lock(g_catalogLock);
+		out.reserve(g_catalog[0].size());
+		for (const auto& p : g_catalog[0]) {
+			out.push_back({ p.name, p.texture });
+		}
+		return out;
 	}
 }

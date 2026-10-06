@@ -7,6 +7,9 @@
 // colours for that texture, when it has any - or freely, by the picker
 // that opens from the layer's colour chip. Intensity is 0 to 100 percent.
 // A picked layer adds a row that chooses its texture, "None" included.
+// War paint adds one more: the catalog of every war paint installed, read
+// off RaceMenu's film by the DLL. Choosing an entry puts that texture on the
+// mask that is showing (D125 brought it in from RaceMenu).
 "use strict";
 
 (() => {
@@ -15,7 +18,7 @@
   section.body.appendChild(body);
   LifecastControls.mount(section, "tints");
 
-  let layers = new Map(); // key -> { pick, r, g, b, alpha, chip, picker, grid, swatches, none }
+  let layers = new Map(); // key -> { pick, catalog, r, g, b, alpha, chip, picker, grid, swatches, none }
   let keys = "";
 
   function hex2(n) {
@@ -58,11 +61,16 @@
     });
   }
 
+  function fileName(path) {
+    const name = String(path).split(/[\\/]/).pop();
+    return name.replace(/\.dds$/i, "");
+  }
+
   function build(list) {
     layers = new Map();
     body.replaceChildren();
     for (const l of list) {
-      const entry = { pick: null, swatches: null, none: false };
+      const entry = { pick: null, catalog: null, textures: [], texture: "", swatches: null, none: false };
       const head = LifecastControls.el("div", "tint-head");
       const name = LifecastControls.el("span", "slider-name", l.label);
       entry.chip = LifecastControls.el("button", "swatch-chip picker-chip");
@@ -98,6 +106,29 @@
           send: (v, final) => send(l.k, { index: v }, final),
         });
         body.appendChild(entry.pick.el);
+      }
+      if (Array.isArray(l.catalog)) {
+        // -1 is a texture the catalog does not carry, shown by its own file
+        // name; it sends nothing, since only a catalog path can be written.
+        entry.catalog = LifecastControls.row({
+          label: "Catalog",
+          min: -1,
+          max: 0,
+          step: 1,
+          button: 1,
+          format: (v) => {
+            if (v >= 0 && entry.textures[v]) {
+              return entry.textures[v].name;
+            }
+            return entry.texture ? fileName(entry.texture) : "None";
+          },
+          send: (v, final) => {
+            if (v >= 0 && entry.textures[v]) {
+              send(l.k, { texture: entry.textures[v].texture }, final);
+            }
+          },
+        });
+        body.appendChild(entry.catalog.el);
       }
       entry.r = colorRow(l.k, entry, "Red");
       entry.g = colorRow(l.k, entry, "Green");
@@ -188,6 +219,23 @@
         setColor(entry, l.color);
         if (!entry.alpha.dragging()) {
           entry.alpha.set(Math.round(l.alpha * 100));
+        }
+      }
+      if (entry.catalog) {
+        entry.textures = Array.isArray(l.catalog) ? l.catalog : [];
+        entry.texture = typeof l.texture === "string" ? l.texture : "";
+        let at = -1;
+        for (let i = 0; i < entry.textures.length; i += 1) {
+          if (String(entry.textures[i].texture).toLowerCase() === entry.texture.toLowerCase()) {
+            at = i;
+            break;
+          }
+        }
+        entry.catalog.setRange(-1, entry.textures.length - 1);
+        if (entry.textures.length === 0) {
+          entry.catalog.set(null);
+        } else if (!entry.catalog.dragging()) {
+          entry.catalog.set(at);
         }
       }
       fillSwatches(l.k, entry, l.label, none ? [] : Array.isArray(l.swatches) ? l.swatches : []);

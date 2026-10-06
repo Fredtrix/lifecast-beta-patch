@@ -30,6 +30,14 @@
 // overlays. Whether the war paint half is worth offering here is a separate
 // question, open and named in D084 - the claim of impossibility is not.
 //
+// It is offered here now (Fase 7.5, D125): the War Paint layer carries the
+// catalog Edit/Overlays reads off the film, and choosing an entry changes the
+// TEXTURE of the mask that is showing - the same field SKSE's
+// Game.SetTintMaskTexturePath writes when RaceMenu applies a catalog paint.
+// RaceMenu is then asked to take a fresh copy of the masks
+// ("RSM_RequestTintSave"), because its script re-applies the textures it
+// holds when a save is loaded.
+//
 // Swatches are the race's own preset colours for that texture, when the race
 // has them; any colour can be set regardless.
 //
@@ -47,10 +55,16 @@
 //                 layer: { "k": key, "label": text, "kind": "plain" | "pick",
 //                          "color": "#RRGGBB", "alpha": 0..1,
 //                          "swatches": [ "#RRGGBB", ... ],
-//                          pick only: "count": N, "index": i (-1 = none) }
+//                          pick only: "count": N, "index": i (-1 = none),
+//                          war paint only: "texture": path of the mask
+//                          showing ("" when none), "catalog": [ { "name":
+//                          text, "texture": path }, ... ] }
 //   page -> dll  "tint-set"   { "k": key, "final": bool, and any of
 //                               "color": "#RRGGBB", "alpha": 0..1,
-//                               "index": i (pick only, -1 = none) }
+//                               "index": i (pick only, -1 = none),
+//                               "texture": path (war paint only, from the
+//                               catalog; with nothing showing, the first
+//                               mask takes it at full intensity) }
 
 #pragma once
 
@@ -59,4 +73,8 @@ namespace Lifecast::Edit::Tints
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
+
+	// Sends the layers to the page again. Edit/Overlays calls it when the war
+	// paint catalog has been read off the film.
+	void Resend(const char* a_why);
 }

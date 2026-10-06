@@ -23,7 +23,6 @@
     ["face-sliders", "Extended Face Sliders", "RaceMenu's own face sliders, beyond the game's."],
     ["extra", "Extra Sliders", "The sliders RaceMenu files under its own Extra tab."],
     ["expressions", "Expressions", "The face expression sliders."],
-    ["paints", "War Paint Catalog", "Every war paint installed. The Lifecast offers the race's own."],
     ["sculpt", "Sculpt", "Free-form editing of the head mesh."],
   ];
 
@@ -31,9 +30,8 @@
   // label - and "a home" is a section OR a fixed row above. $EXTRA and
   // $EXPRESSIONS have a row each. The four overlay categories have sections
   // of their own (overlays.js). $MAKEUP is war paint, which is a tint mask
-  // and not an overlay: its home is the War Paint layer in Skin & Tints, and
-  // the row above is the door to the full catalog, which that layer does not
-  // carry (D084).
+  // and not an overlay: its home is the War Paint layer in Skin & Tints,
+  // which carries the full catalog too (D084; the door to it left with D125).
   //
   // Matched by label and never by flag. AddCategory registers a category by
   // text key and AddSliderEx defaults its section to 0, so 0 is a real value

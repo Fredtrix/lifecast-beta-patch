@@ -65,4 +65,15 @@ namespace Lifecast::Edit::Overlays
 	// Registers the bridge handlers and the session callbacks. Call once, at
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
+
+	// The war paint catalog: the first of the film's five paint lists, read
+	// with the other four. War paint is a tint mask, not an overlay, so it is
+	// not offered here but on the War Paint layer of Edit/Tints. Empty until
+	// the film has been read; Edit/Tints is told each time it is read again.
+	struct WarPaint
+	{
+		std::string name;
+		std::string texture;
+	};
+	std::vector<WarPaint> WarPaintCatalog();
 }

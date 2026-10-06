@@ -5,6 +5,7 @@
 
 #include "Core/RaceMenuSync.h"
 #include "Core/TintRefresh.h"
+#include "Edit/Overlays.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
 
@@ -161,6 +162,14 @@ namespace Lifecast::Edit::Tints
 					layer["count"] = masks.size();
 					layer["index"] = shown;
 				}
+				if (l.type == Type::kWarPaint) {
+					layer["texture"] = shown >= 0 ? TextureOf(mask) : "";
+					auto catalog = nlohmann::json::array();
+					for (const auto& p : Overlays::WarPaintCatalog()) {
+						catalog.push_back({ { "name", p.name }, { "texture", p.texture } });
+					}
+					layer["catalog"] = std::move(catalog);
+				}
 				layers.push_back(std::move(layer));
 			}
 			spdlog::info("[tints] {}: sending {} layers from {} masks", a_why, layers.size(),
@@ -186,6 +195,30 @@ namespace Lifecast::Edit::Tints
 			if (a_final) {
 				spdlog::info("[tints] body tint {} -> {} (follows the skin tone)", Hex(before),
 					Hex(npc->bodyTintColor));
+			}
+		}
+
+		// Changes the texture a mask shows: the field SKSE's
+		// Game.SetTintMaskTexturePath writes for RaceMenu's catalog. The log
+		// reads the field back, and says whether the mask's texture is the
+		// race's own record - writing it would then rename the race's asset,
+		// which every actor of that race and sex shares (measured, not assumed:
+		// the header cannot say which it is).
+		void SetTexture(const std::string& a_key, int a_index, RE::TintMask* a_mask, const std::string& a_path)
+		{
+			if (!a_mask->texture) {
+				spdlog::warn("[tints] {}: mask {} has no texture record - texture not set", a_key, a_index);
+				return;
+			}
+			const std::string before = TextureOf(a_mask);
+			const auto*       asset = AssetOf(a_mask);
+			const bool        shared = asset && &asset->texture.file == a_mask->texture;
+			a_mask->texture->textureName = a_path;
+			spdlog::info("[tints] {} texture, mask {}: \"{}\" -> \"{}\" (read back \"{}\"; race asset {}{})", a_key,
+				a_index, before, a_path, TextureOf(a_mask), asset ? "found" : "not found",
+				asset ? (shared ? ", SAME record as the mask" : ", a different record from the mask") : "");
+			if (asset) {
+				spdlog::info("[tints] {} race asset texture now \"{}\"", a_key, asset->texture.file.textureName.c_str());
 			}
 		}
 
@@ -257,7 +290,34 @@ namespace Lifecast::Edit::Tints
 					return;
 				}
 			}
-			if (!hasColor && !hasAlpha && !hasIndex) {
+			// A texture from the war paint catalog. Only a path the catalog
+			// carries is taken: the page never sends a path of its own.
+			std::string texture;
+			const bool  hasTexture = a_data.contains("texture");
+			if (hasTexture) {
+				if (layer->type != Type::kWarPaint || !a_data["texture"].is_string()) {
+					spdlog::warn("[tints] tint-set {}: \"texture\" only for war paint, as a string - ignored", key);
+					return;
+				}
+				texture = a_data["texture"].get<std::string>();
+				bool known = false;
+				for (const auto& p : Overlays::WarPaintCatalog()) {
+					if (_stricmp(p.texture.c_str(), texture.c_str()) == 0) {
+						known = true;
+						break;
+					}
+				}
+				if (!known) {
+					spdlog::warn("[tints] tint-set {}: texture \"{}\" is not in the war paint catalog - ignored", key,
+						texture);
+					return;
+				}
+				if (hasIndex && index < 0) {
+					spdlog::warn("[tints] tint-set {}: a texture with index -1 (none) - ignored", key);
+					return;
+				}
+			}
+			if (!hasColor && !hasAlpha && !hasIndex && !hasTexture) {
 				spdlog::warn("[tints] tint-set {}: nothing to set - ignored", key);
 				return;
 			}
@@ -268,6 +328,12 @@ namespace Lifecast::Edit::Tints
 			if (layer->pick) {
 				const int shown = ShownIndex(masks);
 				target = hasIndex ? index : shown;
+				if (target < 0 && hasTexture) {
+					// Nothing showing: the first mask takes the paint, at full
+					// intensity, the way a pick from "None" would show it.
+					target = 0;
+					masks[0]->alpha = 1.0F;
+				}
 				if (target < 0 && !hasIndex) {
 					spdlog::warn("[tints] tint-set {}: nothing is picked - pick one first; ignored", key);
 					return;
@@ -302,6 +368,9 @@ namespace Lifecast::Edit::Tints
 				if (hasAlpha) {
 					mask->alpha = alpha;
 				}
+				if (hasTexture) {
+					SetTexture(key, target, mask, texture);
+				}
 			}
 			++g_sets;
 
@@ -322,6 +391,12 @@ namespace Lifecast::Edit::Tints
 				// RaceMenu keeps its own copy of the masks; without this its
 				// tint controls show the old values and a reload restores them.
 				Core::RaceMenuSync::TintsChanged();
+				if (hasTexture) {
+					// The texture is in that copy too, and RaceMenu's script
+					// writes it back on every load: it has to hold the new
+					// path, or a reload brings the old paint back.
+					Core::RaceMenuSync::PresetLoaded();
+				}
 				PushTints("after a final write");
 			}
 		}
@@ -351,5 +426,12 @@ namespace Lifecast::Edit::Tints
 		Panel::Bridge::On("tint-set", &OnTintSet);
 		g_installed = true;
 		spdlog::info("[tints] installed");
+	}
+
+	void Resend(const char* a_why)
+	{
+		if (Session::MenuOpen()) {
+			PushTints(a_why);
+		}
 	}
 }
