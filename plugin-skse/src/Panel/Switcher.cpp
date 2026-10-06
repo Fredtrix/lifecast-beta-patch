@@ -241,7 +241,8 @@ namespace Lifecast::Panel::Switcher
 				// and 64.6 a second whether the panel holds focus or not,
 				// so it is also where the character view slides. A second
 				// tick of its own would buy nothing extra; the stage reads
-				// one atomic and returns when nothing is moving.
+				// two atomics and returns unless something is moving or the
+				// one-figure rule is on and watching its subject drift.
 				Stage::Tick();
 
 				if (!a_event || g_mode != Mode::kRaceMenu) {

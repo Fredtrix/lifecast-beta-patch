@@ -44,6 +44,38 @@ namespace Lifecast::Panel::Stage
 		constexpr double kSnapUnits = 0.05;
 		constexpr double kSnapDegrees = 0.05;
 
+		// THE SUBJECT DOES NOT HOLD STILL, and that is measured rather than
+		// supposed: with the camera parked to the third decimal, the head bone
+		// sweeps 190 to 230 px of 2560 in 13 s (Fase 7, E4d, boot 137). Worse
+		// for a rule that aims once, the sweep is SLOW and not stationary - the
+		// mean of one half of a 13 s record differs from the other half by up
+		// to 6.1% of the stage, and even a 10 s rolling mean moves 2.0 to 2.5%
+		// between neighbouring windows, which is the whole tolerance the rule
+		// is judged by. So there is no short window to average over: no STATIC
+		// aim, however well chosen, can promise where the subject will be for
+		// the next ten seconds.
+		//
+		// Hence the rule re-aims. kTrackMs is how often it looks, and
+		// kTrackBand is how far off centre it tolerates before it moves - a
+		// dead band, so that a camera chasing the last pixel is not what the
+		// player watches. The band is HALF the frame check's own tolerance
+		// (1% of the character view), so correcting inside it would be the
+		// rule fighting its own audit.
+		//
+		// Neither is tunable and neither is taste: they are what makes the rule
+		// track a measured movement, and the author's seven knobs are
+		// elsewhere (Stage.h).
+		constexpr int    kTrackMs = 100;
+		constexpr double kTrackBand = 0.005;  // of the character view's width
+
+		// The solve reads the projection curve instead of extrapolating a
+		// slope: kSolveSteps caps the secant, kSolveEps is how close the
+		// PREDICTED landing has to be before it stops. A tenth of the frame
+		// check's tolerance, so a residual in the log is the camera disagreeing
+		// with the model and never the solve stopping early.
+		constexpr int    kSolveSteps = 8;
+		constexpr double kSolveEps = 0.001;  // of the character view's width
+
 		// The five RaceMenu calls this module needs; any one missing and the
 		// view is refused, since a half-working view is worse than none.
 		constexpr std::array<const char*, 5> kCalls{ "GetRaceSexCameraPos", "SetRaceSexCameraPos", "GetPlayerPosition",
@@ -142,6 +174,42 @@ namespace Lifecast::Panel::Stage
 		double g_oneLeft = 0.0;
 		double g_oneRight = 1.0;
 		int    g_oneSolves = 0;  // how many times it has solved for this view
+
+		// Where the last solve PREDICTED the aim would land, so the check after
+		// the slide compares the model with the camera instead of only with the
+		// centre. A model that is right and a camera that moved look the same in
+		// a residual; these two numbers tell them apart.
+		double g_onePredicted = 0.0;
+
+		// The re-aim: when it last looked, and how many times it has moved the
+		// camera this opening. The count is the measurement of how much the
+		// subject drifted, and a count of zero with a wide band is a tracker
+		// that was written and never acted.
+		int               g_oneTracks = 0;
+		Clock::time_point g_trackAt{};
+
+		// g_oneOn, as an atomic, for Tick() alone. Tick() runs on the INPUT
+		// thread - that is why g_moving is an atomic and not a bool - and it
+		// used to return whenever nothing was moving. With the tracker living
+		// inside Work(), that gate meant the tracker only ever got a look while
+		// a slide was already under way: it closed its own slide and then went
+		// quiet, which is how boot 138 re-aimed 3 times in 60 seconds instead
+		// of once every 100 ms. Reading g_oneOn there would be a data race, so
+		// the gate reads this and every write to g_oneOn writes it too.
+		std::atomic<bool> g_oneTracking{ false };
+
+		// The price of the gate above: with the rule on, Work() now runs on
+		// every input tick and not only during a slide. These two say what that
+		// costs, measured rather than assumed, and they are reported when the
+		// rule goes off - a tick budget nobody ever reads is not a budget.
+		int    g_restTicks = 0;
+		double g_restWorstUs = 0.0;
+
+		void SetOneOn(bool a_on)
+		{
+			g_oneOn = a_on;
+			g_oneTracking.store(a_on, std::memory_order_relaxed);
+		}
 
 		// Whether the kept frame has been read a SECOND time this opening, and
 		// what the first reading said. See Refresh().
@@ -568,13 +636,44 @@ namespace Lifecast::Panel::Stage
 		// so what comes out is the slope AT the subject. The pair rule's single
 		// far probe is what the archived logs show going wrong: a chord to a
 		// point with half the subject's depth is not the slope anywhere near her.
-		bool AimOne(RE::NiPoint3& a_aim, RE::NiPoint3& a_left, RE::NiPoint3& a_right)
+		// WHERE THE FACE IS, and it is a node rather than a number. E4d measured
+		// that GetLookingAtLocation() returns the HEAD BONE's own position -
+		// A minus the head node's world.translate was (0,0,0) in all 29 readings
+		// - so today's aim is already a point of the body, and not the one that
+		// wants framing: the head bone sits at the base of the skull, and the
+		// capture's bilateral-symmetry axis is read at the FACE. E4d measured
+		// the gap as +24 to +76 px, growing with the head's yaw.
+		//
+		// NPCEyeBone closes it without a constant of ours. Read from the
+		// skeleton this instance actually loads, its translate relative to
+		// "NPC Head [Head]" is (-0.082, +8.096, +3.712): on the head's midline
+		// - the very quantity the symmetry detector measures - 8.1 units
+		// forward and 3.7 up. That is the same magnitude E4d's yaw fit implied
+		// for the face, arrived at from the mesh instead of from a correlation.
+		//
+		// Falls back to the head node and then to GetLookingAtLocation(), so a
+		// skeleton without the node frames worse rather than not at all. Which
+		// one answered is logged once per measurement, because a fallback that
+		// is silent is a fallback nobody knows they are measuring.
+		const char* AimNode(RE::PlayerCharacter* a_player, RE::NiPoint3& a_out)
+		{
+			for (const char* name : { "NPCEyeBone", "NPC Head [Head]" }) {
+				if (auto* node = a_player->GetNodeByName(RE::BSFixedString(name))) {
+					a_out = node->world.translate;
+					return name;
+				}
+			}
+			a_out = a_player->GetLookingAtLocation();
+			return "GetLookingAtLocation";
+		}
+
+		bool AimOne(RE::NiPoint3& a_aim, RE::NiPoint3& a_left, RE::NiPoint3& a_right, const char*& a_from)
 		{
 			auto* player = RE::PlayerCharacter::GetSingleton();
 			if (!player) {
 				return false;
 			}
-			a_aim = player->GetLookingAtLocation();
+			a_from = AimNode(player, a_aim);
 			// (-dirY, dirX) is the player-camera direction turned 90 degrees in
 			// the ground plane: the very axis pan moves along, so a world offset
 			// measured here is already in the quantity the solve has to answer in.
@@ -588,13 +687,27 @@ namespace Lifecast::Panel::Stage
 			return true;
 		}
 
-		// Projects the aim and both probes. a_aimX is where the subject lands as
-		// a fraction of the window width; a_perUnit is how much of the window
-		// one world unit across the line of sight is worth at the camera as it
-		// stands RIGHT NOW. Neither is a constant of this file: field of view,
+		// One look at the camera: where the subject lands, how much of the window
+		// a world unit across the line of sight is worth there, and the camera
+		// and aim point themselves, so the solve can go on projecting without
+		// asking again. Nothing here is a constant of this file: field of view,
 		// resolution, the player's height and wherever RaceMenu left the camera
-		// all move them, and all of them come out of this one call.
-		bool MeasureOne(double& a_aimX, double& a_perUnit, const char* a_when)
+		// all move these, and all of them come out of this one call.
+		struct Look
+		{
+			RE::NiCamera* cam{ nullptr };
+			RE::NiPoint3  aim;
+			const char*   from{ "" };
+			double        perpX{ 0.0 };
+			double        perpY{ 0.0 };
+			double        aimX{ 0.0 };
+			double        perUnit{ 0.0 };
+		};
+
+		// a_quiet is for the tracker, which looks ten times a second: the line
+		// below is worth one per solve and not ten per second, and a log that
+		// scrolls is a log nobody reads the solve out of.
+		bool MeasureOne(Look& a_look, const char* a_when, bool a_quiet = false)
 		{
 			auto* cam = RE::Main::WorldRootCamera();
 			if (!cam) {
@@ -605,7 +718,8 @@ namespace Lifecast::Panel::Stage
 			RE::NiPoint3 aim;
 			RE::NiPoint3 left;
 			RE::NiPoint3 right;
-			if (!AimOne(aim, left, right)) {
+			const char*  from = "";
+			if (!AimOne(aim, left, right, from)) {
 				spdlog::warn("[stage] frame {}: no player to aim at", a_when);
 				return false;
 			}
@@ -626,23 +740,147 @@ namespace Lifecast::Panel::Stage
 			}
 			const double sep = rx - lx;
 			const auto&  port = cam->GetRuntimeData2().port;
-			spdlog::info("[stage] frame {}: aim at x {:.4f} y {:.4f} depth {:.3f} | probes at x {:.4f} and {:.4f} "
-						 "(depth {:.3f} and {:.3f}) | {:.4f} of the window for {:.1f} units | port {:.1f} x {:.1f}",
-				a_when, ax, ay, ad, lx, rx, ld, rd, sep, kProbeStep, port.GetWidth(), port.GetHeight());
+			if (!a_quiet) {
+				spdlog::info("[stage] frame {}: aim at x {:.4f} y {:.4f} depth {:.3f} (from {}) | probes at x {:.4f} and "
+							 "{:.4f} (depth {:.3f} and {:.3f}) | {:.4f} of the window for {:.1f} units | port {:.1f} x "
+							 "{:.1f}",
+					a_when, ax, ay, ad, from, lx, rx, ld, rd, sep, kProbeStep, port.GetWidth(), port.GetHeight());
+			}
 			if (std::abs(sep) < 1e-6) {
 				spdlog::warn("[stage] frame {}: the two probes project to the same point ({:.8f} apart) - there is no "
 							 "lateral scale to solve with, and a rule that cannot measure leaves the camera alone",
 					a_when, sep);
 				return false;
 			}
-			a_aimX = ax;
-			a_perUnit = sep / kProbeStep;
+			a_look.cam = cam;
+			a_look.aim = aim;
+			a_look.from = from;
+			a_look.perpX = -g_frame.dirY;
+			a_look.perpY = g_frame.dirX;
+			a_look.aimX = ax;
+			a_look.perUnit = sep / kProbeStep;
 			return true;
+		}
+
+		// WHERE THE AIM WOULD LAND if pan moved by a_by from where the camera
+		// stands now - read, not extrapolated.
+		//
+		// Moving the camera +d along perp and moving the AIM -d along perp are
+		// the same projection, exactly and not to first order: what the camera
+		// sees depends on (aim - camera) in the camera's own axes, both change
+		// that vector by the same -d * perp, and pan does not rotate anything
+		// (WriteCameraPos writes a position; the rotation comes from the kept
+		// frame and from tilt). So the whole curve x(pan) can be sampled by
+		// projecting points, without the camera moving and without a slide to
+		// wait for.
+		//
+		// That is what E4d's measurement needed. The scale the rule reads FALLS
+		// BY HALF between the measurement and the arrival (0.0166 -> 0.0085 of
+		// the window per unit closed, 0.0189 -> 0.0103 open), because perp is
+		// not perpendicular to the line of sight - the RaceSex camera does not
+		// look at the player, and E4d projected the aim at x 1.0277, off the
+		// right of the screen. So translating along perp changes the aim's
+		// DEPTH (0.647 -> 0.741 -> 0.775 in that log), and a slope measured at
+		// one pan is not the slope 40 units later. The slope is right where it
+		// is measured; extrapolating it is what was wrong.
+		bool LandingAt(const Look& a_look, double a_by, double& a_x)
+		{
+			const RE::NiPoint3 moved(static_cast<float>(a_look.aim.x - a_look.perpX * a_by),
+				static_cast<float>(a_look.aim.y - a_look.perpY * a_by), a_look.aim.z);
+			double y = 0.0;
+			double d = 0.0;
+			return ScreenX(a_look.cam, moved, a_x, y, d);
+		}
+
+		// The pan that puts the aim on a_centre, solved against the projection
+		// itself. The secant starts from the straight-line guess the slope gives
+		// - which is the whole of what the rule used to do - and then walks the
+		// real curve.
+		//
+		// a_steps and a_predicted come back out because they are the measurement
+		// of this solve: how many evaluations it took, and where it says the aim
+		// will land. The frame check after the slide compares that prediction
+		// with the camera, and a disagreement there is the model being wrong
+		// rather than the solve stopping early.
+		double SolveFor(const Look& a_look, double a_centre, double a_eps, int& a_steps, double& a_predicted)
+		{
+			double d0 = 0.0;
+			double f0 = a_look.aimX - a_centre;
+			double d1 = f0 / a_look.perUnit;
+			a_steps = 0;
+			a_predicted = a_look.aimX;
+			for (int i = 0; i < kSolveSteps; ++i) {
+				double x = 0.0;
+				if (!LandingAt(a_look, d1, x)) {
+					// Off the projectable world. The last pan that did project
+					// is the answer; a rule that cannot measure does not guess.
+					return d0;
+				}
+				++a_steps;
+				a_predicted = x;
+				const double f1 = x - a_centre;
+				if (std::abs(f1) <= a_eps) {
+					return d1;
+				}
+				const double slope = f1 - f0;
+				if (std::abs(slope) < 1e-9) {
+					return d1;
+				}
+				const double next = d1 - f1 * (d1 - d0) / slope;
+				d0 = d1;
+				f0 = f1;
+				d1 = next;
+			}
+			return d1;
 		}
 
 		// Solves for PAN alone and writes it on the target. Stage.h sets out why
 		// pan alone, and why the camera distance is absent from the arithmetic.
-		bool SolveOne(const char* a_when)
+		// Takes a look that has already been made rather than making its own, so
+		// the tracker - which has to read the offset before it decides whether to
+		// move at all - does not project the same camera twice a tenth of a
+		// second apart and then solve from the second one.
+		bool PanFrom(const Look& a_look, const char* a_when, bool a_quiet)
+		{
+			const double span = g_oneRight - g_oneLeft;
+			const double centre = (g_oneLeft + g_oneRight) / 2.0;
+			const Look&  look = a_look;
+			const double off = look.aimX - centre;
+			// The straight-line step the slope gives, kept only to be LOGGED
+			// against the solved one: the difference between the two is the
+			// nonlinearity E4d measured, in units, in every round from now on.
+			const double straight = g_at.pan + off / look.perUnit;
+			int          steps = 0;
+			double       predicted = 0.0;
+			const double wantedPan = g_at.pan + SolveFor(look, centre, span * kSolveEps, steps, predicted);
+			const double pan = ClampSaid(wantedPan, -kPanMax, kPanMax, "pan");
+
+			if (!a_quiet) {
+				spdlog::info("[stage] frame {}: view {:.4f}..{:.4f}, centre {:.4f}; the aim sits at {:.4f}, off by "
+							 "{:+.4f} of the window - {:+.2f}% of the character view. Scale {:.6f} of the window per "
+							 "unit, so {:.2f} units to the fraction",
+					a_when, g_oneLeft, g_oneRight, centre, look.aimX, off, off / span * 100.0, look.perUnit,
+					1.0 / look.perUnit);
+				spdlog::info("[stage] frame {}: pan {:.2f} -> {:.2f} (wanted {:.2f}; the straight line off the slope "
+							 "would have asked {:.2f}, {:+.2f} units out). Solved in {} projections, predicting the aim "
+							 "lands at {:.4f} ({:+.2f}% of the view). Distance is NOT touched and stays {:.2f} - this "
+							 "rule REMIRA and never recua (V099){}",
+					a_when, g_at.pan, pan, wantedPan, straight, straight - wantedPan, steps, predicted,
+					span > 0.0 ? (predicted - centre) / span * 100.0 : 0.0, g_target.distance,
+					pan != wantedPan
+						? " - THE PAN LIMIT WAS HIT, so the figure comes out short of the centre. kPanMax is the "
+						  "author's number (E4, Fase 6.5) and is not retuned here; the 'wanted' above is what the rule "
+						  "would have needed"
+						: "");
+			}
+
+			g_target.pan = pan;
+			g_onePredicted = predicted;
+			++g_oneSolves;
+			return true;
+		}
+
+		bool SolveOne(const char* a_when, bool a_quiet = false)
 		{
 			const double span = g_oneRight - g_oneLeft;
 			if (span <= 0.0) {
@@ -650,84 +888,103 @@ namespace Lifecast::Panel::Stage
 					a_when, span);
 				return false;
 			}
-			double aimX = 0.0;
-			double perUnit = 0.0;
-			if (!MeasureOne(aimX, perUnit, a_when)) {
+			Look look;
+			if (!MeasureOne(look, a_when, a_quiet)) {
 				return false;
 			}
-			const double centre = (g_oneLeft + g_oneRight) / 2.0;
-			const double off = aimX - centre;
-			// Moving the camera one unit along +perp carries a fixed world point
-			// perUnit of the window the OTHER way, so the camera travels the same
-			// way the subject is currently off by. The sign works out whichever
-			// way round perUnit came, which is why it is never assumed.
-			const double wantedPan = g_at.pan + off / perUnit;
-			const double pan = ClampSaid(wantedPan, -kPanMax, kPanMax, "pan");
-
-			spdlog::info("[stage] frame {}: view {:.4f}..{:.4f}, centre {:.4f}; the aim sits at {:.4f}, off by "
-						 "{:+.4f} of the window - {:+.2f}% of the character view. Scale {:.6f} of the window per "
-						 "unit, so {:.2f} units to the fraction",
-				a_when, g_oneLeft, g_oneRight, centre, aimX, off, off / span * 100.0, perUnit, 1.0 / perUnit);
-			spdlog::info("[stage] frame {}: pan {:.2f} -> {:.2f} (wanted {:.2f}). Distance is NOT touched and stays "
-						 "{:.2f} - this rule REMIRA and never recua (V099){}",
-				a_when, g_at.pan, pan, wantedPan, g_target.distance,
-				pan != wantedPan
-					? " - THE PAN LIMIT WAS HIT, so the figure comes out short of the centre. kPanMax is the "
-					  "author's number (E4, Fase 6.5) and is not retuned here; the 'wanted' above is what the rule "
-					  "would have needed"
-					: "");
-
-			g_target.pan = pan;
-			++g_oneSolves;
-			return true;
+			return PanFrom(look, a_when, a_quiet);
 		}
 
 		// What the slide actually produced, projected again at the camera it
 		// arrived at. Everything SolveOne does is a model of a camera, and the
 		// model is not the camera: this is where the two are compared.
 		//
-		// At most ONE correction follows, for the same reason the pair rule caps
-		// itself: a rule that keeps correcting towards a target it never reaches
-		// is hunting, not converging, and the third small variation of the same
-		// attempt is where a wrong premise stops being worth another try. A
-		// second miss is left standing in the log, which IS the measurement.
+		// IT NO LONGER CORRECTS, and that is the point of the new solve. The
+		// old shape here was one linear step and then at most one correction,
+		// capped because a rule that keeps correcting towards a target it never
+		// reaches is hunting rather than converging. E4d measured that cap
+		// stopping at +2.12% closed and +3.70% open, outside the rule's own 1%:
+		// the cap was not the defect, the extrapolation was. SolveOne now reads
+		// the projection curve instead, so the residual printed below is the
+		// camera disagreeing with the model - and the aim having MOVED while the
+		// slide ran, which is what the tracker answers.
+		//
+		// So this is an instrument now and not a controller: it says what was
+		// asked, what was predicted and what came out, and it never writes.
 		void AuditOne()
 		{
-			if (!g_oneOn || g_oneSolves < 1 || g_oneSolves > 2) {
+			if (!g_oneOn || g_oneSolves < 1) {
 				return;
 			}
-			double aimX = 0.0;
-			double perUnit = 0.0;
-			if (!MeasureOne(aimX, perUnit, g_oneSolves == 1 ? "arrived" : "arrived after the correction")) {
-				g_oneSolves = 3;
+			Look look;
+			if (!MeasureOne(look, "arrived")) {
 				return;
 			}
 			const double span = g_oneRight - g_oneLeft;
 			const double centre = (g_oneLeft + g_oneRight) / 2.0;
-			const double off = aimX - centre;
+			const double off = look.aimX - centre;
 			// The criterion this rule is judged by is 2% of the character view
-			// (Fase 7, E4c). The rule corrects at ONE per cent - half of it - so
-			// that it is not a rule tuned to stop exactly where the criterion
+			// (Fase 7, E4c). The rule holds itself to ONE per cent - half of it -
+			// so that it is not a rule tuned to stop exactly where the criterion
 			// starts failing. The two numbers are independent on purpose: this
 			// one is the rule's, the other is the judge's.
 			const double tolerance = span * 0.01;
 			spdlog::info("[stage] frame check: the aim came out at {:.4f} against {:.4f} asked - {:+.4f} of the "
-						 "window, {:+.2f}% of the character view, against a tolerance of {:.2f}%",
-				aimX, centre, off, span > 0.0 ? off / span * 100.0 : 0.0, 1.0);
-			if (g_oneSolves == 1 && std::abs(off) > tolerance) {
-				spdlog::info("[stage] frame check: outside tolerance - solving once more, and only once");
-				if (SolveOne("correction")) {
-					// The tick stopped when the slide arrived; this target is
-					// new, so it has to be told to start again.
-					g_moving.store(true, std::memory_order_relaxed);
-					return;
-				}
+						 "window, {:+.2f}% of the character view, against a tolerance of {:.2f}%. The solve had "
+						 "predicted {:.4f}, so the MODEL is {:+.4f} off the camera ({:+.2f}% of the view){}",
+				look.aimX, centre, off, span > 0.0 ? off / span * 100.0 : 0.0, 1.0, g_onePredicted,
+				look.aimX - g_onePredicted, span > 0.0 ? (look.aimX - g_onePredicted) / span * 100.0 : 0.0,
+				std::abs(off) > tolerance ? " - OUTSIDE the tolerance; the tracker below is what closes it" : "");
+		}
+
+		// THE RULE RE-AIMS, because the subject does not hold still and no
+		// static aim can promise where she will be. The constants above carry
+		// the measurement; this is the loop.
+		//
+		// It is deliberately NOT a second tick: it runs inside the one the
+		// Switcher already drives, on the UI thread, and it only looks every
+		// kTrackMs. Inside the dead band it does nothing at all - no projection
+		// wasted, no camera written - so a settled view costs one comparison
+		// per look.
+		//
+		// Stands down while a slide is under way: the aim it would read is a
+		// camera in motion, and solving from that is solving for a frame that
+		// has already gone.
+		void TrackOne(Clock::time_point a_now)
+		{
+			if (!g_oneOn || g_pairOn || g_moving.load(std::memory_order_relaxed)) {
+				return;
 			}
-			if (g_oneSolves == 2 && std::abs(off) > tolerance) {
-				spdlog::warn("[stage] frame check: still outside tolerance after the one correction. The rule stops "
-							 "here on purpose - this line is the measurement, not a failure to retry");
+			if (std::chrono::duration_cast<std::chrono::milliseconds>(a_now - g_trackAt).count() < kTrackMs) {
+				return;
 			}
-			g_oneSolves = 3;
+			g_trackAt = a_now;
+			const double span = g_oneRight - g_oneLeft;
+			if (span <= 0.0) {
+				return;
+			}
+			Look look;
+			if (!MeasureOne(look, "track", true)) {
+				return;
+			}
+			const double centre = (g_oneLeft + g_oneRight) / 2.0;
+			const double off = look.aimX - centre;
+			if (std::abs(off) <= span * kTrackBand) {
+				return;
+			}
+			const double was = g_target.pan;
+			if (!PanFrom(look, "track", true)) {
+				return;
+			}
+			++g_oneTracks;
+			// One line per correction, not one per look: this is the record of
+			// how much the figure moved and how often, and it is also how a
+			// tracker that was written and never acted is told apart from one
+			// that works - P6 of the E4e prediction.
+			spdlog::info("[stage] frame track #{}: the aim had drifted to {:+.2f}% of the view (aim from {}), pan "
+						 "{:.2f} -> {:.2f}",
+				g_oneTracks, off / span * 100.0, look.from, was, g_target.pan);
+			g_moving.store(true, std::memory_order_relaxed);
 		}
 
 		// ----- the work (UI thread) -------------------------------------------------
@@ -1008,15 +1265,22 @@ namespace Lifecast::Panel::Stage
 					// camera the write is about to be based on.
 					Refresh(menu.get(), cg, "frame on");
 					g_oneSolves = 0;
-					g_oneOn = SolveOne(!again ? "on" : (moved ? "the view resized" : "again"));
+					g_oneTracks = 0;
+					g_restTicks = 0;
+					g_restWorstUs = 0.0;
+					g_trackAt = Clock::now();
+					SetOneOn(SolveOne(!again ? "on" : (moved ? "the view resized" : "again")));
 				}
 			} else if (p.one == 2) {
 				if (g_oneOn) {
-					spdlog::info("[stage] frame off: back to the view the menu opened with. This is also how the "
-								 "negative control of the measurement is taken - same DLL, same boot, same room");
+					spdlog::info("[stage] frame off after {} re-aims: back to the view the menu opened with. This is "
+								 "also how the negative control of the measurement is taken - same DLL, same boot, "
+								 "same room. {} ticks of it were at rest, worst one {:.0f} us",
+						g_oneTracks, g_restTicks, g_restWorstUs);
 				}
-				g_oneOn = false;
+				SetOneOn(false);
 				g_oneSolves = 0;
+				g_oneTracks = 0;
 				g_target = At{};
 				g_target.distance = g_frame.distance;
 			}
@@ -1093,10 +1357,29 @@ namespace Lifecast::Panel::Stage
 						g_ticks, ms.count(), g_workUs, g_worstUs);
 					AuditPair();
 					AuditOne();
+					// The arrival is also when the tracker's clock should start:
+					// re-aiming is about drift AFTER the view settled, and the
+					// first look should be kTrackMs from here and not from
+					// whenever the last one happened to be.
+					g_trackAt = Clock::now();
 					// After the audit on purpose: when it corrects, it has
 					// already written the new target, and that is the number
 					// the page should be showing.
 					arrived = true;
+				}
+			}
+
+			// After the slide, never during it: the rule re-aims at a camera
+			// that has stopped. It writes the TARGET only, so the easing above
+			// is what moves - the camera glides at the speed the subject drifts
+			// (~17 px/s on screen, E4d) instead of stepping.
+			TrackOne(startedAt);
+
+			if (!wasMoving && !moving) {
+				++g_restTicks;
+				const double us = std::chrono::duration<double, std::micro>(Clock::now() - startedAt).count();
+				if (us > g_restWorstUs) {
+					g_restWorstUs = us;
 				}
 			}
 
@@ -1302,8 +1585,9 @@ namespace Lifecast::Panel::Stage
 					g_why.clear();
 					g_pairOn = false;
 					g_pairSolves = 0;
-					g_oneOn = false;
+					SetOneOn(false);
 					g_oneSolves = 0;
+					g_oneTracks = 0;
 					// The next opening gets its own first reading, and its own
 					// second one: staleness is a property of an opening.
 					g_reread = false;
@@ -1389,7 +1673,14 @@ namespace Lifecast::Panel::Stage
 
 	void Tick()
 	{
-		if (!g_moving.load(std::memory_order_relaxed)) {
+		// Two atomics, not one. Moving means there is a slide to step; tracking
+		// means the one-figure rule is on and the subject it aims at may have
+		// drifted since the camera stopped - and a rule that only looks while
+		// it is already moving cannot notice that (boot 138: 3 re-aims in 60 s,
+		// every one of them on the tail of a slide already under way).
+		// TrackOne's own 100 ms gate is what keeps the cost of the second
+		// condition to one projection every six input ticks.
+		if (!g_moving.load(std::memory_order_relaxed) && !g_oneTracking.load(std::memory_order_relaxed)) {
 			return;
 		}
 		Queue(Pending{});

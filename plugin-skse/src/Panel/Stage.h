@@ -278,6 +278,38 @@ namespace Lifecast::Panel::Stage
 	//     wrong cannot bend what this computes. (It can still be WRITTEN; that
 	//     is what the second reading of the frame is for - see Stage.cpp.)
 	//
+	// WHAT IT AIMS AT is the face, and it is read from a node rather than
+	// computed: "NPCEyeBone", which the skeleton hangs under the head and
+	// places on the head's midline, 8.1 units forward of the head bone and 3.7
+	// up. That matters because what a capture measures is the face's own
+	// bilateral-symmetry axis, and E4d measured the old aim -
+	// GetLookingAtLocation() - to be the HEAD BONE itself, +24 to +76 px to the
+	// side of that axis, the gap growing with the head's yaw. Falls back to the
+	// head node and then to GetLookingAtLocation(), and says which answered.
+	//
+	// AND IT RE-AIMS, every kTrackMs, while it is on. This is not polish: with
+	// the camera parked to the third decimal the head bone sweeps 190 to 230 px
+	// of 2560 in 13 s, and the sweep is slow and not stationary - half of a
+	// 13 s record has a mean up to 6.1% of the stage away from the other half,
+	// and even a 10 s rolling mean moves 2.0 to 2.5% between neighbouring
+	// windows, which is the entire tolerance the rule is judged by (Fase 7,
+	// E4d, boot 137). So there is no short window to average over and no static
+	// aim that can promise where the subject will be: a rule that aims once
+	// centres the instant it happened to look at. Re-aiming moves the TARGET
+	// only, so the easing is what travels, and the camera glides at the speed
+	// the subject drifts - about 17 px a second on screen. Inside a dead band
+	// of half the rule's own tolerance it does nothing at all.
+	//
+	// AND THE SOLVE READS THE CURVE instead of extrapolating the slope. Moving
+	// the camera +d sideways and moving the aim -d sideways are the same
+	// projection exactly, because pan does not rotate anything, so the whole of
+	// x(pan) can be sampled by projecting points - no camera moved, no slide
+	// waited for. E4c and E4d measured why the straight line is not enough:
+	// perp is not perpendicular to the line of sight (the RaceSex camera does
+	// not look at the player), so panning changes the aim's DEPTH and the scale
+	// the rule reads falls by half between the measurement and the arrival. The
+	// slope is right where it is measured; extrapolating it 40 units was wrong.
+	//
 	// Off restores the view the menu opened with, which is what Reset does,
 	// and is also how the measurement's negative control is taken: the same
 	// DLL, the same boot, the same room, one message apart.
