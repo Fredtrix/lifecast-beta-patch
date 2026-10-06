@@ -318,12 +318,42 @@
       });
       tuningInputs.set(key, input);
       row.appendChild(input);
+      // Back to the COMPILED value, which the DLL reports in "tuningDefaults" -
+      // not the one this box opened with. It goes through the same message a
+      // typed number does.
+      const reset = LifecastControls.el("button", "panel-button stage-tuning-reset", "Reset");
+      reset.type = "button";
+      reset.title = "Back to the compiled value";
+      reset.addEventListener("click", () => {
+        const d = state && state.tuningDefaults;
+        if (d && typeof d[key] === "number") {
+          LifecastBridge.send("stage-tune", { [key]: d[key] });
+        }
+      });
+      row.appendChild(reset);
       tuningBox.body.appendChild(row);
       const said = LifecastControls.el("span", "stage-tuning-said");
       said.hidden = true;
       tuningSaid.set(key, said);
       tuningBox.body.appendChild(said);
     }
+    const resetAll = LifecastControls.el("button", "panel-button stage-tuning-reset-all", "Reset all");
+    resetAll.type = "button";
+    resetAll.title = "All seven back to the compiled values, in one message";
+    resetAll.addEventListener("click", () => {
+      const d = state && state.tuningDefaults;
+      if (!d) {
+        return;
+      }
+      const all = {};
+      for (const [key] of TUNABLES) {
+        if (typeof d[key] === "number") {
+          all[key] = d[key];
+        }
+      }
+      LifecastBridge.send("stage-tune", all);
+    });
+    tuningBox.body.appendChild(resetAll);
     tuningNone = LifecastControls.el("span", "stage-tuning-said");
     tuningNone.hidden = true;
     tuningBox.body.appendChild(tuningNone);

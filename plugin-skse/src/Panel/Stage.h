@@ -114,6 +114,11 @@
 //                                 The answer carries "tuning" with all seven, and
 //                                 "tuning" is absent from a release build, which
 //                                 is what keeps the page's section hidden there.
+//                                 The same state carries "tuningDefaults": the seven as
+//                                 COMPILED, which the page's reset sends back through
+//                                 this same message. maxDistance alone has a floor -
+//                                 a value below the nearest the camera can go is
+//                                 raised to it, and "tuneSaid" says so.
 //                                 The seven do NOT go in "limits": the page
 //                                 disables buttons from that key, so it means
 //                                 "how far a move may go" - true of maxDistance,

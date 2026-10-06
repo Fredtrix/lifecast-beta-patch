@@ -48,6 +48,15 @@ namespace Lifecast::Panel::Stage
 		// that was ignored; this is what tells the two apart. Read by State().
 		nlohmann::json g_tuneSaid = nlohmann::json::object();
 
+		// The seven as they were COMPILED, taken at load and never written again.
+		// "Reset" on the page sends these back through the same stage-tune path
+		// every typed number takes, so a reset is a number like any other and the
+		// DLL has no second way to set one. The author's word (2026-10-06): reset
+		// returns the compiled default, not the value the box opened with.
+		const nlohmann::json g_tuneCompiled = { { "maxDistance", kMaxDistance }, { "liftUp", kLiftUp },
+			{ "panMax", kPanMax }, { "tiltMax", kTiltMax }, { "pairApart", kPairApart }, { "pairSpan", kPairSpan },
+			{ "ease", kEase } };
+
 		// What the last SolvePair wanted against what it got, for the same
 		// "A LIMIT WAS HIT" the log carries. Written by SolvePair, read by OnTune
 		// right after it, so the box can say the pair was cut and by how much.
@@ -1188,6 +1197,7 @@ namespace Lifecast::Panel::Stage
 			// and the page reads "limits" to decide what to disable.
 			state["tuning"] = { { "maxDistance", kMaxDistance }, { "liftUp", kLiftUp }, { "panMax", kPanMax },
 				{ "tiltMax", kTiltMax }, { "pairApart", kPairApart }, { "pairSpan", kPairSpan }, { "ease", kEase } };
+			state["tuningDefaults"] = g_tuneCompiled;
 			state["tuneSaid"] = g_tuneSaid;
 #endif
 			return state;
@@ -1774,6 +1784,29 @@ namespace Lifecast::Panel::Stage
 							  "the camera when it would go past", a_before);
 		}
 
+		// maxDistance has the one floor that has a number behind it: the camera
+		// cannot come nearer than DistanceMin(), so a limit below it leaves the
+		// target nowhere to be - Clamp(v, DistanceMin(), limit) hands back the
+		// floor for a v under it and the limit for a v at the floor, and the
+		// target flips between the two on every tune (Acabamento 1: 32 and 33.56,
+		// 2130 "clamped" lines in 281 s). The other six have no such number and
+		// no floor; that is the author's call (Acabamento 5), not an omission.
+		void FloorMaxDistance()
+		{
+			const double lowest = g_frame.have ? DistanceMin() : kMinDistance;
+			if (kMaxDistance >= lowest) {
+				return;
+			}
+			spdlog::info("[stage] tune: maxDistance {:.2f} is below the nearest the camera can go ({:.2f}) - raised "
+						 "to {:.2f}",
+				kMaxDistance, lowest, lowest);
+			g_tuneSaid["maxDistance"] = fmt::format(
+				"raised to {:.2f}: that is the nearest the camera can go, and a limit under it has no place to put the "
+				"camera",
+				lowest);
+			kMaxDistance = lowest;
+		}
+
 		// The page asked for a different number. UI thread, because these are
 		// read by the slide and by the framing rule, which both run there.
 		//
@@ -1797,6 +1830,9 @@ namespace Lifecast::Panel::Stage
 					}
 				}
 				bool any = Tuned(data, "maxDistance", kMaxDistance);
+				if (any) {
+					FloorMaxDistance();
+				}
 				any = Tuned(data, "liftUp", kLiftUp) || any;
 				any = Tuned(data, "panMax", kPanMax) || any;
 				any = Tuned(data, "tiltMax", kTiltMax) || any;
