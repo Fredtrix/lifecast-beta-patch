@@ -65,8 +65,8 @@ const LifecastGroups = (() => {
     "sex", "look:Body", "scales", "obody",
     "race", "delegate",
     "presets",
-    "debug",
     "debug:tuning",
+    "debug",
   ]);
 
   return {

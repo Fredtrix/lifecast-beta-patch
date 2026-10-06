@@ -167,6 +167,12 @@ namespace Lifecast::Edit::Appearance
 
 		// Rebuilds the lists if the player's race or sex is not the one they
 		// were built for. Returns false without a player.
+		// The RaceSex Menu builds its head-part arrays when it opens. A race or sex
+		// swap done from the panel does not rebuild them, so until the menu is
+		// opened again they belong to the old race and sex (boot 147: the page
+		// showed "--" in hair, eyes, brows and scar after the sex swap).
+		bool g_menuListsStale = false;
+
 		bool EnsureLists(const char* a_why)
 		{
 			auto* npc = Npc();
@@ -176,14 +182,14 @@ namespace Lifecast::Edit::Appearance
 			auto*      race = npc->GetRace();
 			const auto sex = npc->GetSex();
 			if (race && race == g_lists.race && sex == g_lists.sex &&
-				(g_lists.fromMenu || MenuPartsOf(HPType::kHair).empty())) {
+				(g_lists.fromMenu || g_menuListsStale || MenuPartsOf(HPType::kHair).empty())) {
 				return true;
 			}
 
 			g_lists = {};
 			g_lists.race = race;
 			g_lists.sex = sex;
-			g_lists.fromMenu = !MenuPartsOf(HPType::kHair).empty();
+			g_lists.fromMenu = !g_menuListsStale && !MenuPartsOf(HPType::kHair).empty();
 			for (const auto& p : kPartLists) {
 				g_lists.parts[p.key] = g_lists.fromMenu ? MenuPartsOf(p.type) : PartsOf(npc, p.type);
 			}
@@ -454,11 +460,13 @@ namespace Lifecast::Edit::Appearance
 				const int   inPanel = current && hasPanel ? IndexOf(it->second, current) : -1;
 				const bool  ok = !current || (inGame >= 0 && (!hasPanel || inPanel >= 0));
 				belong += ok ? 1 : 0;
-				spdlog::info("[fit] {} {}: {:08X} '{}' | game list {} idx {} | panel list {} idx {} | {}", a_tag, t.key,
-					current ? current->GetFormID() : 0u,
+				auto* raw = npc->GetHeadPartByType(t.type);
+				spdlog::info("[fit] {} {}: {:08X} '{}' | game list {} idx {} | panel list {} idx {} | {} | raw {:08X} overlays {}",
+					a_tag, t.key, current ? current->GetFormID() : 0u,
 					current && current->GetFormEditorID() ? current->GetFormEditorID() : "",
 					valid.size(), inGame, hasPanel ? static_cast<int>(it->second.size()) : -1, inPanel,
-					!current ? "ABSENT (none worn)" : ok ? "BELONGS" : "DOES NOT BELONG");
+					!current ? "ABSENT (none worn)" : ok ? "BELONGS" : "DOES NOT BELONG", raw ? raw->GetFormID() : 0u,
+					npc->HasOverlays());
 			}
 			const auto* hrd = npc->headRelatedData;
 			auto*       color = hrd ? hrd->hairColor : nullptr;
@@ -686,6 +694,7 @@ namespace Lifecast::Edit::Appearance
 		void OnOpened()
 		{
 			g_sets = 0;
+			g_menuListsStale = false;
 			g_lists = {};
 			g_pendingParts.clear();
 			g_pendingWeight = false;
@@ -728,6 +737,7 @@ namespace Lifecast::Edit::Appearance
 		}
 		// The lists are the new race's and sex's own, never the ones the page was
 		// last sent.
+		g_menuListsStale = true;
 		g_lists = {};
 		if (!EnsureLists(a_why)) {
 			return;
@@ -773,6 +783,20 @@ namespace Lifecast::Edit::Appearance
 				pick->GetFormEditorID() ? pick->GetFormEditorID() : "",
 				t.type == HPType::kMisc ? " (misc: a type that holds several parts - check the mouth)" : "");
 			npc->ChangeHeadPart(pick);
+			// With overlays (RaceMenu's skee) the game reads the worn part from the
+			// base-overlay array, which ChangeHeadPart leaves alone: measured in boot
+			// 147, the part list changed and GetCurrentHeadPartByType still said the
+			// old one. The array's entry of that type takes the new part too.
+			if (npc->HasOverlays()) {
+				auto*      overlays = npc->GetBaseOverlays();
+				const auto count = npc->GetNumBaseOverlays();
+				for (std::uint32_t i = 0; overlays && i < count; ++i) {
+					if (overlays[i] && overlays[i]->type == t.type) {
+						overlays[i] = pick;
+						break;
+					}
+				}
+			}
 			++changed;
 		}
 
