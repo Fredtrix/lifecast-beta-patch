@@ -43,6 +43,9 @@
   ];
 
   const PART_KEYS = new Set(["hair", "facial-hair", "eyes", "brows", "scar"]);
+  // The four head-part lists that also open as a pop-up (listpick.js); the
+  // DLL sends their entries once per build of the lists, in "look-lists".
+  const LIST_KEYS = ["hair", "eyes", "brows", "facial-hair"];
 
   const rows = new Map(); // key -> { row, kind, count, chip, picker, color, grid, swatches }
 
@@ -71,6 +74,11 @@
         entry.nameEl.textContent = "...";
         entry.nameEl.title = "";
       });
+    }
+
+    if (LIST_KEYS.indexOf(key) >= 0) {
+      entry.list = LifecastList.create({ row: entry.row });
+      entry.index = -1;
     }
 
     if (key === "hair-color") {
@@ -174,6 +182,10 @@
         continue;
       }
       entry.row.setRange(0, c.count - 1);
+      entry.index = c.index;
+      if (entry.list) {
+        entry.list.setCurrent(c.index);
+      }
       if (entry.grid) {
         fillSwatches(entry, Array.isArray(c.swatches) ? c.swatches : []);
       }
@@ -198,6 +210,24 @@
         entry.color = typeof c.color === "string" ? c.color : entry.swatches && entry.swatches[c.index];
         paintChip(entry, c.index);
       }
+    }
+  });
+
+  // The whole lists the pop-ups choose from. Each is checked against the
+  // stamp the DLL put on it, and the answer goes back.
+  LifecastBridge.on("look-lists", (data) => {
+    const lists = data && data.lists ? data.lists : {};
+    for (const key of LIST_KEYS) {
+      const d = lists[key];
+      const entry = rows.get(key);
+      if (!d || !Array.isArray(d.items) || !entry || !entry.list) {
+        continue;
+      }
+      LifecastList.verify("look:" + key, d.items, d);
+      entry.list.setItems(
+        d.items.map((a) => ({ name: a[0], source: a[1] })),
+        entry.index
+      );
     }
   });
 

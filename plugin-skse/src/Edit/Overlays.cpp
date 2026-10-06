@@ -3,6 +3,7 @@
 
 #include "Edit/Overlays.h"
 
+#include "Core/ListSig.h"
 #include "Core/RaceMenuSync.h"
 #include "Core/SkeeLink.h"
 #include "Edit/Session.h"
@@ -444,15 +445,22 @@ namespace Lifecast::Edit::Overlays
 						{ "name", painted ? DisplayName(layer.texture) : "" }, { "color", Hex(layer.color) },
 						{ "alpha", layer.alpha }, { "glow", Hex(layer.glow) }, { "glowAlpha", layer.glowAlpha } });
 				}
-				auto catalog = nlohmann::json::array();
+				auto        catalog = nlohmann::json::array();
+				std::string canonical;
+				std::size_t catalogCount = 0;
 				{
 					std::scoped_lock lock(g_catalogLock);
 					for (const auto& p : g_catalog[a.catalog]) {
-						catalog.push_back({ { "name", p.name }, { "texture", p.texture } });
+						const auto name = Core::ListSig::Sanitize(p.name);
+						const auto texture = Core::ListSig::Sanitize(p.texture);
+						canonical += name + "\t" + texture + "\n";
+						catalog.push_back({ { "name", name }, { "texture", texture } });
+						++catalogCount;
 					}
 				}
+				auto catalogSig = Core::ListSig::Stamp(std::string("overlay:") + a.key, canonical, catalogCount);
 				areas.push_back({ { "k", a.key }, { "label", a.label }, { "catalog", std::move(catalog) },
-					{ "layers", std::move(layers) } });
+					{ "catalogSig", std::move(catalogSig) }, { "layers", std::move(layers) } });
 			}
 			spdlog::info("[overlays] {}: sending {} areas ({}), female {}", a_why, areas.size(), counts, female);
 			Panel::Bridge::Send("overlays", { { "ready", true }, { "areas", std::move(areas) } });

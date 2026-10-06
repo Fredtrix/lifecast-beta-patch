@@ -5,6 +5,7 @@
 
 #include "Edit/FaceSliders.h"
 #include "Edit/Session.h"
+#include "Core/ListSig.h"
 #include "Panel/Bridge.h"
 
 namespace Lifecast::Edit::RacePresets
@@ -113,13 +114,17 @@ namespace Lifecast::Edit::RacePresets
 				Panel::Bridge::Send("race-presets", { { "count", 0 }, { "names", nlohmann::json::array() } });
 				return;
 			}
-			auto names = nlohmann::json::array();
+			auto        names = nlohmann::json::array();
+			std::string canonical;
 			for (const auto* preset : g_lists.presets) {
-				names.push_back(NameOf(preset));
+				const auto name = Core::ListSig::Sanitize(NameOf(preset));
+				canonical += name + "\n";
+				names.push_back(name);
 			}
 			spdlog::info("[race-presets] {}: sending {} presets", a_why, g_lists.presets.size());
 			Panel::Bridge::Send("race-presets",
-				{ { "count", static_cast<int>(g_lists.presets.size()) }, { "names", std::move(names) } });
+				{ { "count", static_cast<int>(g_lists.presets.size()) }, { "names", std::move(names) },
+					{ "sig", Core::ListSig::Stamp("race-presets", canonical, g_lists.presets.size()) } });
 		}
 
 		void Answer(int a_index, bool a_ok, std::string a_why)

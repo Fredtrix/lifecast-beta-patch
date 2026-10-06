@@ -462,6 +462,19 @@ const LifecastControls = (() => {
         }
         wrap.dataset.changed = a_v !== state.initial ? "1" : "0";
       },
+      // The same as pressing a step button, but to a value the caller picked
+      // (listpick.js): set it, show it, send it as final, offer it to the
+      // undo history. A disabled row takes nothing.
+      choose(a_v) {
+        if (input.disabled || typeof a_v !== "number" || !isFinite(a_v)) {
+          return;
+        }
+        const v = Math.min(Number(input.max), Math.max(Number(input.min), a_v));
+        input.value = String(v);
+        show(Number(input.value));
+        send(true);
+        commit(Number(input.value));
+      },
       setRange(a_min, a_max) {
         input.min = String(a_min);
         input.max = String(a_max);

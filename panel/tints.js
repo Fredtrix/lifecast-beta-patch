@@ -105,6 +105,7 @@
           format: (v) => (v < 0 ? "None" : String(v + 1) + " / " + String(entry.count)),
           send: (v, final) => send(l.k, { index: v }, final),
         });
+        entry.pickList = LifecastList.create({ row: entry.pick, none: true });
         body.appendChild(entry.pick.el);
       }
       if (Array.isArray(l.catalog)) {
@@ -128,6 +129,7 @@
             }
           },
         });
+        entry.catalogList = LifecastList.create({ row: entry.catalog });
         body.appendChild(entry.catalog.el);
       }
       entry.r = colorRow(l.k, entry, "Red");
@@ -209,6 +211,10 @@
         if (!entry.pick.dragging()) {
           entry.pick.set(l.index);
         }
+        if (l.list && Array.isArray(l.list.items)) {
+          LifecastList.verify("tint:" + l.k, l.list.items, l.list);
+          entry.pickList.setItems(l.list.items.map((a) => ({ name: a[0] })), l.index);
+        }
       }
       if (none) {
         for (const row of [entry.r, entry.g, entry.b, entry.alpha]) {
@@ -232,6 +238,10 @@
           }
         }
         entry.catalog.setRange(-1, entry.textures.length - 1);
+        if (l.catalogSig) {
+          LifecastList.verify("tint:paint-catalog", entry.textures.map((p) => [p.name, p.texture]), l.catalogSig);
+        }
+        entry.catalogList.setItems(entry.textures.map((p) => ({ name: p.name, title: p.texture })), at);
         if (entry.textures.length === 0) {
           entry.catalog.set(null);
         } else if (!entry.catalog.dragging()) {

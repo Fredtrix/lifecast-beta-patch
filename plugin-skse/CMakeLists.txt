@@ -67,6 +67,7 @@ add_commonlibsse_plugin(
     AUTHOR "Awrawra"
     SOURCES
         src/plugin.cpp
+        src/Core/ListSig.cpp
         src/Core/Log.cpp
         src/Core/MeridianLink.cpp
         src/Core/ObodyLink.cpp

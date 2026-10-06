@@ -3,6 +3,7 @@
 
 #include "Edit/Appearance.h"
 
+#include "Core/ListSig.h"
 #include "Core/RaceMenuSync.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
@@ -65,6 +66,13 @@ namespace Lifecast::Edit::Appearance
 		} g_lists;
 
 		std::uint32_t g_sets = 0;
+
+		// Which build of the lists the page was last sent, and whether it asked for them
+		// again (it does when it attaches). The lists go to the page once per build,
+		// not with every look message: a pop-up needs every item, a slider needs one.
+		std::uint32_t g_listsGen = 0;
+		std::uint32_t g_listsSentGen = 0;
+		bool          g_resendLists = false;
 
 		RE::TESNPC* Npc()
 		{
@@ -187,6 +195,7 @@ namespace Lifecast::Edit::Appearance
 			}
 
 			g_lists = {};
+			++g_listsGen;
 			g_lists.race = race;
 			g_lists.sex = sex;
 			g_lists.fromMenu = !g_menuListsStale && !MenuPartsOf(HPType::kHair).empty();
@@ -257,6 +266,51 @@ namespace Lifecast::Edit::Appearance
 			return true;
 		}
 
+		// What RaceMenu shows for a head part: the name, the editor ID, and the
+		// plugin it comes from.
+		std::string PartName(const HeadPart* a_part)
+		{
+			const std::string full = a_part->GetFullName() ? a_part->GetFullName() : "";
+			const std::string id = a_part->GetFormEditorID() ? a_part->GetFormEditorID() : "";
+			return full.empty() || full == id ? id : id.empty() ? full : full + " (" + id + ")";
+		}
+
+		std::string PartSource(HeadPart* a_part)
+		{
+			const auto* file = a_part->GetFile(0);
+			return file ? std::string(file->GetFilename()) : std::string();
+		}
+
+		// The four head-part lists the pop-ups offer, whole: every item with its
+		// name and its plugin of origin. The look message keeps sending only the
+		// count and the current index - this is what the page chooses from.
+		void SendLists(const char* a_why)
+		{
+			auto lists = nlohmann::json::object();
+			for (const auto& p : kPartLists) {
+				const std::string key = p.key;
+				if (key == "scar") {
+					continue;
+				}
+				const auto& list = g_lists.parts[key];
+				auto        items = nlohmann::json::array();
+				std::string canonical;
+				for (auto* part : list) {
+					const auto name = Core::ListSig::Sanitize(PartName(part));
+					const auto source = Core::ListSig::Sanitize(PartSource(part));
+					canonical += name + "\t" + source + "\n";
+					items.push_back(nlohmann::json::array({ name, source }));
+				}
+				auto entry = Core::ListSig::Stamp("look:" + key, canonical, list.size());
+				entry["items"] = std::move(items);
+				lists[key] = std::move(entry);
+			}
+			const nlohmann::json message = { { "lists", std::move(lists) } };
+			spdlog::info("[look] {}: sending the lists, {} bytes of payload", a_why, message.dump().size());
+			Panel::Bridge::Send("look-lists", message);
+			g_listsSentGen = g_listsGen;
+		}
+
 		void PushLook(const char* a_why)
 		{
 			auto* npc = Npc();
@@ -279,11 +333,8 @@ namespace Lifecast::Edit::Appearance
 				// What RaceMenu shows under its slider: the name, the editor
 				// ID, and the plugin it comes from.
 				if (current) {
-					const std::string full = current->GetFullName() ? current->GetFullName() : "";
-					const std::string id = current->GetFormEditorID() ? current->GetFormEditorID() : "";
-					control["name"] = full.empty() || full == id ? id : id.empty() ? full : full + " (" + id + ")";
-					const auto* file = current->GetFile(0);
-					control["source"] = file ? std::string(file->GetFilename()) : std::string();
+					control["name"] = PartName(current);
+					control["source"] = PartSource(current);
 				}
 				controls[p.key] = std::move(control);
 			}
@@ -308,8 +359,14 @@ namespace Lifecast::Edit::Appearance
 			controls["weight"] = { { "kind", "range" }, { "min", kMinWeight }, { "max", kMaxWeight },
 				{ "value", npc->weight } };
 
-			spdlog::info("[look] {}: sending {} controls", a_why, controls.size());
-			Panel::Bridge::Send("look", { { "ready", true }, { "controls", std::move(controls) } });
+			const nlohmann::json look = { { "ready", true }, { "controls", std::move(controls) } };
+			spdlog::info("[look] {}: sending {} controls, {} bytes of payload", a_why, look["controls"].size(),
+				look.dump().size());
+			Panel::Bridge::Send("look", look);
+			if (g_resendLists || g_listsSentGen != g_listsGen) {
+				g_resendLists = false;
+				SendLists(a_why);
+			}
 		}
 
 		// Returns the index in [0, a_count), or -1 with a log line.
@@ -634,6 +691,7 @@ namespace Lifecast::Edit::Appearance
 
 		void OnLookGet(const nlohmann::json&)
 		{
+			g_resendLists = true;
 			PushLook("the page asked");
 		}
 

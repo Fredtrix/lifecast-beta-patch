@@ -7,6 +7,7 @@
 #include "Core/TintRefresh.h"
 #include "Edit/Overlays.h"
 #include "Edit/Session.h"
+#include "Core/ListSig.h"
 #include "Panel/Bridge.h"
 
 namespace Lifecast::Edit::Tints
@@ -127,6 +128,23 @@ namespace Lifecast::Edit::Tints
 			return out;
 		}
 
+		// A texture's name for a pop-up: the file, without the folder and the
+		// extension - what the page's own Catalog row does with a path it cannot
+		// find in the catalog.
+		std::string ItemName(const char* a_path)
+		{
+			std::string name = a_path ? a_path : "";
+			const auto  slash = name.find_last_of("\\/");
+			if (slash != std::string::npos) {
+				name.erase(0, slash + 1);
+			}
+			const auto dot = name.find_last_of('.');
+			if (dot != std::string::npos && _stricmp(name.c_str() + dot, ".dds") == 0) {
+				name.erase(dot);
+			}
+			return Core::ListSig::Sanitize(name);
+		}
+
 		// The first mask of a picked type that is showing, or -1.
 		int ShownIndex(const std::vector<RE::TintMask*>& a_masks)
 		{
@@ -161,14 +179,33 @@ namespace Lifecast::Edit::Tints
 				if (l.pick) {
 					layer["count"] = masks.size();
 					layer["index"] = shown;
+					// The whole list, for the pop-up: one name per mask, in the order
+					// the index points into.
+					auto        items = nlohmann::json::array();
+					std::string canonical;
+					for (const auto* m : masks) {
+						const auto name = ItemName(TextureOf(m));
+						canonical += name + "\n";
+						items.push_back(nlohmann::json::array({ name }));
+					}
+					auto stamp = Core::ListSig::Stamp(std::string("tint:") + l.key, canonical, masks.size());
+					stamp["items"] = std::move(items);
+					layer["list"] = std::move(stamp);
 				}
 				if (l.type == Type::kWarPaint) {
 					layer["texture"] = shown >= 0 ? TextureOf(mask) : "";
-					auto catalog = nlohmann::json::array();
+					auto        catalog = nlohmann::json::array();
+					std::string canonical;
+					std::size_t n = 0;
 					for (const auto& p : Overlays::WarPaintCatalog()) {
-						catalog.push_back({ { "name", p.name }, { "texture", p.texture } });
+						const auto name = Core::ListSig::Sanitize(p.name);
+						const auto texture = Core::ListSig::Sanitize(p.texture);
+						canonical += name + "\t" + texture + "\n";
+						catalog.push_back({ { "name", name }, { "texture", texture } });
+						++n;
 					}
 					layer["catalog"] = std::move(catalog);
+					layer["catalogSig"] = Core::ListSig::Stamp("tint:paint-catalog", canonical, n);
 				}
 				layers.push_back(std::move(layer));
 			}

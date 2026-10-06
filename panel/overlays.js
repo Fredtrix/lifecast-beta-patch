@@ -116,6 +116,7 @@
       format: (v) => String(Math.round(v)) + "%",
       send: (v, final) => send(areaKey, index, { glowAlpha: v / 100 }, final),
     });
+    entry.textureList = LifecastList.create({ row: entry.texture, none: true });
     for (const row of [entry.texture, entry.alpha, entry.glowAlpha]) {
       area.section.body.appendChild(row.el);
     }
@@ -133,6 +134,10 @@
 
   function apply(areaData, area) {
     const catalog = Array.isArray(areaData.catalog) ? areaData.catalog : [];
+    if (areaData.catalogSig) {
+      LifecastList.verify("overlay:" + areaData.k, catalog.map((p) => [p.name, p.texture]), areaData.catalogSig);
+    }
+    const items = catalog.map((p) => ({ name: p.name, title: p.texture }));
     for (const layer of areaData.layers) {
       const entry = area.layers.get(layer.i);
       if (!entry) {
@@ -152,6 +157,7 @@
         }
       }
       entry.texture.setRange(-1, catalog.length - 1);
+      entry.textureList.setItems(items, at);
       if (!entry.texture.dragging()) {
         entry.texture.set(at);
       }

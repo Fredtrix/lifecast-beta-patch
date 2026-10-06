@@ -42,6 +42,7 @@
     // Browsing is local: the DLL hears nothing until Apply.
     send: () => showName(),
   });
+  const list = LifecastList.create({ row: row });
   const nameEl = LifecastControls.el("div", "part-name");
   row.el.appendChild(nameEl);
   section.body.appendChild(row.el);
@@ -82,6 +83,7 @@
     }
     nameEl.textContent = labelFor(i);
     nameEl.title = names[i] === undefined ? "" : names[i];
+    list.setCurrent(i);
   }
 
   apply.addEventListener("click", () => {
@@ -105,6 +107,7 @@
     apply.disabled = count === 0;
     if (count === 0) {
       row.set(null);
+      list.setItems([], 0);
       nameEl.textContent = "";
       status.textContent = "this race has no preset faces";
       return;
@@ -113,6 +116,10 @@
     if (!row.dragging()) {
       row.set(Math.min(index(), count - 1));
     }
+    if (data.sig) {
+      LifecastList.verify("race-presets", names.map((n) => [n]), data.sig);
+    }
+    list.setItems(names.map((n, i) => ({ name: labelFor(i), title: n })), Math.min(index(), count - 1));
     showName();
   });
 

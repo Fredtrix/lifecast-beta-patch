@@ -737,6 +737,106 @@ html[data-belt-region] #sections > .group-heading {
   opacity: 0.7;
 }
 
+/* The pop-up a list row opens from its "list" chip: every entry, and a strip
+   of plugin chips when the entries come from more than one. Inline under the
+   row, like the colour picker. */
+.list-chip {
+  margin-left: 6px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--text-dim);
+  background: var(--field-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.list-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.listpop {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 var(--gap);
+}
+
+.listpop[hidden] {
+  display: none;
+}
+
+.listpop-origins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-height: 4.6em;
+  overflow-y: auto;
+}
+
+.listpop-origins[hidden] {
+  display: none;
+}
+
+.listpop-origin {
+  padding: 1px 6px;
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: var(--field-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.listpop-origin.selected {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.listpop-count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.listpop-items {
+  display: grid;
+  max-height: 14em;
+  overflow-y: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+}
+
+.listpop-item {
+  padding: 2px 6px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.listpop-item[hidden] {
+  display: none;
+}
+
+.listpop-item:hover {
+  background: var(--row-hover);
+}
+
+.listpop-item.selected {
+  background: var(--row-selected);
+  color: var(--accent);
+}
+
 /* One tint layer: its name and colour chip, then its rows. */
 .tint-head {
   margin: calc(var(--gap) * 1.5) 0 var(--gap);

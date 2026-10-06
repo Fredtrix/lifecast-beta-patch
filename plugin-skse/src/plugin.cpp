@@ -14,6 +14,7 @@
 // the engine, through SKSE lifecycle messages, and the only output is
 // Documents/My Games/Skyrim Special Edition/SKSE/Lifecast.log.
 
+#include "Core/ListSig.h"
 #include "Core/Log.h"
 #include "Core/MeridianLink.h"
 #include "Core/ObodyLink.h"
@@ -124,6 +125,7 @@ namespace
 			// redraw, so it goes first.
 			Lifecast::Edit::Session::Install();
 			Lifecast::Edit::FaceSliders::Install();
+			Lifecast::Core::ListSig::Install();
 			Lifecast::Edit::Appearance::Install();
 			Lifecast::Edit::RacePresets::Install();
 			Lifecast::Edit::RaceSex::Install();
