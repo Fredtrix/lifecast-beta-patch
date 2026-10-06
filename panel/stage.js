@@ -32,7 +32,7 @@
 // controls go away; nothing else in the panel changes.
 //
 // A development build of the DLL also sends "tuning", and then a section of
-// number boxes appears under the readout: the six numbers of the view the
+// number boxes appears under the readout: the seven numbers of the view the
 // author retunes at OLHO DO AUTOR. A release DLL never sends that key, so the
 // section is never built - there is no flag here to set, and nothing to
 // remember to turn off. Said here because the comment above this one was once
