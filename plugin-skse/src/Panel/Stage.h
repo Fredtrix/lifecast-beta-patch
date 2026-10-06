@@ -76,15 +76,15 @@
 //                                 "tilt": deg }  (deltas, any subset)
 //   page -> dll  "stage-reset"  {}
 //   page -> dll  "stage-mode"   { "free": bool } the camera mode. STANDARD is
-//                                 what the menu opens in: turn (the body),
-//                                 pan and the tracking of the one-figure rule,
-//                                 and two fixed positions; every other move is
+//                                 what the menu opens in: RaceMenu's own
+//                                 camera, untouched, and only the turn (the
+//                                 body) of ours; every other move is
 //                                 dropped HERE, so a page that forgot to hide
 //                                 a control still cannot move the camera.
 //                                 FREE is the five moves of before. The
 //                                 comparison turns FREE on when it opens and
 //                                 gives the mode back when it closes.
-//   page -> dll  "stage-zoom"   {} standard mode only: far <-> near
+//   page -> dll  "stage-zoom"   {} standard mode only: asks RaceMenu for its own zoom (far <-> near)
 //   page -> dll  "stage-frame"  { "on": bool, "left": frac, "right": frac }
 //                                 the character view's edges as a fraction of
 //                                 the window width, and whether the camera
@@ -99,7 +99,7 @@
 //                                 "turn": deg, "distance": units,
 //                                 "lift": units, "pan": units,
 //                                 "tiltDeg": deg,
-//                                 "free": bool, "near": bool, "forced": bool,
+//                                 "free": bool, "forced": bool,
 //                                 "frame": { "on": bool, "left": frac,
 //                                            "right": frac },
 //                                 "limits": { "minDistance", "maxDistance",
@@ -159,23 +159,6 @@ namespace Lifecast::Panel::Stage
 	inline constexpr double kFloorMargin = 12.0;    // above the player's origin
 	LIFECAST_TUNABLE        kPanMax = 80.0;         // sideways, either way - see note above
 	LIFECAST_TUNABLE        kTiltMax = 35.0;        // degrees, either way
-
-	// THE STANDARD CAMERA'S TWO POSITIONS (Acabamento 4, D152, the author's).
-	//
-	// The standard mode is RaceMenu's own camera: two fixed positions, far (the
-	// body) and near (the face), swapped by LAlt, with the right button and the
-	// wheel inert. FAR is the frame the menu opened with, and needs no number.
-	// NEAR is the two numbers below, and they are OURS: neither the header
-	// (RaceSexMenu.h / RaceSexCamera.h expose no zoom state and no position) nor
-	// anything else read in this project gives the engine's own near position,
-	// so these are working values for the author's eye to retune.
-	//
-	//   kNearDistance    camera to player, ground plane - never under kMinDistance
-	//   kNearLiftOffset  above the eye node (NPCEyeBone); the lift itself is
-	//                    read from the eye at the swap, since a Redguard and an
-	//                    Orc do not share a head height
-	LIFECAST_TUNABLE kNearDistance = 35.0;
-	LIFECAST_TUNABLE kNearLiftOffset = 0.0;
 
 	// How far to the side the second subject stands, in the ground plane and
 	// across the line of sight (Edit/Compare). It is a WORLD distance and not

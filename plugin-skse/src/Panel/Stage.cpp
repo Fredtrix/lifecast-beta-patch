@@ -235,12 +235,10 @@ namespace Lifecast::Panel::Stage
 		}
 
 		// THE MODE (Acabamento 4, D152). Standard is what the menu opens in: RaceMenu's
-		// own two camera positions, swapped by LAlt, with only the turn of the body
-		// and the pan the framing rule needs on top. Free is the camera of before,
-		// all five moves. g_near is which of the two standard positions is showing;
-		// g_freeBefore is what the comparison gives back when it closes. All UI thread.
+		// own two camera positions, swapped by LAlt, and the only thing of ours on it
+		// is the turn of the body: no write to the camera at all. Free is the camera
+		// of before, all five moves, with the framing rule. g_freeBefore is what the comparison gives back when it closes. All UI thread.
 		bool g_free = false;
-		bool g_near = false;
 		bool g_freeBefore = false;
 		bool g_pairForced = false;  // the comparison is what made it free
 
@@ -988,7 +986,7 @@ namespace Lifecast::Panel::Stage
 		// has already gone.
 		void TrackOne(Clock::time_point a_now)
 		{
-			if (!g_oneOn || g_pairOn || g_moving.load(std::memory_order_relaxed)) {
+			if (!g_oneOn || !g_free || g_pairOn || g_moving.load(std::memory_order_relaxed)) {
 				return;
 			}
 			if (std::chrono::duration_cast<std::chrono::milliseconds>(a_now - g_trackAt).count() < kTrackMs) {
@@ -1177,7 +1175,7 @@ namespace Lifecast::Panel::Stage
 			}
 			json state = { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
 				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_target.pan },
-				{ "tiltDeg", g_target.tilt }, { "free", g_free }, { "near", g_near }, { "forced", g_pairForced },
+				{ "tiltDeg", g_target.tilt }, { "free", g_free }, { "forced", g_pairForced },
 				// What the camera is framing into, so the page - and the bench
 				// driving it - can read the rule's state instead of assuming it.
 				{ "frame", { { "on", g_oneOn }, { "left", g_oneLeft }, { "right", g_oneRight } } },
@@ -1214,31 +1212,43 @@ namespace Lifecast::Panel::Stage
 			}
 		}
 
-		// The standard camera's two fixed positions (D152). FAR is the frame the
-		// menu opened with: the kept distance and no lift. NEAR is OURS - the
-		// header exposes no zoom state, so kNearDistance and kNearLiftOffset are
-		// constants, and the eye is read here, at the swap, so the lift follows
-		// whatever race and sex are on screen. Only the target is set: the same
-		// easing and the same write that carry every other move carry this one.
-		void PlaceStandard(const char* a_why)
+		// Where RaceMenu's own camera stood when standard was left for the free one.
+		// Handing the camera back puts it exactly there: the opening frame is NOT
+		// RaceMenu's far position (boot 155 measured the engine at 55.40 / 0 / 0 for
+		// three seconds after a comparison closed, against 31.40 / 9.20 / 19.92 before
+		// it), and a standard camera that is not RaceMenu's breaks D152's rule.
+		RE::NiPoint3 g_native{};
+		bool         g_haveNative = false;
+
+		void KeepNative(RE::GFxValue& a_cg)
 		{
-			double distance = g_frame.distance;
-			double lift = 0.0;
-			if (g_near) {
-				distance = ClampSaid(kNearDistance, DistanceMin(), kMaxDistance, "near distance");
-				RE::NiPoint3 eye;
-				const char*  from = "none";
-				if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-					from = AimNode(player, eye);
-					lift = ClampSaid(eye.z - g_frame.camera.z + kNearLiftOffset, LiftMin(), kLiftUp, "near height");
-				}
-				spdlog::info("[stage] standard near ({}): the eye is {} - the NEAR numbers are ours, not RaceMenu's", a_why, from);
-			}
-			g_target.distance = distance;
-			g_target.lift = lift;
+			g_haveNative = GetPoint(a_cg, "GetRaceSexCameraPos", g_native);
+			spdlog::info("[stage] RaceMenu's own camera kept before the free one: {} ({:.2f}, {:.2f}, {:.2f})",
+				g_haveNative ? "read" : "NOT readable", g_native.x, g_native.y, g_native.z);
+		}
+
+		// Handing the camera back to RaceMenu from the free one, the one write the
+		// standard camera is allowed. After it, standard writes NOTHING to the camera
+		// (D152): the turn of the body is the only thing of ours that moves, and the
+		// two zoom positions are RaceMenu's own, asked for in OnZoom.
+		void RestoreOpening(const char* a_why, RE::GFxMovieView* a_movie, RE::GFxValue& a_cg)
+		{
+			g_target.distance = g_frame.distance;
+			g_target.lift = 0.0;
+			g_target.pan = 0.0;
 			g_target.tilt = 0.0;
-			spdlog::info("[stage] standard {} ({}): target distance {:.2f}, lift {:.2f}", g_near ? "near" : "far", a_why,
-				g_target.distance, g_target.lift);
+			if (g_haveNative && a_movie) {
+				// What is written already equals the target, so the tick below does not
+				// walk the camera toward the opening frame; tilt still steps back to 0.
+				g_at.distance = g_target.distance;
+				g_at.lift = g_target.lift;
+				g_at.pan = g_target.pan;
+				const bool ok = SetCameraPos(a_movie, a_cg, g_native);
+				spdlog::info("[stage] standard ({}): the camera goes back to where RaceMenu had it ({:.2f}, {:.2f}, {:.2f}) - {}",
+					a_why, g_native.x, g_native.y, g_native.z, ok ? "written" : "NOT written");
+			} else {
+				spdlog::warn("[stage] standard ({}): RaceMenu's own position was not kept - the camera is left where it is", a_why);
+			}
 		}
 
 		// V166's instrument, and it reports a VALUE, never a count of writes: once
@@ -1278,7 +1288,7 @@ namespace Lifecast::Panel::Stage
 			}
 			spdlog::info("[stage] hold {}: engine distance {:.2f} lift {:.2f} pan {:.2f} | target distance {:.2f} lift {:.2f} "
 						 "pan {:.2f} tilt {:.2f} | aim {}{:+.2f}% of the view",
-				g_near ? "near" : "far", distance, lift, pan, g_target.distance, g_target.lift, g_target.pan, g_target.tilt,
+				"standard", distance, lift, pan, g_target.distance, g_target.lift, g_target.pan, g_target.tilt,
 				haveAim ? "" : "n/a ", aim);
 		}
 
@@ -1320,6 +1330,9 @@ namespace Lifecast::Panel::Stage
 			if (p.pair == 1 && !g_pairForced) {
 				g_pairForced = true;
 				g_freeBefore = g_free;
+				if (!g_free) {
+					KeepNative(cg);
+				}
 				g_free = true;
 				spdlog::info("[stage] comparison opens: the free camera is forced on (was {})", g_freeBefore ? "free" : "standard");
 			}
@@ -1327,34 +1340,33 @@ namespace Lifecast::Panel::Stage
 				if (g_pairForced) {
 					spdlog::info("[stage] mode change ignored: the comparison holds the free camera");
 				} else if ((p.mode == 2) != g_free) {
+					if (p.mode == 2) {
+						KeepNative(cg);
+					}
 					g_free = p.mode == 2;
-					g_near = false;
 					if (!g_free) {
-						g_target.pan = 0.0;
-						PlaceStandard("mode");
+						RestoreOpening("mode", movie, cg);
+					} else if (g_oneOn && !g_pairOn) {
+						g_oneSolves = 0;
+						SolveOne("free on");
 					}
 					spdlog::info("[stage] mode: {}", g_free ? "free" : "standard");
 				}
 			}
 			// STANDARD drops every move the page could still send except the
-			// turn. The pan that survives is the tracker's, and that goes on
-			// the target directly, not through here.
+			// turn, and the tracker stands down (TrackOne): the camera is
+			// RaceMenu's and nothing of ours writes to it.
 			if (!g_free) {
 				p.distance = 0.0;
 				p.lift = 0.0;
 				p.pan = 0.0;
 				p.tilt = 0.0;
-				if (p.zoom % 2 != 0) {
-					g_near = !g_near;
-					PlaceStandard("LAlt");
-				}
 			}
 
 			// The move goes on the target, and the clamp with it.
 			if (p.reset) {
 				g_target = At{};
 				g_target.distance = g_frame.distance;
-				g_near = false;
 			}
 			if (p.turn != 0.0) {
 				g_target.turn = Wrap(g_target.turn + p.turn);
@@ -1393,8 +1405,8 @@ namespace Lifecast::Panel::Stage
 					g_free = g_freeBefore;
 					spdlog::info("[stage] comparison closes: back to the {} camera", g_free ? "free" : "standard");
 				}
-				if (!g_free && g_near) {
-					PlaceStandard("comparison closed");
+				if (!g_free) {
+					RestoreOpening("comparison closed", movie, cg);
 				}
 			}
 
@@ -1410,15 +1422,21 @@ namespace Lifecast::Panel::Stage
 					const bool moved = p.oneLeft != g_oneLeft || p.oneRight != g_oneRight;
 					g_oneLeft = p.oneLeft;
 					g_oneRight = p.oneRight;
-					// Before the measurement, because the measurement is of the
-					// camera the write is about to be based on.
-					Refresh(menu.get(), cg, "frame on");
-					g_oneSolves = 0;
-					g_oneTracks = 0;
 					g_restTicks = 0;
 					g_restWorstUs = 0.0;
 					g_trackAt = Clock::now();
-					SetOneOn(SolveOne(!again ? "on" : (moved ? "the view resized" : "again")));
+					g_oneSolves = 0;
+					g_oneTracks = 0;
+					if (!g_free) {
+						// Standard: the edges are kept for the day the free camera is
+						// switched on, and nothing is solved or written.
+						SetOneOn(true);
+					} else {
+						// Before the measurement, because the measurement is of the
+						// camera the write is about to be based on.
+						Refresh(menu.get(), cg, "frame on");
+						SetOneOn(SolveOne(!again ? "on" : (moved ? "the view resized" : "again")));
+					}
 				}
 			} else if (p.one == 2) {
 				if (g_oneOn) {
@@ -1430,10 +1448,9 @@ namespace Lifecast::Panel::Stage
 				SetOneOn(false);
 				g_oneSolves = 0;
 				g_oneTracks = 0;
-				g_target = At{};
-				g_target.distance = g_frame.distance;
-				if (!g_free && g_near) {
-					PlaceStandard("frame off");
+				if (g_free) {
+					g_target = At{};
+					g_target.distance = g_frame.distance;
 				}
 			}
 
@@ -1637,13 +1654,50 @@ namespace Lifecast::Panel::Stage
 			Queue(p);
 		}
 
+		// The standard camera's zoom is RaceMenu's own, and ours only in that we
+		// ask for it. Two ways failed at boot 153: LAlt in the input queue (the panel
+		// holds the keyboard and Meridian echoed the key back to the page, which asked
+		// again - hundreds of messages) and a "Zoom In/Out" ButtonEvent handed to the
+		// menu (CanProcess false). This one runs the menu's own Scaleform handler, so
+		// RaceMenu keeps its zoom state. Game thread. D152's probe.
+		Clock::time_point g_zoomAt{};
+
 		void OnZoom(const json&)
 		{
-			Pending p;
-			p.zoom = 1;
-			p.any = true;
-			p.answer = true;
-			Queue(p);
+			if (g_free) {
+				return;
+			}
+			const auto now = Clock::now();
+			if (std::chrono::duration_cast<std::chrono::milliseconds>(now - g_zoomAt).count() < 400) {
+				return;  // a swap takes longer than that, and a loop would show here
+			}
+			g_zoomAt = now;
+			auto menu = Menu();
+			auto* movie = menu ? menu->uiMovie.get() : nullptr;
+			if (!movie) {
+				spdlog::warn("[stage] zoom: no RaceSex menu movie - nothing was sent");
+				return;
+			}
+			// Read from the installed racesex_menu.swf (read only): the bottom bar's
+			// "Zoom" button runs onZoomClicked, which flips bPlayerZoom, swaps the
+			// label and calls GameDelegate.call("ZoomPC"). So the handler is invoked
+			// by name on whichever candidate object owns it; which one does is logged.
+			static constexpr const char* kPaths[] = { "_root.RaceSexMenuBaseInstance", "_root", "_root.RaceSexMenuBaseInstance.RaceSexPanelsInstance" };
+			bool                         called = false;
+			for (const char* path : kPaths) {
+				RE::GFxValue obj;
+				const bool   got = movie->GetVariable(&obj, path) && obj.IsObject();
+				const bool   has = got && obj.HasMember("onZoomClicked");
+				spdlog::info("[stage] zoom: candidate {} - object {}, onZoomClicked {}", path, got, has);
+				if (has) {
+					called = obj.Invoke("onZoomClicked", nullptr, nullptr, 0);
+					spdlog::info("[stage] zoom: {}.onZoomClicked() invoked - {}", path, called);
+					break;
+				}
+			}
+			if (!called) {
+				spdlog::warn("[stage] zoom: no candidate owned onZoomClicked - nothing was sent");
+			}
 		}
 
 		// Absent "on" means TRUE: the page sends this every time the character
@@ -1850,7 +1904,6 @@ namespace Lifecast::Panel::Stage
 					g_pairOn = false;
 					g_pairSolves = 0;
 					g_free = false;
-					g_near = false;
 					g_freeBefore = false;
 					g_pairForced = false;
 					SetOneOn(false);

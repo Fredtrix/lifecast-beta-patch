@@ -14,7 +14,7 @@
 //
 // TWO MODES (D152). STANDARD is what the menu opens in: RaceMenu's own camera,
 // two fixed positions - far, the body, and near, the face - swapped by LAlt or
-// the Near/Far button. The wheel and the right button do nothing, and the left
+// the Zoom button, or the wheel (up in, down out). The right button does nothing, and the left
 // button turns the character's body, which is the one thing that differs from
 // RaceMenu. FREE is the camera as it was before the modes, with every move
 // below. A switch under the frame changes between them; the comparison forces
@@ -24,7 +24,7 @@
 //   drag                  turn the character
 //   drag, right button    move the camera, up/down and left/right
 //   drag, Ctrl held       tilt the camera (when the DLL can)
-//   wheel                 closer and farther
+//   wheel                 zoom in / out (RaceMenu's two positions)
 // In STANDARD only the first of those, the drag, is alive.
 // The buttons under the frame repeat the turn, the distance, the height and
 // the tilt, so none of THOSE depends on knowing a mouse gesture.
@@ -135,7 +135,7 @@
         LifecastBridge.send("stage-mode", { free: !state.free });
       }
     }, (s) => !!s.forced);
-  const nearButton = button("Near", "Swap far and near (LAlt)", () => sendZoom(), null);
+  const nearButton = button("Zoom", "RaceMenu's own zoom, far and near (LAlt)", () => sendZoom(), null);
   group("Camera", [modeSwitch, nearButton]);
   const zoomGroup = group("Zoom", [
     button("+", "Closer", () => move("distance", -DISTANCE_STEP),
@@ -227,7 +227,12 @@
       return;
     }
     if (state && state.ready && !state.free) {
-      e.preventDefault();  // the wheel is inert in standard
+      e.preventDefault();
+      // Wheel up zooms in, down zooms out; RaceMenu only has the two positions,
+      // so a turn toward the one already shown does nothing.
+      if (e.deltaY !== 0 && (e.deltaY < 0) !== zoomedIn) {
+        sendZoom();
+      }
       return;
     }
     move("distance", e.deltaY * DISTANCE_PER_WHEEL);
@@ -237,8 +242,15 @@
   // LAlt swaps far and near in standard. The altKey reaches the DOM with the
   // panel focused (measured 2026-09-28), so nothing has to be routed to the
   // game. preventDefault keeps the browser from taking the key for a menu.
+  // The DLL drops a second request inside 400 ms; the page keeps the same
+  // window so its far/near guess flips only when a request really went out.
+  let zoomedIn = false;
+  let zoomAt = 0;
   function sendZoom() {
-    if (state && state.ready && !state.free) {
+    const now = Date.now();
+    if (state && state.ready && !state.free && now - zoomAt >= 400) {
+      zoomAt = now;
+      zoomedIn = !zoomedIn;
       LifecastBridge.send("stage-zoom");
     }
   }
@@ -370,7 +382,6 @@
     modeSwitch.textContent = "Free camera: " + (free ? "on" : "off") + (state.forced ? " (comparison)" : "");
     modeSwitch.classList.toggle("is-on", free);
     nearButton.hidden = free;
-    nearButton.textContent = state.near ? "Far" : "Near";
     zoomGroup.hidden = !free;
     heightGroup.hidden = !free;
     reframe.hidden = !free;
@@ -382,7 +393,7 @@
       ? "turn " + Math.round(state.turn) + " deg  |  distance " + Math.round(state.distance) +
         "  |  height " + Math.round(state.lift) + "  |  pan " + Math.round(state.pan) +
         (state.tilt ? "  |  tilt " + Math.round(state.tiltDeg) + " deg" : "")
-      : "turn " + Math.round(state.turn) + " deg  |  " + (state.near ? "near" : "far");
+      : "turn " + Math.round(state.turn) + " deg  |  RaceMenu camera";
   }
 
   LifecastBridge.on("stage", (data) => {
