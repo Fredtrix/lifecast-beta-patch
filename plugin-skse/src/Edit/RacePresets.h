@@ -54,6 +54,9 @@ namespace Lifecast::Edit::RacePresets
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
 
+	// NOT CALLED at present: the sex change is handed to RaceMenu's own callback
+	// (Edit/RaceSex), which does its own reset. Kept, unused, as a fallback.
+	//
 	// Puts the player on the first preset the race lists for the current sex, as
 	// the game does when the sex is swapped: morphs, face parts, head parts,
 	// hair colour and complexion, but not the weight. Returns false when there

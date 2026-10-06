@@ -46,6 +46,10 @@ namespace Lifecast::Edit::Appearance
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
 
+	// NOT CALLED at present: race and sex changes are handed to RaceMenu's own
+	// callbacks (Edit/RaceSex), which apply the game's rules for the new race
+	// or sex. Kept as a fallback should that path ever be unavailable.
+	//
 	// After the player's race or sex was changed: for each of the seven head
 	// part types, the hair colour and the complexion, what the new race and sex
 	// accept stays, and what they do not becomes the race's default (the first
