@@ -61,4 +61,14 @@ namespace Lifecast::Panel::RaceMenuFilm
 	// that arrive before the queued call runs fold into one, with the last
 	// value and the last a_done.
 	void Apply(Slider a_slider, int a_which, double a_value, bool a_final, Done a_done);
+
+	// The sex and race changes, handed to the same GameDelegate callbacks
+	// RaceMenu's own Sex slider and race list call ("ChangeSex": value 0 male,
+	// 1 female, and the entry's sliderID; "ChangeRace": the race's entry in the
+	// film's race list, and -1). The game then does what it does for those
+	// controls; nothing here decides what the new race or sex keeps. The race
+	// is found in the film's list by its name. Queued on the UI thread; a_done
+	// runs there with whether the callback was called.
+	void ChangeSex(bool a_female, std::function<void(bool a_called)> a_done);
+	void ChangeRace(std::string a_raceName, std::function<void(bool a_called)> a_done);
 }

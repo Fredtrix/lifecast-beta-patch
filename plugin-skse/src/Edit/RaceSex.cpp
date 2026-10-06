@@ -4,9 +4,9 @@
 #include "Edit/RaceSex.h"
 
 #include "Edit/Appearance.h"
-#include "Edit/RacePresets.h"
 #include "Edit/Session.h"
 #include "Panel/Bridge.h"
+#include "Panel/RaceMenuFilm.h"
 
 namespace Lifecast::Edit::RaceSex
 {
@@ -26,6 +26,21 @@ namespace Lifecast::Edit::RaceSex
 
 		std::vector<RE::TESRace*> g_races;
 		std::uint32_t             g_changes = 0;
+
+		using Clock = std::chrono::steady_clock;
+
+		// A change handed to RaceMenu and not yet seen to land.
+		struct Wait
+		{
+			bool                  active = false;
+			const char*           what = "";
+			bool                  female = false;
+			RE::FormID            raceBefore = 0;
+			RE::SEX               sexBefore = RE::SEX::kNone;
+			Clock::time_point     start;
+			bool                  changed = false;
+			Clock::time_point     changedAt;
+		} g_wait;
 
 		RE::PlayerCharacter* Player() { return RE::PlayerCharacter::GetSingleton(); }
 
@@ -138,16 +153,6 @@ namespace Lifecast::Edit::RaceSex
 				static_cast<const void*>(root), root ? root->name.c_str() : "-", parts);
 		}
 
-		void Finish(const char* a_what)
-		{
-			++g_changes;
-			// Replaced first, so every section drops what it kept from the old
-			// character before it re-reads; then the whole-actor redraw.
-			Session::Replaced(a_what);
-			Session::RequestRedraw(true);
-			spdlog::info("[race-sex]   after:  {}", State());
-		}
-
 		void OnRaceSet(const nlohmann::json& a_data)
 		{
 			if (!Session::MenuOpen()) {
@@ -174,14 +179,20 @@ namespace Lifecast::Edit::RaceSex
 				Answer("race", false, "already that race");
 				return;
 			}
+			if (g_wait.active) {
+				Answer("race", false, "a change is still settling");
+				return;
+			}
 			spdlog::info("[race-sex] race-set [{}] {:08X} {}", index, race->GetFormID(), RaceName(race));
 			spdlog::info("[race-sex]   before: {}", State());
-			player->SwitchRace(race, true);
-			spdlog::info("[race-sex]   switched: {}", State());
-			Appearance::FitToRace("the race was changed");
-			Finish("the race was changed");
-			Answer("race", true, RaceName(race));
-			Push("after a race change");
+			// RaceMenu's own race change, whatever it does for the new race.
+			g_wait = { true, "race", false, player->GetRace()->GetFormID(), Npc()->GetSex(), Clock::now(), false, {} };
+			Panel::RaceMenuFilm::ChangeRace(RaceName(race), [](bool a_called) {
+				if (!a_called) {
+					g_wait.active = false;
+					Answer("race", false, "RaceMenu's ChangeRace was not called");
+				}
+			});
 		}
 
 		void OnSexSet(const nlohmann::json& a_data)
@@ -204,17 +215,62 @@ namespace Lifecast::Edit::RaceSex
 				Answer("sex", false, "already that sex");
 				return;
 			}
+			if (g_wait.active) {
+				Answer("sex", false, "a change is still settling");
+				return;
+			}
 			spdlog::info("[race-sex] sex-set {}", female ? "female" : "male");
 			spdlog::info("[race-sex]   before: {}", State());
-			npc->SetActorBaseFlag(RE::ACTOR_BASE_DATA::Flag::kFemale, female, true);
-			spdlog::info("[race-sex]   flag:   {}", State());
-			// What a fresh character of this sex starts on, then the fit for whatever
-			// the preset does not name (face, misc).
-			RacePresets::ApplyDefault("the sex was changed");
-			Appearance::FitToRace("the sex was changed");
-			Finish("the sex was changed");
-			Answer("sex", true, female ? "female" : "male");
-			Push("after a sex change");
+			// RaceMenu's own sex change, whatever it does for the new sex.
+			auto* player = Player();
+			g_wait = { true, "sex", female, player && player->GetRace() ? player->GetRace()->GetFormID() : 0, npc->GetSex(),
+				Clock::now(), false, {} };
+			Panel::RaceMenuFilm::ChangeSex(female, [](bool a_called) {
+				if (!a_called) {
+					g_wait.active = false;
+					Answer("sex", false, "RaceMenu's ChangeSex was not called");
+				}
+			});
+		}
+
+		// The game applies the change over the next frames (about 300 ms in the
+		// vanilla log), so the panel is told once it shows and has settled.
+		void OnTick()
+		{
+			if (!g_wait.active) {
+				return;
+			}
+			auto*      player = Player();
+			auto*      npc = Npc();
+			const auto now = Clock::now();
+			if (!player || !npc) {
+				g_wait.active = false;
+				return;
+			}
+			if (!g_wait.changed) {
+				const auto* race = player->GetRace();
+				if (npc->GetSex() != g_wait.sexBefore || (race && race->GetFormID() != g_wait.raceBefore)) {
+					g_wait.changed = true;
+					g_wait.changedAt = now;
+					spdlog::info("[race-sex]   {} change seen {} ms after the call", g_wait.what,
+						std::chrono::duration_cast<std::chrono::milliseconds>(now - g_wait.start).count());
+				} else if (now - g_wait.start > std::chrono::seconds(4)) {
+					g_wait.active = false;
+					spdlog::warn("[race-sex]   {}: no change seen in 4 s - state {}", g_wait.what, State());
+					Answer(g_wait.what, false, "the game showed no change");
+				}
+				return;
+			}
+			if (now - g_wait.changedAt < std::chrono::milliseconds(600)) {
+				return;
+			}
+			g_wait.active = false;
+			spdlog::info("[race-sex]   settled: {}", State());
+			Appearance::ListsChanged();
+			++g_changes;
+			Session::Replaced("RaceMenu changed the race or sex");
+			Answer(g_wait.what, true, "");
+			Push("after the game's change");
 		}
 
 		// The redraw runs on a later tick than the change: this is the line
@@ -250,6 +306,7 @@ namespace Lifecast::Edit::RaceSex
 		Session::OnMenuOpened(&OnOpened);
 		Session::OnMenuClosed(&OnClosed);
 		Session::OnRedrawn(&OnRedrawn);
+		Session::OnTick(&OnTick);
 		Panel::Bridge::On("race-sex-get", &OnGet);
 		Panel::Bridge::On("race-set", &OnRaceSet);
 		Panel::Bridge::On("sex-set", &OnSexSet);

@@ -727,6 +727,12 @@ namespace Lifecast::Edit::Appearance
 		bool g_installed = false;
 	}
 
+	void ListsChanged()
+	{
+		g_menuListsStale = true;
+		g_lists = {};
+	}
+
 	void FitToRace(const char* a_why)
 	{
 		auto* npc = Npc();

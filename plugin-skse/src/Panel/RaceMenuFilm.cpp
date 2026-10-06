@@ -422,6 +422,117 @@ namespace Lifecast::Panel::RaceMenuFilm
 		tasks->AddUITask([]() { DeliverPending(); });
 	}
 
+	namespace
+	{
+		constexpr auto kRaceList = "_root.RaceSexMenuBaseInstance.RaceSexPanelsInstance.racePanel.itemList";
+
+		// Calls a GameDelegate callback of the menu with two numbers. UI thread.
+		bool CallNative(RE::GFxMovieView* a_movie, RE::IMenu* a_menu, const char* a_callback, double a_first,
+			double a_second)
+		{
+			if (!a_movie || !a_menu || !a_menu->fxDelegate) {
+				return false;
+			}
+			auto* defn = a_menu->fxDelegate->callbacks.Get(RE::GString(a_callback));
+			if (!defn || !defn->callback) {
+				spdlog::warn("[film] {} is not registered in RaceMenu's GameDelegate", a_callback);
+				return false;
+			}
+			const std::array<RE::GFxValue, 2> args{ RE::GFxValue(a_first), RE::GFxValue(a_second) };
+			const RE::FxDelegateArgs          params(RE::GFxValue(), defn->handler.get(), a_movie, args.data(),
+						 static_cast<std::uint32_t>(args.size()));
+			defn->callback(params);
+			return true;
+		}
+
+		std::string Lower(std::string a_s)
+		{
+			for (auto& c : a_s) {
+				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			}
+			return a_s;
+		}
+
+		void DoChangeSex(bool a_female, const std::function<void(bool)>& a_done)
+		{
+			auto* ui = RE::UI::GetSingleton();
+			auto  menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto* movie = menu ? menu->uiMovie.get() : nullptr;
+			double id = -1;
+			bool   called = false;
+			if (movie && FindSliderID(movie, { "ChangeSex", nullptr }, id)) {
+				called = CallNative(movie, menu.get(), "ChangeSex", a_female ? 1.0 : 0.0, id);
+			}
+			spdlog::info("[film] ChangeSex({}, {}): {}", a_female ? 1 : 0, id, called ? "called" : "not called");
+			if (a_done) {
+				a_done(called);
+			}
+		}
+
+		void DoChangeRace(const std::string& a_name, const std::function<void(bool)>& a_done)
+		{
+			auto* ui = RE::UI::GetSingleton();
+			auto  menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto* movie = menu ? menu->uiMovie.get() : nullptr;
+			bool  called = false;
+			RE::GFxValue list;
+			RE::GFxValue entries;
+			if (movie && movie->GetVariable(&list, kRaceList) && list.IsObject() &&
+				((list.GetMember("entryList", &entries) && entries.IsArray()) ||
+					(list.GetMember("_entryList", &entries) && entries.IsArray()))) {
+				const auto n = entries.GetArraySize();
+				const auto wanted = Lower(a_name);
+				int        found = -1;
+				for (std::uint32_t i = 0; i < n; ++i) {
+					RE::GFxValue entry;
+					if (!entries.GetElement(i, &entry) || !entry.IsObject()) {
+						continue;
+					}
+					const auto text = Str(entry, "text");
+					double     raceID = i;
+					Num(entry, "raceID", raceID);
+					spdlog::info("[film]   race list [{}] '{}' raceID {}", i, text, raceID);
+					if (Lower(text) == wanted) {
+						found = static_cast<int>(i);
+						called = CallNative(movie, menu.get(), "ChangeRace", raceID, -1.0);
+						spdlog::info("[film] ChangeRace({}, -1) for '{}': {}", raceID, a_name,
+							called ? "called" : "not called");
+						break;
+					}
+				}
+				if (found < 0) {
+					spdlog::warn("[film] ChangeRace: no entry named '{}' among the film's {} races", a_name, n);
+				}
+			} else {
+				spdlog::warn("[film] ChangeRace: no race list at {}", kRaceList);
+			}
+			if (a_done) {
+				a_done(called);
+			}
+		}
+	}
+
+	void ChangeSex(bool a_female, std::function<void(bool)> a_done)
+	{
+		auto* tasks = SKSE::GetTaskInterface();
+		if (!tasks) {
+			DoChangeSex(a_female, a_done);
+			return;
+		}
+		tasks->AddUITask([a_female, a_done = std::move(a_done)]() { DoChangeSex(a_female, a_done); });
+	}
+
+	void ChangeRace(std::string a_raceName, std::function<void(bool)> a_done)
+	{
+		auto* tasks = SKSE::GetTaskInterface();
+		if (!tasks) {
+			DoChangeRace(a_raceName, a_done);
+			return;
+		}
+		tasks->AddUITask(
+			[name = std::move(a_raceName), a_done = std::move(a_done)]() { DoChangeRace(name, a_done); });
+	}
+
 	void Sync()
 	{
 		auto* tasks = SKSE::GetTaskInterface();

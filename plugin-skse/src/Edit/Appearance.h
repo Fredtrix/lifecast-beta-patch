@@ -52,4 +52,9 @@ namespace Lifecast::Edit::Appearance
 	// of its list when it declares none). Not a reset: a value the race would
 	// have taken is the player's choice and is kept. The caller redraws.
 	void FitToRace(const char* a_why);
+
+	// After RaceMenu itself changed the player's race or sex: the lists the page
+	// was sent are the old ones, and the new ones are rebuilt on the next read
+	// (from the data handler until the menu reopens). Writes nothing to the game.
+	void ListsChanged();
 }
