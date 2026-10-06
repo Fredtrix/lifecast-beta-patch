@@ -135,8 +135,16 @@
         LifecastBridge.send("stage-mode", { free: !state.free });
       }
     }, (s) => !!s.forced);
+  // The lock on the character (Acabamento 9). Its state is in its own label, so the
+  // player can read whether the camera is framing her without pressing anything.
+  const lockSwitch = button("Lock on character: on",
+    "On, the camera keeps the character framed as she moves; off, it stays where you put it", () => {
+      if (state && state.ready && state.free && !state.forced) {
+        LifecastBridge.send("stage-lock", { on: !state.lock });
+      }
+    }, (s) => !!s.forced);
   const nearButton = button("Zoom", "RaceMenu's own zoom, far and near (LAlt)", () => sendZoom(), null);
-  group("Camera", [modeSwitch, nearButton]);
+  group("Camera", [modeSwitch, lockSwitch, nearButton]);
   const zoomGroup = group("Zoom", [
     button("+", "Closer", () => move("distance", -DISTANCE_STEP),
       (s) => s.distance <= s.limits.minDistance + near),
@@ -412,6 +420,11 @@
     modeSwitch.textContent = "Free camera: " + (free ? "on" : "off") + (state.forced ? " (comparison)" : "");
     modeSwitch.classList.toggle("is-on", free);
     nearButton.hidden = free;
+    // Absent "lock" means on: that is what the view did before the switch existed.
+    const lock = state.lock !== false;
+    lockSwitch.hidden = !free;
+    lockSwitch.textContent = "Lock on character: " + (lock ? "on" : "off");
+    lockSwitch.classList.toggle("is-on", lock);
     zoomGroup.hidden = !free;
     heightGroup.hidden = !free;
     reframe.hidden = !free;

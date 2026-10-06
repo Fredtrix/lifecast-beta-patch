@@ -84,6 +84,14 @@
 //                                 FREE is the five moves of before. The
 //                                 comparison turns FREE on when it opens and
 //                                 gives the mode back when it closes.
+//   page -> dll  "stage-lock"   { "on": bool } the lock on the character (Acabamento 9),
+//                                 free mode. ON is what the view always did and is
+//                                 the default: the camera keeps the subject framed
+//                                 and re-aims as she drifts. OFF, nothing of ours
+//                                 aims the camera - no solve, no re-aim - and it stays
+//                                 where it is until the player moves it. Turning it
+//                                 back on frames once. Back to ON when the menu closes.
+//                                 The state carries it as "lock".
 //   page -> dll  "stage-zoom"   {} standard mode only: asks RaceMenu for its own zoom (far <-> near)
 //   page -> dll  "stage-frame"  { "on": bool, "left": frac, "right": frac }
 //                                 the character view's edges as a fraction of

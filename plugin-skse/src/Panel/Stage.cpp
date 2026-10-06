@@ -164,6 +164,9 @@ namespace Lifecast::Panel::Stage
 			// far <-> near swaps were asked (they add up: two are none).
 			int    mode{ 0 };
 			int    zoom{ 0 };
+			// The lock on the character (Acabamento 9): 0 nothing, 1 on, 2 off.
+			// The last one wins, like the mode.
+			int    lock{ 0 };
 			// The framing rule: 0 nothing, 1 frame the pair, 2 stop framing
 			// it. Not a bool, because "no request" and "turn it off" are
 			// different things and folding them loses the second.
@@ -237,10 +240,25 @@ namespace Lifecast::Panel::Stage
 		int    g_restTicks = 0;
 		double g_restWorstUs = 0.0;
 
+		// THE LOCK ON THE CHARACTER (Acabamento 9). ON, the default, is the rule above
+		// as it always was: the camera keeps the subject framed, and re-aims as she
+		// drifts. OFF, nothing of ours aims the camera any more - no solve on any
+		// trigger, no re-aim - and it stays where it is until the player moves it. The
+		// edges the page sent are kept either way, so turning it back on frames at
+		// once. Session only, back to ON when the menu closes (D157). UI thread.
+		// Where the frame rule last put the pan. The player's own sideways travel is measured from here, not from the
+		// character: the rule pans the camera off to one side to centre the figure in the narrow stage, and a limit
+		// centred on zero left a few units on that side and a long way on the other (the wall on the right).
+		double g_panHome = 0.0;
+		double PanLo() { return g_panHome - kPanMax; }
+		double PanHi() { return g_panHome + kPanMax; }
+
+		bool g_lockOn = true;
+
 		void SetOneOn(bool a_on)
 		{
 			g_oneOn = a_on;
-			g_oneTracking.store(a_on, std::memory_order_relaxed);
+			g_oneTracking.store(a_on && g_lockOn, std::memory_order_relaxed);
 		}
 
 		// THE MODE (Acabamento 4, D152). Standard is what the menu opens in: RaceMenu's
@@ -918,6 +936,7 @@ namespace Lifecast::Panel::Stage
 			}
 
 			g_target.pan = pan;
+			g_panHome = pan;
 			g_onePredicted = predicted;
 			++g_oneSolves;
 			return true;
@@ -995,7 +1014,7 @@ namespace Lifecast::Panel::Stage
 		// has already gone.
 		void TrackOne(Clock::time_point a_now)
 		{
-			if (!g_oneOn || !g_free || g_pairOn || g_moving.load(std::memory_order_relaxed)) {
+			if (!g_oneOn || !g_lockOn || !g_free || g_pairOn || g_moving.load(std::memory_order_relaxed)) {
 				return;
 			}
 			if (std::chrono::duration_cast<std::chrono::milliseconds>(a_now - g_trackAt).count() < kTrackMs) {
@@ -1184,12 +1203,12 @@ namespace Lifecast::Panel::Stage
 			}
 			json state = { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
 				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_target.pan },
-				{ "tiltDeg", g_target.tilt }, { "free", g_free }, { "forced", g_pairForced },
+				{ "tiltDeg", g_target.tilt }, { "free", g_free }, { "forced", g_pairForced }, { "lock", g_lockOn },
 				// What the camera is framing into, so the page - and the bench
 				// driving it - can read the rule's state instead of assuming it.
 				{ "frame", { { "on", g_oneOn }, { "left", g_oneLeft }, { "right", g_oneRight } } },
 				{ "limits", { { "minDistance", DistanceMin() }, { "maxDistance", kMaxDistance }, { "liftMin", LiftMin() },
-								{ "liftMax", kLiftUp }, { "panMin", -kPanMax }, { "panMax", kPanMax },
+								{ "liftMax", kLiftUp }, { "panMin", PanLo() }, { "panMax", PanHi() },
 								{ "tiltMax", kTiltMax } } } };
 #ifdef LIFECAST_TUNING
 			// Deliberately NOT folded into "limits" - see the note in Stage.h.
@@ -1356,13 +1375,44 @@ namespace Lifecast::Panel::Stage
 					g_free = p.mode == 2;
 					if (!g_free) {
 						RestoreOpening("mode", movie, cg);
-					} else if (g_oneOn && !g_pairOn) {
+					} else if (g_oneOn && g_lockOn && !g_pairOn) {
 						g_oneSolves = 0;
 						SolveOne("free on");
 					}
 					spdlog::info("[stage] mode: {}", g_free ? "free" : "standard");
 				}
 			}
+			// The lock. Off: the rule stops aiming and the camera stays; the target is
+			// not touched, so what the page reads is where the camera is. On: it frames
+			// once, from where the camera is now, exactly as turning the free camera on
+			// does. The comparison owns the camera while it is open, so there is
+			// nothing for the lock to do then, and it is said.
+			if (p.lock != 0) {
+				const bool want = p.lock == 1;
+				if (want != g_lockOn) {
+					g_lockOn = want;
+					SetOneOn(g_oneOn);
+					if (!g_lockOn) {
+						// "Stays where it is" means where it IS: a slide that the rule had
+						// already started toward its last aim stops here instead of running
+						// out its easing, so the pose at the instant of the switch is the
+						// pose it keeps. The turn is the body's and is not touched.
+						g_target.distance = g_at.distance;
+						g_target.lift = g_at.lift;
+						g_target.pan = g_at.pan;
+						g_target.tilt = g_at.tilt;
+					}
+					spdlog::info("[stage] lock on the character: {}{}", g_lockOn ? "ON" : "OFF",
+						g_pairOn ? " (the comparison is framing the camera; this takes effect when it closes)" : "");
+					if (g_lockOn && g_free && g_oneOn && !g_pairOn) {
+						g_oneSolves = 0;
+						g_trackAt = Clock::now();
+						Refresh(menu.get(), cg, "lock on");
+						SolveOne("lock on");
+					}
+				}
+			}
+
 			// STANDARD drops every move the page could still send except the
 			// turn, and the tracker stands down (TrackOne): the camera is
 			// RaceMenu's and nothing of ours writes to it.
@@ -1375,7 +1425,7 @@ namespace Lifecast::Panel::Stage
 
 			// The move goes on the target, and the clamp with it.
 			if (p.reset) {
-				g_target = At{};
+				g_target = At{}; g_panHome = 0.0;
 				g_target.distance = g_frame.distance;
 			}
 			if (p.turn != 0.0) {
@@ -1388,7 +1438,7 @@ namespace Lifecast::Panel::Stage
 				g_target.lift = ClampSaid(g_target.lift + p.lift, LiftMin(), kLiftUp, "height");
 			}
 			if (p.pan != 0.0) {
-				g_target.pan = ClampSaid(g_target.pan + p.pan, -kPanMax, kPanMax, "pan");
+				g_target.pan = ClampSaid(g_target.pan + p.pan, PanLo(), PanHi(), "pan");
 			}
 			if (p.tilt != 0.0 && g_frame.node) {
 				g_target.tilt = ClampSaid(g_target.tilt + p.tilt, -kTiltMax, kTiltMax, "tilt");
@@ -1408,7 +1458,7 @@ namespace Lifecast::Panel::Stage
 				}
 				g_pairOn = false;
 				g_pairSolves = 0;
-				g_target = At{};
+				g_target = At{}; g_panHome = 0.0;
 				g_target.distance = g_frame.distance;
 				if (g_pairForced) {
 					g_pairForced = false;
@@ -1437,9 +1487,10 @@ namespace Lifecast::Panel::Stage
 					g_trackAt = Clock::now();
 					g_oneSolves = 0;
 					g_oneTracks = 0;
-					if (!g_free) {
-						// Standard: the edges are kept for the day the free camera is
-						// switched on, and nothing is solved or written.
+					if (!g_free || !g_lockOn) {
+						// Standard, or the lock is off: the edges are kept for the day the free
+						// camera is switched on or the lock is turned on, and nothing is solved or
+						// written.
 						SetOneOn(true);
 					} else {
 						// Before the measurement, because the measurement is of the
@@ -1459,7 +1510,7 @@ namespace Lifecast::Panel::Stage
 				g_oneSolves = 0;
 				g_oneTracks = 0;
 				if (g_free) {
-					g_target = At{};
+					g_target = At{}; g_panHome = 0.0;
 					g_target.distance = g_frame.distance;
 				}
 			}
@@ -1583,6 +1634,9 @@ namespace Lifecast::Panel::Stage
 					g_pending.mode = a_add.mode;
 				}
 				g_pending.zoom += a_add.zoom;
+				if (a_add.lock != 0) {
+					g_pending.lock = a_add.lock;
+				}
 				// A toggle does not add up: two presses folded into one pass
 				// are the last one, not both.
 				if (a_add.pair != 0) {
@@ -1659,6 +1713,20 @@ namespace Lifecast::Panel::Stage
 			}
 			Pending p;
 			p.mode = free ? 2 : 1;
+			p.any = true;
+			p.answer = true;
+			Queue(p);
+		}
+
+		// "on": bool. Absent is ON, the safe side: ON is what the view always did.
+		void OnLock(const json& a_data)
+		{
+			bool on = true;
+			if (a_data.is_object() && a_data.contains("on") && a_data["on"].is_boolean()) {
+				on = a_data["on"].get<bool>();
+			}
+			Pending p;
+			p.lock = on ? 1 : 2;
 			p.any = true;
 			p.answer = true;
 			Queue(p);
@@ -1856,7 +1924,7 @@ namespace Lifecast::Panel::Stage
 					const At before = g_target;
 					g_target.distance = ClampSaid(g_target.distance, DistanceMin(), kMaxDistance, "distance");
 					g_target.lift = ClampSaid(g_target.lift, LiftMin(), kLiftUp, "height");
-					g_target.pan = ClampSaid(g_target.pan, -kPanMax, kPanMax, "pan");
+					g_target.pan = ClampSaid(g_target.pan, PanLo(), PanHi(), "pan");
 					g_target.tilt = ClampSaid(g_target.tilt, -kTiltMax, kTiltMax, "tilt");
 					SaidLimit("maxDistance", before.distance, g_target.distance);
 					SaidLimit("liftUp", before.lift, g_target.lift);
@@ -1934,7 +2002,7 @@ namespace Lifecast::Panel::Stage
 					}
 					g_frame = Frame{};
 					g_at = At{};
-					g_target = At{};
+					g_target = At{}; g_panHome = 0.0;
 					g_moving.store(false, std::memory_order_relaxed);
 					g_why.clear();
 					g_pairOn = false;
@@ -1942,6 +2010,7 @@ namespace Lifecast::Panel::Stage
 					g_free = false;
 					g_freeBefore = false;
 					g_pairForced = false;
+					g_lockOn = true;
 					SetOneOn(false);
 					g_oneSolves = 0;
 					g_oneTracks = 0;
@@ -2054,6 +2123,7 @@ namespace Lifecast::Panel::Stage
 		Panel::Bridge::On("stage-move", &OnMove);
 		Panel::Bridge::On("stage-reset", &OnReset);
 		Panel::Bridge::On("stage-mode", &OnMode);
+		Panel::Bridge::On("stage-lock", &OnLock);
 		Panel::Bridge::On("stage-zoom", &OnZoom);
 		Panel::Bridge::On("stage-frame", &OnFrame);
 #ifdef LIFECAST_TUNING
