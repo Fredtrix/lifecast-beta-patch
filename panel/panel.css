@@ -119,7 +119,7 @@ body {
   bottom: 0;
   font-size: calc(var(--text-size) * var(--panel-scale));
   display: grid;
-  grid-template-columns: calc(var(--panel-width) * var(--panel-scale)) auto minmax(0, 1fr) auto;
+  grid-template-columns: calc(var(--panel-width) * var(--panel-scale)) minmax(var(--belt-min, min-content), max-content) minmax(0, 1fr) auto;
   grid-template-rows: auto var(--belt-height);
 }
 
@@ -200,34 +200,51 @@ body {
   white-space: nowrap;
 }
 
-/* The quick buttons' group, and the arrow that only the narrow belt shows. */
-/* As tall as the belt, so the pop-up's "100%" is the belt's top edge. */
-.belt-more {
-  position: relative;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-}
-
+/* The quick buttons' group. */
 .belt-quick-group {
   display: flex;
   align-items: center;
   gap: 2px;   /* the belt's own gap, as when the buttons were its children */
 }
 
-.belt-more-toggle {
+/* The strip of categories (D146): it takes the room the belt has and scrolls
+   past it. Its minimum is DECLARED, and belt.js's fit() counts that, not the
+   content - see the comment there. */
+.belt-cats {
+  --belt-track-min: 140px;
+}
+
+.belt-track {
+  flex: 1 1 auto;
+  min-width: var(--belt-track-min);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.belt-track::-webkit-scrollbar {
   display: none;
 }
 
-.belt-more-toggle.is-on {
-  color: var(--accent);
-  border-color: var(--accent);
+.belt-arrow {
+  flex: none;
+  box-sizing: border-box;
+  width: 30px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.belt-arrow[hidden] {
+  display: none;
 }
 
 /* ----- the narrow belt (D136) ----------------------------------------------
    belt.js sets data-belt-narrow when the belt does not fit in one row. The
-   counts go, the quick buttons go behind the arrow, and the name and Finish
-   go up to a row of their own over the belt. */
+   counts go, and the name and Finish go up to a row of their own over the
+   belt; the quick buttons stay (D146). */
 html[data-belt-narrow] {
   --name-row: 44px;
 }
@@ -235,39 +252,11 @@ html[data-belt-narrow] {
 /* The name's column is empty on the narrow belt: the categories' column
    grows into the room instead, so the belt stays one band. */
 html[data-belt-narrow] .panel {
-  grid-template-columns: calc(var(--panel-width) * var(--panel-scale)) minmax(max-content, 1fr) 0 auto;
+  grid-template-columns: calc(var(--panel-width) * var(--panel-scale)) minmax(var(--belt-min, min-content), 1fr) 0 auto;
 }
 
 html[data-belt-narrow] .belt-count {
   display: none;
-}
-
-html[data-belt-narrow] .belt-more-toggle {
-  display: block;
-}
-
-html[data-belt-narrow] .belt-quick-group {
-  display: none;
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--name-row) + var(--gap));
-  /* Over the stage and its bars, which come later in the page. */
-  z-index: 10;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  padding: 8px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-}
-
-html[data-belt-narrow][data-belt-more] .belt-quick-group {
-  display: flex;
-}
-
-html[data-belt-narrow] .belt-quick-group .belt-quick {
-  margin-left: 0;
 }
 
 html[data-belt-narrow] .panel-toolbar {

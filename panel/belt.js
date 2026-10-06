@@ -21,10 +21,10 @@
 //
 // Narrow (D136): when the belt does not fit the screen in one row, or leaves
 // the name field too small to type in, <html> gets data-belt-narrow and the
-// stylesheet folds it - the counts go, the three quick buttons go behind one
-// arrow that opens them in a small pop-up, and the name and Finish go up to a
-// row of their own over the belt. The test is always made on the wide row,
-// so the two layouts cannot chase each other.
+// stylesheet folds it - the counts go, and the name and Finish go up to a
+// row of their own over the belt. The categories are a strip that scrolls
+// (D146), so the quick buttons are never folded (D126 whole again). The test
+// is always made on the wide row, so the two layouts cannot chase each other.
 //
 // Opening: the page outlives the menu (presets.js receives "menu-closed"),
 // so the belt re-opens as the player left it in this run of the game, and
@@ -58,6 +58,55 @@ const LifecastBelt = (() => {
     return sections().filter((s) => s.dataset.group === name);
   }
 
+  // The categories ride a strip that scrolls (D146): an arrow on each side,
+  // the mouse wheel over it, and All outside it, fixed, beside the quick
+  // buttons. Everything else on the belt stays where it is.
+  const prev = document.createElement("button");
+  prev.type = "button";
+  prev.tabIndex = -1;
+  prev.className = "panel-button belt-arrow";
+  prev.textContent = "\u25C0";
+  prev.title = "Scroll the categories left";
+  const track = document.createElement("div");
+  track.className = "belt-track";
+  const next = document.createElement("button");
+  next.type = "button";
+  next.tabIndex = -1;
+  next.className = "panel-button belt-arrow";
+  next.textContent = "\u25B6";
+  next.title = "Scroll the categories right";
+  nav.appendChild(prev);
+  nav.appendChild(track);
+  nav.appendChild(next);
+
+  // The arrows are on screen only while the strip is clipped: a strip that
+  // fits has nothing to scroll, and the wide row is then the row it was
+  // before the strip existed.
+  function reach() {
+    const max = track.scrollWidth - track.clientWidth;
+    prev.hidden = next.hidden = max <= 0.5;
+    prev.disabled = track.scrollLeft <= 0.5;
+    next.disabled = track.scrollLeft >= max - 0.5;
+  }
+
+  function slide(dir) {
+    track.scrollBy({ left: dir * Math.max(80, track.clientWidth * 0.6), behavior: "smooth" });
+  }
+
+  prev.addEventListener("click", () => slide(-1));
+  next.addEventListener("click", () => slide(1));
+  track.addEventListener("scroll", reach);
+  // The wheel over the strip rolls it sideways; the camera's wheel is on
+  // #stage (stage.js) and never gets here, so there is nothing to share.
+  track.addEventListener("wheel", (e) => {
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (d !== 0 && track.scrollWidth > track.clientWidth) {
+      track.scrollLeft += d;
+      reach();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
   const buttons = new Map();
   for (const name of LifecastGroups.names.concat(["All"])) {
     const b = document.createElement("button");
@@ -72,7 +121,7 @@ const LifecastBelt = (() => {
     b.appendChild(label);
     b.appendChild(n);
     b.addEventListener("click", () => choose(name));
-    nav.appendChild(b);
+    (name === "All" ? nav : track).appendChild(b);
     buttons.set(name, b);
   }
 
@@ -100,34 +149,11 @@ const LifecastBelt = (() => {
   const sep = document.createElement("span");
   sep.className = "belt-sep";
   nav.appendChild(sep);
-  // The quick buttons live in one group behind an arrow that only the narrow
-  // belt shows; on the wide belt the group is just the row of buttons.
-  const more = document.createElement("span");
-  more.className = "belt-more";
-  const moreButton = document.createElement("button");
-  moreButton.type = "button";
-  moreButton.tabIndex = -1;
-  moreButton.className = "panel-button belt-more-toggle";
-  moreButton.textContent = "\u25B2";
-  moreButton.title = QUICK.map((q) => q.name).join(", ");
+  // The quick buttons are one group and are never folded: they are what
+  // the player reaches for from any category (D126, whole again in D146).
   const group = document.createElement("span");
   group.className = "belt-quick-group";
-  more.appendChild(moreButton);
-  more.appendChild(group);
-  nav.appendChild(more);
-
-  function showMore(on) {
-    root.toggleAttribute("data-belt-more", on);
-    moreButton.classList.toggle("is-on", on);
-  }
-
-  moreButton.addEventListener("click", () => showMore(!root.hasAttribute("data-belt-more")));
-  // A click anywhere else closes the pop-up.
-  document.addEventListener("pointerdown", (e) => {
-    if (root.hasAttribute("data-belt-more") && !more.contains(e.target)) {
-      showMore(false);
-    }
-  });
+  nav.appendChild(group);
 
   for (const q of QUICK) {
     const b = document.createElement("button");
@@ -139,7 +165,6 @@ const LifecastBelt = (() => {
       b.title = q.title;
     }
     b.addEventListener("click", () => {
-      showMore(false);
       if (q.send) {
         LifecastBridge.send("show-racemenu", { for: q.send });
       } else {
@@ -243,21 +268,50 @@ const LifecastBelt = (() => {
   // Measured in the E5 probe at 1280x720: the wide row needs 1456 px at 80%
   // and leaves the name field 18 px; folded, it fits up to 120%. A name
   // field under NAME_MIN counts as not fitting even when nothing overflows.
+  //
+  // The strip counts for its DECLARED minimum (the arrows plus the CSS
+  // min-width of .belt-track), never for its content: with the strip
+  // scrolling, what does not fit is clipped inside it and the belt cell's
+  // scrollWidth stops growing, so a sum of contents would call every row
+  // wide and the belt would run off the screen without ever folding (D154).
   const NAME_MIN = 80;
-  const cells = [".panel-header", ".belt-cats", ".panel-toolbar", ".panel-footer"]
+  const cells = [".panel-header", ".panel-toolbar", ".panel-footer"]
     .map((sel) => document.querySelector(sel))
     .filter((el) => el);
   const name = document.getElementById("finish-name");
 
+  // The width the belt cell needs at the least: padding, every fixed item,
+  // the two arrows (on screen or not - they come the moment the strip is
+  // clipped) and the strip's declared min-width.
+  function beltMin() {
+    const cs = getComputedStyle(nav);
+    const gap = parseFloat(cs.columnGap) || 0;
+    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    const arrow = parseFloat(getComputedStyle(prev).width) || 0;
+    const kids = Array.prototype.filter.call(nav.children, (k) =>
+      k !== track && k !== prev && k !== next && k.offsetParent !== null);
+    const fixed = kids.reduce((t, k) => t + k.getBoundingClientRect().width +
+      (parseFloat(getComputedStyle(k).marginLeft) || 0), 0);
+    return pad + fixed + 2 * arrow + (parseFloat(getComputedStyle(track).minWidth) || 0) +
+      gap * (kids.length + 2);
+  }
+
+  // The belt's grid column is told this minimum, so that the strip is what
+  // gives way when the screen is short, and never the buttons beside it.
+  const panel = document.getElementById("panel");
+
   function fit() {
+    prev.hidden = next.hidden = true;
     root.removeAttribute("data-belt-narrow");
-    const need = cells.reduce((t, el) => t + el.scrollWidth, 0);
+    const min = beltMin();
+    if (panel) {
+      panel.style.setProperty("--belt-min", min + "px");
+    }
+    const need = cells.reduce((t, el) => t + el.scrollWidth, 0) + min;
     const narrow = need > window.innerWidth ||
       (!!name && name.getBoundingClientRect().width < NAME_MIN);
     root.toggleAttribute("data-belt-narrow", narrow);
-    if (!narrow) {
-      showMore(false);
-    }
+    reach();
   }
 
   window.addEventListener("resize", fit);
