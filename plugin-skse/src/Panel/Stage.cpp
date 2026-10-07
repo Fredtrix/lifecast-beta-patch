@@ -2146,12 +2146,27 @@ namespace Lifecast::Panel::Stage
 		if (!player || !g_frame.have) {
 			return false;
 		}
-		// The SAME perpendicular Aims() projects, and the same kPairApart.
-		const double perpX = -g_frame.dirY;
-		const double perpY = g_frame.dirX;
+		// Which way is screen right is read NOW, from the camera that is drawing, and not from the frame kept when
+		// the menu opened: RaceMenu moves its camera after that (and a game camera turned to the side before the
+		// menu opened leaves it tens of degrees off the line to the player), so the opening frame's perpendicular
+		// put the copy partly ALONG the line of sight - in front of her and huge, or behind her (boot 176: 27 units
+		// along, 54 across, against 11 and 59 with this read). Two things change together, the point (the camera's
+		// real right, not the player-camera perpendicular) and the instant of the read (now, not the opening); the
+		// kept frame is the fallback when the camera gives no usable forward.
+		double rightX = g_frame.rightX;
+		double rightY = g_frame.rightY;
+		if (auto* wc = RE::Main::WorldRootCamera()) {
+			const double fx = wc->world.rotate.entry[0][0];
+			const double fy = wc->world.rotate.entry[1][0];
+			const double fl = std::sqrt(fx * fx + fy * fy);
+			if (fl > 0.05) {
+				rightX = fy / fl;
+				rightY = -fx / fl;
+			}
+		}
 		const RE::NiPoint3 at = player->GetPosition();
-		a_out = RE::NiPoint3(static_cast<float>(at.x + perpX * kPairApart),
-			static_cast<float>(at.y + perpY * kPairApart), at.z);
+		a_out = RE::NiPoint3(static_cast<float>(at.x + rightX * kPairApart),
+			static_cast<float>(at.y + rightY * kPairApart), at.z);
 		return true;
 	}
 
