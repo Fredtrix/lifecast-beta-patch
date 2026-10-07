@@ -121,6 +121,10 @@ namespace Lifecast::Panel::Stage
 			double        distance{ 0.0 };
 			double        dirX{ 0.0 };  // unit vector, player to camera, ground plane
 			double        dirY{ 0.0 };
+			// Where the camera REALLY looks, ground plane, unit. The line player-to-camera above is not it: RaceMenu
+			// leaves the figure off to one side, so the two differ by tens of degrees (47 at the IM02 opening).
+			double        rightX{ 0.0 };
+			double        rightY{ 0.0 };
 		};
 
 		struct At
@@ -246,12 +250,13 @@ namespace Lifecast::Panel::Stage
 		// trigger, no re-aim - and it stays where it is until the player moves it. The
 		// edges the page sent are kept either way, so turning it back on frames at
 		// once. Session only, back to ON when the menu closes (D157). UI thread.
-		// Where the frame rule last put the pan. The player's own sideways travel is measured from here, not from the
-		// character: the rule pans the camera off to one side to centre the figure in the narrow stage, and a limit
-		// centred on zero left a few units on that side and a long way on the other (the wall on the right).
-		double g_panHome = 0.0;
-		double PanLo() { return g_panHome - kPanMax; }
-		double PanHi() { return g_panHome + kPanMax; }
+		// The player's own sideways travel, in world units along the camera's REAL right, from where the rule (or
+		// a reset) last left it. Zero whenever the rule solves. The old limit was kept on the pan axis, which runs
+		// along the player-camera perpendicular and not along the screen: a drag to one side also moved the camera
+		// in depth, so it came out of the frame long before the limit (D158, redone in D159).
+		double g_lat = 0.0;
+		double PanLo() { return -kPanMax; }
+		double PanHi() { return kPanMax; }
 
 		bool g_lockOn = true;
 
@@ -628,6 +633,7 @@ namespace Lifecast::Panel::Stage
 #endif
 			g_target.distance = distance;
 			g_target.pan = pan;
+			g_lat = 0.0;
 			++g_pairSolves;
 			return true;
 		}
@@ -936,7 +942,7 @@ namespace Lifecast::Panel::Stage
 			}
 
 			g_target.pan = pan;
-			g_panHome = pan;
+			g_lat = 0.0;
 			g_onePredicted = predicted;
 			++g_oneSolves;
 			return true;
@@ -1075,6 +1081,22 @@ namespace Lifecast::Panel::Stage
 			}
 			f.dirX = dx / f.distance;
 			f.dirY = dy / f.distance;
+			// The world camera's forward is its first column (measured: the pose lines of the band probe, a camera
+			// looking down the room reads (-0.016, -0.995, -0.101)). Screen right is that turned a quarter, flat.
+			f.rightX = -f.dirY;
+			f.rightY = f.dirX;
+			double offLine = 0.0;
+			if (auto* wc = RE::Main::WorldRootCamera()) {
+				const double fx = wc->world.rotate.entry[0][0];
+				const double fy = wc->world.rotate.entry[1][0];
+				const double fl = std::sqrt(fx * fx + fy * fy);
+				if (fl > 0.05) {
+					f.rightX = fy / fl;
+					f.rightY = -fx / fl;
+					// Between where it looks and the line to the player: 0 when it looks straight at her.
+					offLine = std::acos(std::clamp(-(fx * f.dirX + fy * f.dirY) / fl, -1.0, 1.0)) * 57.29577951308232;
+				}
+			}
 			if (auto* node = a_menu->GetRuntimeData().camera.cameraRoot.get()) {
 				f.node = true;
 				f.cameraRot = node->local.rotate;
@@ -1090,9 +1112,9 @@ namespace Lifecast::Panel::Stage
 			g_moving.store(false, std::memory_order_relaxed);
 			g_why.clear();
 			spdlog::info("[stage] frame kept: camera {} player {} - {:.2f} apart in the ground plane, {:.2f} above; "
-						 "camera node {}",
+						 "camera node {}; it looks {:.1f} deg off the line to the player, screen right is ({:+.3f}, {:+.3f})",
 				P(f.camera), P(f.player), f.distance, static_cast<double>(f.camera.z) - f.player.z,
-				f.node ? "present" : "ABSENT (no tilt)");
+				f.node ? "present" : "ABSENT (no tilt)", offLine, f.rightX, f.rightY);
 			return true;
 		}
 
@@ -1178,7 +1200,7 @@ namespace Lifecast::Panel::Stage
 			// A world-space rotation about the horizontal axis across the line
 			// of sight, brought into the node's parent space. Which way a
 			// positive angle turns the view is read on screen, not assumed.
-			const RE::NiMatrix3 world = AxisAngle(-g_frame.dirY, g_frame.dirX, 0.0, g_at.tilt);
+			const RE::NiMatrix3 world = AxisAngle(g_frame.rightX, g_frame.rightY, 0.0, g_at.tilt);
 			RE::NiMatrix3       local;
 			if (auto* parent = node->parent) {
 				const RE::NiMatrix3 p = parent->world.rotate;
@@ -1202,7 +1224,7 @@ namespace Lifecast::Panel::Stage
 				return { { "ready", false }, { "why", g_why.empty() ? std::string("not measured yet") : g_why } };
 			}
 			json state = { { "ready", true }, { "tilt", g_frame.node }, { "turn", g_target.turn },
-				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_target.pan },
+				{ "distance", g_target.distance }, { "lift", g_target.lift }, { "pan", g_lat }, { "panAxis", g_target.pan },
 				{ "tiltDeg", g_target.tilt }, { "free", g_free }, { "forced", g_pairForced }, { "lock", g_lockOn },
 				// What the camera is framing into, so the page - and the bench
 				// driving it - can read the rule's state instead of assuming it.
@@ -1254,6 +1276,74 @@ namespace Lifecast::Panel::Stage
 			g_haveNative = GetPoint(a_cg, "GetRaceSexCameraPos", g_native);
 			spdlog::info("[stage] RaceMenu's own camera kept before the free one: {} ({:.2f}, {:.2f}, {:.2f})",
 				g_haveNative ? "read" : "NOT readable", g_native.x, g_native.y, g_native.z);
+		}
+
+		// A sideways move of a_by world units along the camera's REAL right (screen left/right, flat), written as
+		// the two numbers the camera is built from: the pan axis is the player-camera perpendicular, and when the
+		// camera does not look at the player along that line one unit sideways is a unit of pan AND some distance.
+		// The travel is limited on the screen axis, from where the rule last left it, and a limit that distance
+		// would cross stops the move there instead of bending it.
+		void MoveSideways(double a_by)
+		{
+			const double a = g_frame.rightX * g_frame.dirX + g_frame.rightY * g_frame.dirY;
+			const double b = -g_frame.rightX * g_frame.dirY + g_frame.rightY * g_frame.dirX;
+			double       to = g_lat + a_by;
+			if (to < PanLo() || to > PanHi()) {
+				const double cut = std::clamp(to, PanLo(), PanHi());
+				spdlog::info("[stage] pan target {:.2f} is outside {:.2f} .. {:.2f} - clamped to {:.2f}", to, PanLo(), PanHi(), cut);
+				to = cut;
+			}
+			double by = to - g_lat;
+			// The guard is on how far the camera really is from the character on the ground, not on the distance
+			// coordinate: that one runs along the player-camera line, and a move to the right of a camera that is not
+			// looking along that line shortens it without bringing the camera any nearer (boot 173: the right side
+			// stopped after 17 units, against 80 on the left). A move may not end nearer than the nearest zoom
+			// allows, nor farther than the farthest, unless it is already out there and moving back in.
+			const double now = std::hypot(g_target.distance, g_target.pan);
+			const auto   fine = [&](double a_by) {
+				const double g = std::hypot(g_target.distance + a * a_by, g_target.pan + b * a_by);
+				return (g >= DistanceMin() || g >= now) && (g <= kMaxDistance || g <= now);
+			};
+			if (!fine(by)) {
+				double lo = 0.0;
+				double hi = 1.0;
+				for (int i = 0; i < 24; ++i) {
+					const double mid = (lo + hi) / 2.0;
+					(fine(by * mid) ? lo : hi) = mid;
+				}
+				spdlog::info("[stage] sideways: {:.2f} units would take the camera {:.2f} from the character, outside {:.2f} .. {:.2f} - "
+							 "the move stops at {:.2f}",
+					by, std::hypot(g_target.distance + a * by, g_target.pan + b * by), DistanceMin(), kMaxDistance, by * lo);
+				by *= lo;
+			}
+			g_target.distance += a * by;
+			g_target.pan += b * by;
+			g_lat += by;
+		}
+
+		// The frame is read once when the menu opens, and that reading can be stale (V099) or simply a camera that
+		// RaceMenu has moved since: its own zoom, and above all a game camera that was turned to the side before
+		// the menu opened (the author's test of 2026-10-06 - the kept frame was the side view, the camera RaceMenu
+		// actually had was 100 units away on the other side, and everything the free camera was built on, the
+		// direction, the height and the rotation the tilt starts from, was the old one). So it is read again at the
+		// moment the free camera takes over. The body's turn is the body's and is kept as it was.
+		void FrameAgain(RE::RaceSexMenu* a_menu, RE::GFxValue& a_cg, const char* a_why)
+		{
+			const Frame before = g_frame;
+			const At    atBefore = g_at;
+			const At    targetBefore = g_target;
+			if (!Capture(a_menu, a_cg)) {
+				spdlog::warn("[stage] {}: the frame could not be read again - the one from the opening stays", a_why);
+				return;
+			}
+			g_frame.body = before.body;
+			g_at.turn = atBefore.turn;
+			g_target.turn = targetBefore.turn;
+			g_lat = 0.0;
+			g_reread = true;
+			spdlog::info("[stage] {}: the frame was read again as the free camera takes over - camera ({:.2f}, {:.2f}) was ({:.2f}, "
+						 "{:.2f}), {:.2f} from the player was {:.2f}",
+				a_why, g_frame.camera.x, g_frame.camera.y, before.camera.x, before.camera.y, g_frame.distance, before.distance);
 		}
 
 		// Handing the camera back to RaceMenu from the free one, the one write the
@@ -1360,6 +1450,7 @@ namespace Lifecast::Panel::Stage
 				g_pairForced = true;
 				g_freeBefore = g_free;
 				if (!g_free) {
+					FrameAgain(menu.get(), cg, "comparison opens");
 					KeepNative(cg);
 				}
 				g_free = true;
@@ -1370,6 +1461,7 @@ namespace Lifecast::Panel::Stage
 					spdlog::info("[stage] mode change ignored: the comparison holds the free camera");
 				} else if ((p.mode == 2) != g_free) {
 					if (p.mode == 2) {
+						FrameAgain(menu.get(), cg, "free camera on");
 						KeepNative(cg);
 					}
 					g_free = p.mode == 2;
@@ -1425,7 +1517,7 @@ namespace Lifecast::Panel::Stage
 
 			// The move goes on the target, and the clamp with it.
 			if (p.reset) {
-				g_target = At{}; g_panHome = 0.0;
+				g_target = At{}; g_lat = 0.0;
 				g_target.distance = g_frame.distance;
 			}
 			if (p.turn != 0.0) {
@@ -1438,7 +1530,7 @@ namespace Lifecast::Panel::Stage
 				g_target.lift = ClampSaid(g_target.lift + p.lift, LiftMin(), kLiftUp, "height");
 			}
 			if (p.pan != 0.0) {
-				g_target.pan = ClampSaid(g_target.pan + p.pan, PanLo(), PanHi(), "pan");
+				MoveSideways(p.pan);
 			}
 			if (p.tilt != 0.0 && g_frame.node) {
 				g_target.tilt = ClampSaid(g_target.tilt + p.tilt, -kTiltMax, kTiltMax, "tilt");
@@ -1458,7 +1550,7 @@ namespace Lifecast::Panel::Stage
 				}
 				g_pairOn = false;
 				g_pairSolves = 0;
-				g_target = At{}; g_panHome = 0.0;
+				g_target = At{}; g_lat = 0.0;
 				g_target.distance = g_frame.distance;
 				if (g_pairForced) {
 					g_pairForced = false;
@@ -1510,7 +1602,7 @@ namespace Lifecast::Panel::Stage
 				g_oneSolves = 0;
 				g_oneTracks = 0;
 				if (g_free) {
-					g_target = At{}; g_panHome = 0.0;
+					g_target = At{}; g_lat = 0.0;
 					g_target.distance = g_frame.distance;
 				}
 			}
@@ -1924,11 +2016,14 @@ namespace Lifecast::Panel::Stage
 					const At before = g_target;
 					g_target.distance = ClampSaid(g_target.distance, DistanceMin(), kMaxDistance, "distance");
 					g_target.lift = ClampSaid(g_target.lift, LiftMin(), kLiftUp, "height");
-					g_target.pan = ClampSaid(g_target.pan, PanLo(), PanHi(), "pan");
+					const double latBefore = g_lat;
+					if (g_lat < PanLo() || g_lat > PanHi()) {
+						MoveSideways(std::clamp(g_lat, PanLo(), PanHi()) - g_lat);
+					}
 					g_target.tilt = ClampSaid(g_target.tilt, -kTiltMax, kTiltMax, "tilt");
 					SaidLimit("maxDistance", before.distance, g_target.distance);
 					SaidLimit("liftUp", before.lift, g_target.lift);
-					SaidLimit("panMax", before.pan, g_target.pan);
+					SaidLimit("panMax", latBefore, g_lat);
 					SaidLimit("tiltMax", before.tilt, g_target.tilt);
 					// A pairing already on the screen was solved with the OLD
 					// numbers, so it is solved again. The twin herself does not
@@ -2002,7 +2097,7 @@ namespace Lifecast::Panel::Stage
 					}
 					g_frame = Frame{};
 					g_at = At{};
-					g_target = At{}; g_panHome = 0.0;
+					g_target = At{}; g_lat = 0.0;
 					g_moving.store(false, std::memory_order_relaxed);
 					g_why.clear();
 					g_pairOn = false;
