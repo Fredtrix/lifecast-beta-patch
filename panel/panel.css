@@ -506,6 +506,14 @@ select.panel-button option {
   border-left: none;
 }
 
+/* Hidden, not disabled, while no category is open: the field cannot be used
+   with the belt closed, so it is not on screen. Any category, All, a search
+   in progress or Changed sets data-belt-open and brings it back. The name
+   field in the footer is a different control and is not touched. */
+html:not([data-belt-open]) .finder {
+  display: none;
+}
+
 .finder .preset-field {
   flex: 1;
   min-width: 0;
@@ -753,6 +761,55 @@ html[data-belt-all] .section.is-flat .swatch-chip {
   transform: rotate(45deg);
 }
 
+/* The form of All (F22, D211): belt.js turns the sections and their wrappers
+   into display:contents and gives every control an `order`, so that #sections
+   is one flex list in RaceMenu's order. A colour is ONE line: the head (name
+   and diamond) and the Intensity row side by side; the red, green, blue rows
+   and the swatches are not in this view. */
+html[data-belt-all] #sections {
+  display: flex;
+  flex-flow: row wrap;
+  align-content: flex-start;
+}
+
+html[data-belt-all] #sections > .group-heading {
+  display: none;
+}
+
+html[data-belt-all] #sections .all-wrap,
+html[data-belt-all] #sections > .section.is-flat.all-wrap,
+html[data-belt-all] #sections > .section.is-flat.all-wrap > .section-body.all-wrap {
+  display: contents;
+}
+
+html[data-belt-all] #sections .all-item {
+  flex: 0 0 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+html[data-belt-all] #sections .all-hide {
+  display: none;
+}
+
+html[data-belt-all] #sections .all-line-head {
+  flex: 0 0 40%;
+  margin: 0 0 2px;
+  padding: 0;
+  border-top: none;
+  font-weight: inherit;
+}
+
+html[data-belt-all] #sections .all-line-slider {
+  flex: 0 0 60%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "track value";
+}
+
+html[data-belt-all] #sections .all-line-slider .slider-name {
+  display: none;
+}
+
 .swatch-chip {
   display: inline-block;
   width: 14px;
@@ -882,8 +939,12 @@ html[data-belt-all] .section.is-flat .swatch-chip {
   color: var(--text-dim);
 }
 
+/* max-content rows: the items clip (overflow: hidden), so their automatic
+   minimum height is 0, and under this max-height a long list's rows were
+   squeezed to the items' padding - 1308 hairs read as a blank, scrolling box. */
 .listpop-items {
   display: grid;
+  grid-auto-rows: max-content;
   max-height: 14em;
   overflow-y: auto;
   border: 1px solid var(--panel-border);

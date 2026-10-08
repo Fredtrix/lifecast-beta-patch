@@ -217,8 +217,252 @@ const LifecastBelt = (() => {
       (changed && changed.getAttribute("aria-pressed") === "true");
   }
 
+  // ----- the form of All (F22, D211) --------------------------------------
+  // RaceMenu's ALL, as a form: one line per slider (name, slider, value), a
+  // colour as ONE line with a diamond, every face slider under its full name.
+  // The first 46 lines follow RaceMenu's order and names; what is only ours
+  // (body morphs, scales, overlays...) comes after them, in the order of the
+  // sections, under its section's head. The parity is of FORM, not of SET
+  // (D211): the native-only $ rows are out of v1 (D196) and are not here.
+  //
+  // Nothing is moved: the sections and their wrappers become display:contents
+  // so that every control is a flex item of #sections, and `order` sorts
+  // them. A control is found by its section key and its (first-text) name.
+  // Leaving All takes every class, order and renamed text back.
+  const NATIVE = [
+    ["sex"],
+    ["face:RacePresets", "Preset", "Presets"],
+    ["head", "Skin Tone"],
+    ["look:Body", "Weight"],
+    ["look:Features", "Complexion"],
+    ["pick", "Dirt", "Dirt"],
+    ["head", "Dirt", "Dirt Color"],
+    ["look:Features", "Scar", "Scars"],
+    ["pick", "War Paint", "War Paint"],
+    ["head", "War Paint", "War Paint Color"],
+    ["look:Hair", "Hair"],
+    ["look:Hair", "Hair Color"],
+    ["face:Eyes", "Eye Shape"],
+    ["face:Eyes", "Eye Color"],
+    ["face:Eyes", "Height", "Eye Height"],
+    ["face:Eyes", "Width", "Eye Width"],
+    ["face:Eyes", "Depth", "Eye Depth"],
+    ["head", "Eyeliner", "Eyeliner Color"],
+    ["head", "Upper Eye Socket", "Eye Shadow"],
+    ["head", "Lower Eye Socket", "Eye Tint"],
+    ["face:Brows", "Brow Type"],
+    ["face:Brows", "Height", "Brow Height"],
+    ["face:Brows", "Width", "Brow Width"],
+    ["face:Brows", "Forward", "Brow Forward"],
+    ["face:Nose", "Nose Type"],
+    ["face:Nose", "Height", "Nose Height"],
+    ["face:Nose", "Length", "Nose Length"],
+    ["face:Jaw", "Width", "Jaw Width"],
+    ["face:Jaw", "Height", "Jaw Height"],
+    ["face:Jaw", "Forward", "Jaw Forward"],
+    ["face:Cheekbones", "Height", "Cheekbone Height"],
+    ["face:Cheekbones", "Width", "Cheekbone Width"],
+    ["head", "Cheeks", "Cheek Color"],
+    ["head", "Laugh Lines"],
+    ["head", "Lower Cheeks", "Cheek Color Lower"],
+    ["head", "Nose", "Nose Color"],
+    ["head", "Chin", "Chin Color"],
+    ["head", "Neck", "Neck Color"],
+    ["head", "Forehead", "Forehead Color"],
+    ["face:Mouth", "Mouth Shape"],
+    ["face:Mouth", "Height", "Mouth Height"],
+    ["face:Mouth", "Forward", "Mouth Forward"],
+    ["face:Chin", "Width", "Chin Width"],
+    ["face:Chin", "Length", "Chin Length"],
+    ["face:Chin", "Forward", "Chin Forward"],
+    ["head", "Lips", "Lip Color"],
+  ];
+  const TAIL = 1000;
+  const shaped = { renamed: [], els: [] };
+
+  // The name a row or head goes by: its own first text, never the "list"
+  // chip or the colour chip that sit beside it in the same span.
+  function nameNode(el) {
+    const n = el.querySelector(".slider-name");
+    const t = n && n.firstChild;
+    return t && t.nodeType === 3 ? t : null;
+  }
+
+  function nameOf(el) {
+    const t = nameNode(el);
+    return t ? t.data.trim() : "";
+  }
+
+  function rename(el, to) {
+    const t = nameNode(el);
+    if (t && t.data !== to) {
+      shaped.renamed.push([t, t.data]);
+      t.data = to;
+    }
+  }
+
+  function unshape() {
+    for (const [t, old] of shaped.renamed) {
+      t.data = old;
+    }
+    for (const el of shaped.els) {
+      el.classList.remove("all-wrap", "all-item", "all-hide", "all-line-head", "all-line-slider");
+      el.style.removeProperty("order");
+    }
+    shaped.renamed = [];
+    shaped.els = [];
+  }
+
+  function mark(el, ...classes) {
+    el.classList.add(...classes);
+    if (shaped.els.indexOf(el) < 0) {
+      shaped.els.push(el);
+    }
+  }
+
+  // The controls of a section, through the bare wrapper divs that tints.js
+  // and face.js keep in a section body.
+  function itemsOf(section) {
+    const out = [];
+    const walk = (parent) => {
+      for (const c of parent.children) {
+        if (c.tagName === "DIV" && c.className === "") {
+          mark(c, "all-wrap");
+          walk(c);
+        } else {
+          out.push(c);
+        }
+      }
+    };
+    const body = section.querySelector(":scope > .section-body");
+    if (body) {
+      mark(body, "all-wrap");
+      walk(body);
+    }
+    return out;
+  }
+
+  function shape() {
+    unshape();
+    const taken = new Set();
+    const flat = sections().filter((s) => s.classList.contains("is-flat"));
+    // Everything that can be named, per section, in document order.
+    const lines = []; // { sec, el, name, head, block }
+    for (const s of flat) {
+      mark(s, "all-wrap");
+      const items = itemsOf(s);
+      let block = null;
+      for (const el of items) {
+        if (el.classList.contains("tint-head")) {
+          block = { head: el, label: nameOf(el), members: [] };
+        } else if (block && !el.classList.contains("slider") &&
+                   !el.classList.contains("picker") && !el.classList.contains("swatch-grid")) {
+          block = null;
+        }
+        lines.push({ sec: s, el: el, name: el.classList.contains("slider") ? nameOf(el) : "",
+          block: block });
+        if (block && el !== block.head) {
+          block.members.push(el);
+        }
+      }
+    }
+    const slot = (n) => (n + 1) * 10;
+    const blockOf = (label) => {
+      const l = lines.find((x) => x.block && x.el === x.block.head && x.block.label === label);
+      return l ? l.block : null;
+    };
+    NATIVE.forEach((spec, i) => {
+      const [kind, key, as] = spec;
+      const at = slot(i);
+      if (kind === "sex") {
+        const s = host.querySelector(':scope > .section[data-key="sex"]');
+        if (s) {
+          s.style.order = String(at);
+          mark(s, "all-item");
+          taken.add(s);
+        }
+      } else if (kind === "head" || kind === "pick") {
+        const block = blockOf(key);
+        if (!block) {
+          return;
+        }
+        if (kind === "pick") {
+          const row = block.members.find((m) => m.classList.contains("slider") && nameOf(m) === "Texture");
+          if (row) {
+            rename(row, as);
+            row.style.order = String(at);
+            mark(row, "all-item");
+            taken.add(row);
+          }
+          return;
+        }
+        // The colour line: the head (name and diamond) and the Intensity
+        // row side by side; the picker opens under them.
+        rename(block.head, as || key);
+        block.head.style.order = String(at);
+        mark(block.head, "all-item", "all-line-head");
+        taken.add(block.head);
+        for (const m of block.members) {
+          const n = m.classList.contains("slider") ? nameOf(m) : "";
+          if (n === "Intensity") {
+            m.style.order = String(at + 1);
+            mark(m, "all-item", "all-line-slider");
+          } else if (m.classList.contains("picker")) {
+            m.style.order = String(at + 2);
+            mark(m, "all-item");
+          } else if (n === "Red" || n === "Green" || n === "Blue" ||
+                     m.classList.contains("swatch-grid")) {
+            mark(m, "all-hide");
+          } else {
+            continue; // Catalog: a line of ours, goes with the tail
+          }
+          taken.add(m);
+        }
+      } else {
+        const l = lines.find((x) => x.sec.dataset.key === kind && x.name === key && !taken.has(x.el));
+        if (l) {
+          if (as) {
+            rename(l.el, as);
+          }
+          l.el.style.order = String(at);
+          mark(l.el, "all-item");
+          taken.add(l.el);
+        }
+      }
+    });
+    // The rest, after the 46, in the order of the sections; a section's head
+    // stands before its first control, and is gone when it has none left.
+    let n = 0;
+    for (const s of flat) {
+      const rest = lines.filter((x) => x.sec === s && !taken.has(x.el));
+      const head = s.querySelector(":scope > .section-head");
+      if (head) {
+        mark(head, "all-item");
+        if (rest.length === 0) {
+          mark(head, "all-hide");
+        } else {
+          head.style.order = String(TAIL + n * 10);
+          n += 1;
+        }
+      }
+      for (const x of rest) {
+        x.el.style.order = String(TAIL + n * 10);
+        mark(x.el, "all-item");
+        n += 1;
+      }
+    }
+    for (const s of sections()) {
+      if (!s.classList.contains("is-flat") && !s.classList.contains("is-off") && !taken.has(s)) {
+        s.style.order = String(TAIL + n * 10);
+        mark(s, "all-item");
+        n += 1;
+      }
+    }
+  }
+
   function apply() {
     ui.results = filtering();
+    unshape();
     const wide = ui.all || ui.results;
     const region = !wide && !!ui.cat;
     if (region && ui.region) {
@@ -249,6 +493,9 @@ const LifecastBelt = (() => {
         el.hidden = !host.querySelector(':scope > .section[data-key="' + q.key + '"]');
         el.classList.toggle("is-on", region && ui.cat === q.cat && ui.region === q.key);
       }
+    }
+    if (ui.all) {
+      shape();
     }
     fit();
     root.toggleAttribute("data-belt-open", wide || region);
@@ -342,6 +589,26 @@ const LifecastBelt = (() => {
       apply();
     });
   }).observe(host, { childList: true });
+
+  // All is shaped from what is there: a control that arrives later (the
+  // tint layers and lists come on the DLL's own time) must be shaped too.
+  // Only elements coming or going count; a value's text changing on every
+  // drag frame does not.
+  let reshape = false;
+  new MutationObserver((records) => {
+    if (!ui.all || reshape || !records.some((r) =>
+      Array.prototype.some.call(r.addedNodes, (n) => n.nodeType === 1) ||
+      Array.prototype.some.call(r.removedNodes, (n) => n.nodeType === 1))) {
+      return;
+    }
+    reshape = true;
+    requestAnimationFrame(() => {
+      reshape = false;
+      if (ui.all) {
+        shape();
+      }
+    });
+  }).observe(host, { childList: true, subtree: true });
 
   if (search) {
     search.addEventListener("input", apply);
