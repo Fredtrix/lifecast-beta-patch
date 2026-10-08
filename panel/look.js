@@ -149,6 +149,26 @@
     });
   }
 
+  // A free hair colour is not one row: the Hair Color row then rests on a
+  // stand-in 0 (marked, so the portrait skips it) and the colour lives here.
+  // Null while the colour is one of the race's, which the row holds.
+  LifecastControls.addPortraitPart("hair-rgb", {
+    get: () => {
+      const e = rows.get("hair-color");
+      return e && e.index < 0 && e.color ? e.color : null;
+    },
+    restore: (hex) => {
+      const e = rows.get("hair-color");
+      if (!e || typeof hex !== "string") {
+        return;
+      }
+      e.color = hex;
+      e.chip.style.background = hex;
+      e.picker.refresh();
+      send("hair-rgb", hex, true);
+    },
+  });
+
   for (const s of SECTIONS) {
     const section = LifecastControls.section(s.label || s.title);
     for (const [key, label] of s.controls) {
@@ -195,6 +215,7 @@
       if (c.index < 0) {
         // Enabled, but showing that the current value is not a list entry.
         entry.row.set(0);
+        entry.row.mark(true);
         entry.row.valueEl.textContent = "--";
       } else {
         entry.row.set(c.index);

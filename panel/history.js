@@ -55,6 +55,10 @@ const LifecastHistory = (() => {
     return line;
   }
 
+  function shown(a_entry, a_value) {
+    return typeof a_entry.describe === "function" ? a_entry.describe(a_value) : a_value;
+  }
+
   function changed() {
     listeners.forEach((fn) => {
       try {
@@ -65,7 +69,10 @@ const LifecastHistory = (() => {
     });
   }
 
-  // a_entry: { label, before, after, apply(value) }
+  // a_entry: { label, before, after, apply(value), describe(value)? }
+  // before/after may be any value apply() understands - a number for a
+  // slider, a portrait of the whole face for a race preset (F27); describe()
+  // is what the log prints in place of a value too big to print.
   // Returns whether it became an entry. A gesture that ended where it
   // started is not one, and neither is a gesture on a control that never
   // received a value to start from.
@@ -88,7 +95,7 @@ const LifecastHistory = (() => {
       entries.shift();
     }
     at = entries.length;
-    note("record", { label: a_entry.label, from: a_entry.before, to: a_entry.after });
+    note("record", { label: a_entry.label, from: shown(a_entry, a_entry.before), to: shown(a_entry, a_entry.after) });
     changed();
     return true;
   }
@@ -102,7 +109,7 @@ const LifecastHistory = (() => {
     } finally {
       applying = false;
     }
-    note(a_what, { label: a_entry.label, to: a_value });
+    note(a_what, { label: a_entry.label, to: shown(a_entry, a_value) });
   }
 
   function undo() {
@@ -129,6 +136,22 @@ const LifecastHistory = (() => {
     return true;
   }
 
+  // Back to where the panel opened (F28, D192): every entry the history
+  // holds, newest first, each through its own undo(). Nothing is thrown away,
+  // so Redo walks the same way forward and a misclick costs nothing.
+  function undoAll() {
+    if (at === 0) {
+      note("undo-all-empty");
+      return false;
+    }
+    const steps = at;
+    while (at > 0) {
+      undo();
+    }
+    note("undo-all", { steps: steps });
+    return true;
+  }
+
   function clear(a_why) {
     if (entries.length === 0) {
       return;
@@ -142,13 +165,17 @@ const LifecastHistory = (() => {
   function wire() {
     const undoButton = document.getElementById("undo");
     const redoButton = document.getElementById("redo");
-    if (!undoButton || !redoButton) {
+    const undoAllButton = document.getElementById("undoall");
+    if (!undoButton || !redoButton || !undoAllButton) {
       return;
     }
     undoButton.addEventListener("click", () => undo());
     redoButton.addEventListener("click", () => redo());
+    undoAllButton.addEventListener("click", () => undoAll());
     const paint = () => {
       undoButton.disabled = at === 0;
+      undoAllButton.disabled = at === 0;
+      undoAllButton.title = at === 0 ? "Nothing to undo" : "Undo everything since the panel opened";
       redoButton.disabled = at >= entries.length;
       undoButton.title = at === 0 ? "Nothing to undo" : "Undo " + entries[at - 1].label;
       redoButton.title = at >= entries.length ? "Nothing to redo" : "Redo " + entries[at].label;
@@ -171,6 +198,7 @@ const LifecastHistory = (() => {
     record: record,
     undo: undo,
     redo: redo,
+    undoAll: undoAll,
     clear: clear,
     // For a measurement from outside the page: how many entries can still
     // be undone, how many exist, and what happened in order.

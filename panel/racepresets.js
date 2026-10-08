@@ -40,6 +40,9 @@
   // when the race's list changes: index 3 of another race is another face.
   let applied = null;
   let listKey = "";
+  // The portrait of the face taken before the first preset of the gesture in
+  // progress (F27), handed to the history entry when the gesture ends.
+  let gesture = null;
 
   const section = LifecastControls.section("Face Presets");
 
@@ -53,6 +56,11 @@
     // Arrows, list rows and the end of a drag all arrive here; the drag
     // itself is also heard below, step by step.
     send: () => step(),
+    // A race preset rewrites the whole face, so the generic entry (the older
+    // INDEX, replayed) would redraw the older preset over every edit made
+    // since. The entry is a portrait instead: see entryFor().
+    portrait: false,
+    entry: (before, after) => entryFor(before, after),
   });
   const list = LifecastList.create({ row: row });
   const nameEl = LifecastControls.el("div", "part-name");
@@ -102,9 +110,48 @@
     if (i === applied) {
       return;
     }
+    if (gesture === null) {
+      gesture = LifecastControls.portrait();
+    }
     applied = i;
     status.textContent = "applying " + labelFor(i) + "...";
     LifecastBridge.send("race-preset-apply", { i: i });
+  }
+
+  // The history entry for one finished gesture on the Preset row. Undo puts
+  // the portrait back (and the row on the index it held) and sends no preset;
+  // redo sends the preset again, which is a pure function of the index, on
+  // the very face the undo left (the stack hands redo back only that face).
+  // The portrait lives in the entry, not in history.js: the history keeps its
+  // one-control contract, and an entry may hold whatever apply() understands.
+  function entryFor(before, after) {
+    const portrait = gesture;
+    gesture = null;
+    if (portrait === null) {
+      return null;
+    }
+    return {
+      label: "Preset",
+      before: { index: before, portrait: portrait },
+      after: after,
+      describe: (v) =>
+        typeof v === "number" ? v : { index: v.index, portrait: v.portrait.rows.length + " rows" },
+      apply: (v) => {
+        if (typeof v === "number") {
+          row.set(v);
+          showName();
+          applied = v;
+          status.textContent = "applying " + labelFor(v) + "...";
+          LifecastBridge.send("race-preset-apply", { i: v });
+          return;
+        }
+        row.set(v.index);
+        showName();
+        applied = null;
+        const n = LifecastControls.restorePortrait(v.portrait);
+        status.textContent = "undone: " + String(n) + " values put back";
+      },
+    };
   }
 
   // The range reports every step of a drag; the row's own send is paced for
@@ -125,7 +172,7 @@
     if (own && own.contains(t)) {
       return;
     }
-    if (t.closest("#sections") || t.closest("#undo, #redo")) {
+    if (t.closest("#sections") || t.closest("#undo, #redo, #undoall")) {
       applied = null;
     }
   }

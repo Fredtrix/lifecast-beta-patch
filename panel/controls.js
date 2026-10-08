@@ -14,6 +14,15 @@
 const LifecastControls = (() => {
   const SEND_GAP_MS = 50;
 
+  // The portrait (F27): what every edit row holds right now, so a step that
+  // rewrites the whole face (a race preset) can be undone by putting the
+  // values back instead of by replaying the older step. The set is the rows
+  // THEMSELVES, not a list of fields: a control added later is in the
+  // portrait the day it is built, with no line here to forget. A part is a
+  // value that is not one row (a free hair colour): { get(), restore(v) }.
+  const portraitRows = new Set();
+  const portraitParts = new Map();
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) {
@@ -320,6 +329,9 @@ const LifecastControls = (() => {
 
   // a_opts: { label, min, max, step, button, format(v), send(v, final) }
   // button is how far one press of < or > moves the value.
+  // Optional: portrait:false keeps the row out of the portrait; entry(before,
+  // after, put) builds the history entry in place of the default one (or
+  // returns null for none) - for a row whose step is not a value to put back.
   function row(a_opts) {
     const wrap = el("div", "slider");
     const name = el("span", "slider-name", a_opts.label);
@@ -348,7 +360,7 @@ const LifecastControls = (() => {
     wrap.appendChild(value);
     wrap.appendChild(track);
 
-    const state = { dragging: false, timer: null, lastSent: 0, hasInitial: false, initial: null, last: null };
+    const state = { dragging: false, timer: null, lastSent: 0, hasInitial: false, initial: null, last: null, fake: false };
     wrap.dataset.changed = "0";
 
     function show(v) {
@@ -371,28 +383,32 @@ const LifecastControls = (() => {
     // keeps the value from before the hand touched it: while dragging()
     // is true the sections stop calling set(), which is what makes the
     // "before" survive the echoes that arrive mid-drag.
+    // The same write the player's own gesture would do, with another value:
+    // set the input, show it, and send it as final.
+    function put(v) {
+      if (input.disabled) {
+        return false;
+      }
+      input.value = String(v);
+      show(Number(input.value));
+      state.last = Number(input.value);
+      send(true);
+      return true;
+    }
+
     function commit(a_v) {
       const before = state.last;
       state.last = a_v;
       if (typeof before !== "number") {
         return;
       }
-      LifecastHistory.record({
-        label: a_opts.label,
-        before: before,
-        after: a_v,
-        // The same write the player's own gesture would do, with the older
-        // value: set the input, show it, and send it as final.
-        apply: (v) => {
-          if (input.disabled) {
-            return;
-          }
-          input.value = String(v);
-          show(Number(input.value));
-          state.last = Number(input.value);
-          send(true);
-        },
-      });
+      const entry =
+        typeof a_opts.entry === "function"
+          ? a_opts.entry(before, a_v, put)
+          : { label: a_opts.label, before: before, after: a_v, apply: put };
+      if (entry) {
+        LifecastHistory.record(entry);
+      }
     }
 
     input.addEventListener("input", () => {
@@ -432,7 +448,7 @@ const LifecastControls = (() => {
     down.addEventListener("click", () => stepBy(-1));
     up.addEventListener("click", () => stepBy(1));
 
-    return {
+    const handle = {
       el: wrap,
       input: input,
       // The player's hand wins over a value from before it moved.
@@ -448,6 +464,7 @@ const LifecastControls = (() => {
         input.disabled = off;
         down.disabled = off;
         up.disabled = off;
+        state.fake = false;
         if (off) {
           value.textContent = "--";
           state.last = null;
@@ -479,10 +496,65 @@ const LifecastControls = (() => {
         input.min = String(a_min);
         input.max = String(a_max);
       },
+      // The value just set() stands in for one the row cannot hold (a list
+      // that shows "--" and rests on 0): the portrait must not keep it.
+      mark(a_fake) {
+        state.fake = !!a_fake;
+      },
       // Replaces the value text with arbitrary content (a colour chip).
       valueEl: value,
       changed: () => wrap.dataset.changed === "1",
     };
+    if (a_opts.portrait !== false) {
+      portraitRows.add({
+        el: wrap,
+        snapshot: () => (input.disabled || state.fake ? null : Number(input.value)),
+        // false when there is nothing to do: the row already holds it.
+        restore: (v) => (typeof v !== "number" || input.disabled || Number(input.value) === v ? false : put(v)),
+      });
+    }
+    return handle;
+  }
+
+  function addPortraitPart(a_key, a_part) {
+    portraitParts.set(a_key, a_part);
+  }
+
+  // Rows that left the page (a tint layer list rebuilt) are dropped here.
+  function portrait() {
+    const rows = [];
+    for (const r of portraitRows) {
+      if (!r.el.isConnected) {
+        portraitRows.delete(r);
+        continue;
+      }
+      rows.push([r, r.snapshot()]);
+    }
+    const parts = {};
+    for (const [key, part] of portraitParts) {
+      parts[key] = part.get();
+    }
+    return { rows: rows, parts: parts };
+  }
+
+  // Puts back only what differs from the portrait. Called after every step
+  // newer than the portrait was undone, so what differs is what the step
+  // changed. Returns how many values were written.
+  function restorePortrait(a_portrait) {
+    let written = 0;
+    for (const [r, v] of a_portrait.rows) {
+      if (v !== null && r.el.isConnected && r.restore(v)) {
+        written += 1;
+      }
+    }
+    for (const [key, part] of portraitParts) {
+      const want = a_portrait.parts[key];
+      if (want !== undefined && JSON.stringify(want) !== JSON.stringify(part.get())) {
+        part.restore(want);
+        written += 1;
+      }
+    }
+    return written;
   }
 
   // Opens the section named a_key if it is collapsed, and scrolls it into
@@ -506,5 +578,6 @@ const LifecastControls = (() => {
     return true;
   }
 
-  return { el: el, section: section, mount: mount, setOrder: setOrder, setGroups: setGroups, row: row, reveal: reveal };
+  return { el: el, section: section, mount: mount, setOrder: setOrder, setGroups: setGroups, row: row, reveal: reveal,
+    portrait: portrait, restorePortrait: restorePortrait, addPortraitPart: addPortraitPart };
 })();
