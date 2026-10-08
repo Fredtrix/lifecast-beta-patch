@@ -33,8 +33,9 @@ namespace Lifecast::Edit::Freeze
 		Saved                                 g_saved;
 		std::chrono::steady_clock::time_point g_lastPin{};
 
-		// Event name, label. A candidate list: an entry stays only if the
-		// graph accepted it AND the character really moved (MEDIDO-E12).
+		// Event name, label. Every entry was played on the player: the graph
+		// answered true AND the character really moved. An event that answers
+		// true and moves nothing is worse than one that is absent.
 		struct PoseEntry
 		{
 			const char* event;
@@ -51,14 +52,10 @@ namespace Lifecast::Edit::Freeze
 			{ "IdleExamine", "Examine" },
 			{ "IdleStudy", "Study" },
 			{ "IdleLookFar", "Look far" },
-			{ "IdleStretching", "Stretch" },
-			{ "IdleBowHeadAsKing", "Bow head" },
 			{ "IdleSurrender", "Surrender" },
 			{ "IdlePray", "Pray" },
 			{ "IdleBracedPain", "Braced" },
 			{ "IdleSilentBow", "Silent bow" },
-			{ "IdleNervous", "Nervous" },
-			{ "IdleWave", "Wave" },
 		};
 
 		void PushFreeze(const char* a_why)
