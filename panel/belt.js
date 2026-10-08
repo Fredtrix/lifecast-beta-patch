@@ -5,7 +5,8 @@
 // the categories, search and the panel's buttons. Choosing a category opens a
 // small panel anchored over the belt's left end, showing ONE region (one
 // section) of it, with the sister regions as chips at its head. All shows
-// every section; search and Changed show every section that matches. The
+// every section, laid out as one running list (name, slider, value, one line
+// each); search and Changed show every section that matches. The
 // categories are groups.js's groups - this file knows none by name.
 //
 // Where things live:
@@ -227,6 +228,10 @@ const LifecastBelt = (() => {
       const on = region && s.dataset.key === ui.region;
       s.classList.toggle("is-region", on);
       s.classList.toggle("is-off", region ? !on : !wide);
+      // All reads as one running list, as RaceMenu's ALL does (D184): the
+      // sections that hold sliders are laid open, one line per slider. A
+      // section with no slider (Presets, Body...) keeps its own look.
+      s.classList.toggle("is-flat", ui.all && !!s.querySelector(".slider"));
     }
     for (const [name, b] of buttons) {
       const n = name === "All" ? host.querySelectorAll(".slider").length
@@ -248,6 +253,7 @@ const LifecastBelt = (() => {
     fit();
     root.toggleAttribute("data-belt-open", wide || region);
     root.toggleAttribute("data-belt-wide", wide);
+    root.toggleAttribute("data-belt-all", ui.all);
     root.toggleAttribute("data-belt-region", region);
     chips.textContent = "";
     if (region) {

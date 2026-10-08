@@ -674,6 +674,73 @@ html[data-belt-region] #sections > .group-heading {
   cursor: default;
 }
 
+/* All (D184): one running list, as RaceMenu's ALL - name, slider, value on
+   one line per slider, a diamond where the row carries a colour. The sections
+   that hold sliders are laid open whatever their saved state (which is left
+   untouched, for the other views), and their heads become plain labels. A
+   section with no slider is not .is-flat and keeps its own look. */
+html[data-belt-all] #sections > .section.is-flat > .section-body {
+  display: block;
+  padding-top: 4px;
+}
+
+html[data-belt-all] #sections > .section.is-flat > .section-head {
+  pointer-events: none;
+}
+
+html[data-belt-all] #sections > .section.is-flat .section-caret {
+  display: none;
+}
+
+html[data-belt-all] .section.is-flat .slider {
+  grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto;
+  grid-template-areas: "name track value";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 0;
+  margin-bottom: 2px;
+}
+
+html[data-belt-all] .section.is-flat .slider-name {
+  grid-area: name;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-belt-all] .section.is-flat .slider[data-changed="1"] .slider-name::before {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+html[data-belt-all] .section.is-flat .slider-track {
+  grid-area: track;
+  grid-column: auto;
+}
+
+html[data-belt-all] .section.is-flat .slider-value {
+  grid-area: value;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 3.5em;
+  text-align: right;
+}
+
+/* The reference list has no step arrows; they stay in the single regions. */
+html[data-belt-all] .section.is-flat .step-button {
+  display: none;
+}
+
+html[data-belt-all] .section.is-flat .swatch-chip {
+  width: 11px;
+  height: 11px;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+
 .swatch-chip {
   display: inline-block;
   width: 14px;

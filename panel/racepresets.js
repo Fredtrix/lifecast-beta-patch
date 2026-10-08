@@ -7,8 +7,14 @@
 // the RACE record ships for the player's race and sex. Same word, different
 // thing - the DLL calls them race presets for that reason.
 //
-// Browsing is free and applying is not: a preset is one full redraw of the
-// actor, so moving the list sends nothing and only Apply does.
+// Every step applies, as in RaceMenu: moving the slider, pressing an arrow or
+// picking a row each send the preset the list now rests on. A preset is one
+// full redraw of the actor, so a drag across the whole list can send as many
+// redraws as the list has steps. That is the behaviour asked for, and nothing
+// here holds a step back (no debounce, no throttle, no "only the last one of
+// the drag"): a stall during a drag is a number to measure, not something to
+// hide. The one thing skipped is a step that lands on the preset the actor
+// already wears, which is not a step.
 //
 // The list shows "Preset 1", "Preset 2", ... in the order the game returns,
 // and NOT what the DLL sends as the name. Every preset's full name is
@@ -22,13 +28,17 @@
 // from the plugin, or a thumbnail) is a Fase 8 item in the BACKLOG.
 //
 // There is no "current" preset: a face the player has been editing is not one
-// of these, so the list opens at 0 and means "the one Apply would use", never
-// "the one you are wearing".
+// of these, so the list opens at 0 and means "the first one a step would
+// apply", never "the one you are wearing".
 "use strict";
 
 (() => {
   let count = 0;
   let names = [];
+  // The last index sent, so a step onto the same preset sends nothing. Cleared
+  // when the race's list changes: index 3 of another race is another face.
+  let applied = null;
+  let listKey = "";
 
   const section = LifecastControls.section("Face Presets");
 
@@ -39,23 +49,17 @@
     step: 1,
     button: 1,
     format: (v) => String(v) + " / " + String(count - 1),
-    // Browsing is local: the DLL hears nothing until Apply.
-    send: () => showName(),
+    // Arrows, list rows and the end of a drag all arrive here; the drag
+    // itself is also heard below, step by step.
+    send: () => step(),
   });
   const list = LifecastList.create({ row: row });
   const nameEl = LifecastControls.el("div", "part-name");
   row.el.appendChild(nameEl);
   section.body.appendChild(row.el);
 
-  const bar = LifecastControls.el("div", "preset-bar");
-  const apply = LifecastControls.el("button", "panel-button", "Apply");
-  apply.type = "button";
-  apply.tabIndex = -1;
-  apply.title = "Applies this preset face to your character";
-  bar.appendChild(apply);
   const status = LifecastControls.el("div", "preset-status", "--");
-  bar.appendChild(status);
-  section.body.appendChild(bar);
+  section.body.appendChild(status);
 
   LifecastControls.mount(section, "face:RacePresets");
 
@@ -86,15 +90,25 @@
     list.setCurrent(i);
   }
 
-  apply.addEventListener("click", () => {
+  // One step: show where the list rests and send that preset, once per
+  // distinct preset. Sends are never delayed or merged.
+  function step() {
+    showName();
     if (count === 0) {
       return;
     }
     const i = index();
+    if (i === applied) {
+      return;
+    }
+    applied = i;
     status.textContent = "applying " + labelFor(i) + "...";
     LifecastBridge.send("race-preset-apply", { i: i });
-  });
+  }
 
+  // The range reports every step of a drag; the row's own send is paced for
+  // sliders that stream a value, and a preset is not a value to stream.
+  row.input.addEventListener("input", step);
   LifecastBridge.on("race-presets", (data) => {
     count = data && typeof data.count === "number" ? data.count : 0;
     names = data && Array.isArray(data.names) ? data.names : [];
@@ -104,7 +118,11 @@
     // (belt.js), so hiding the section would leave a button that leads
     // nowhere.
     row.el.hidden = count === 0;
-    apply.disabled = count === 0;
+    const key = names.join("|");
+    if (key !== listKey) {
+      listKey = key;
+      applied = null;
+    }
     if (count === 0) {
       row.set(null);
       list.setItems([], 0);
