@@ -14,7 +14,8 @@
 // here holds a step back (no debounce, no throttle, no "only the last one of
 // the drag"): a stall during a drag is a number to measure, not something to
 // hide. The one thing skipped is a step that lands on the preset the actor
-// already wears, which is not a step.
+// already wears, which is not a step; an edit to the face (see faceTouched)
+// ends that, so the same preset can be chosen again to start over from it.
 //
 // The list shows "Preset 1", "Preset 2", ... in the order the game returns,
 // and NOT what the DLL sends as the name. Every preset's full name is
@@ -109,6 +110,26 @@
   // The range reports every step of a drag; the row's own send is paced for
   // sliders that stream a value, and a preset is not a value to stream.
   row.input.addEventListener("input", step);
+
+  // An edit anywhere else puts the face off every preset, so the preset the
+  // list rests on is no longer the one worn: going back to it must send again.
+  // Heard at the document, in the capture phase, so no control has to opt in:
+  // sliders, lists, swatches and Undo/Redo all count. Search and the belt do
+  // not edit the face and are left out.
+  function faceTouched(e) {
+    const t = e.target;
+    if (!t || !t.closest) {
+      return;
+    }
+    const own = row.el.closest(".section");
+    if (own && own.contains(t)) {
+      return;
+    }
+    if (t.closest("#sections") || t.closest("#undo, #redo")) {
+      applied = null;
+    }
+  }
+  ["input", "change", "click"].forEach((n) => document.addEventListener(n, faceTouched, true));
   LifecastBridge.on("race-presets", (data) => {
     count = data && typeof data.count === "number" ? data.count : 0;
     names = data && Array.isArray(data.names) ? data.names : [];
