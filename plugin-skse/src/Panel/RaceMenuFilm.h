@@ -22,7 +22,10 @@
 //     player wears is found in it by editor ID - no label needed;
 //   - the complexion (ChangeFaceDetails), as its index among the race's
 //     face detail sets.
-//   - the weight (ChangeWeight), which that slider shows from 0 to 1.
+//   - the weight (ChangeWeight), which that slider shows from 0 to 1;
+//   - the Presets slider (ChangeHeadPreset), which only moves when the Lifecast
+//     hands it a preset: the game does not keep which one is worn, so this
+//     remembers the last index handed over.
 // Hair colour and tint masks are not here: RaceMenu re-reads those itself
 // on the mod events the Lifecast sends (Core/RaceMenuSync).
 //
@@ -49,6 +52,7 @@ namespace Lifecast::Panel::RaceMenuFilm
 		kMorph,       // a_which: the faceData morph index, 0 to 17
 		kType,        // a_which: the faceData part index (nose 0, eyes 2, mouth 3)
 		kComplexion,  // a_which: unused
+		kHeadPreset,  // a_which: unused; the value is the race's preset index
 	};
 
 	// a_delivered: whether RaceMenu's callback was called. When it was not

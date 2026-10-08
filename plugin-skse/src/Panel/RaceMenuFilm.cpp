@@ -3,6 +3,8 @@
 
 #include "Panel/RaceMenuFilm.h"
 
+#include "Edit/RacePresets.h"
+
 namespace Lifecast::Panel::RaceMenuFilm
 {
 	namespace
@@ -147,6 +149,10 @@ namespace Lifecast::Panel::RaceMenuFilm
 			return -1;
 		}
 
+		// The last preset index handed to ChangeHeadPreset, and the film it was handed to.
+		RE::GFxMovieView* g_presetMovie = nullptr;
+		int               g_presetPos = -1;
+
 		bool Set(RE::GFxValue& a_entry, double a_value, int& a_written)
 		{
 			double pos = 0;
@@ -233,6 +239,11 @@ namespace Lifecast::Panel::RaceMenuFilm
 				} else if (callback == "ChangeWeight") {
 					// The weight slider runs from 0 to 1; the game keeps 0 to 100.
 					want = npc->weight / 100.0;
+				} else if (callback == "ChangeHeadPreset") {
+					if (g_presetMovie != movie || g_presetPos < 0) {
+						continue;
+					}
+					want = g_presetPos;
 				} else if (callback == "ChangeFaceDetails") {
 					const int index = ComplexionIndex(npc);
 					if (index < 0) {
@@ -289,6 +300,8 @@ namespace Lifecast::Panel::RaceMenuFilm
 				break;
 			case Slider::kComplexion:
 				return { "ChangeFaceDetails", nullptr };
+			case Slider::kHeadPreset:
+				return { "ChangeHeadPreset", "Presets" };
 			}
 			return {};
 		}
@@ -374,6 +387,13 @@ namespace Lifecast::Panel::RaceMenuFilm
 			const auto start = Clock::now();
 			defn->callback(params);
 			const auto us = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+			if (a_key.first == Slider::kHeadPreset) {
+				// The game does not hand the new position back to the film, and the
+				// face the preset set changes other sliders: show both.
+				g_presetMovie = movie;
+				g_presetPos = static_cast<int>(a_value);
+				SyncNow();
+			}
 
 			const int n = ++g_calls[a_key];
 			if (n == 1 || a_final) {
@@ -460,9 +480,18 @@ namespace Lifecast::Panel::RaceMenuFilm
 			auto* movie = menu ? menu->uiMovie.get() : nullptr;
 			double id = -1;
 			bool   called = false;
+			Edit::RacePresets::LogPlayerFields("sex-before");
 			if (movie && FindSliderID(movie, { "ChangeSex", nullptr }, id)) {
 				called = CallNative(movie, menu.get(), "ChangeSex", a_female ? 1.0 : 0.0, id);
 			}
+			Edit::RacePresets::LogPlayerFields("sex-after");
+			// The reset the game runs for a sex change may finish after the callback returns.
+			std::thread([]() {
+				std::this_thread::sleep_for(std::chrono::seconds(3));
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddUITask([]() { Edit::RacePresets::LogPlayerFields("sex-3s-later"); });
+				}
+			}).detach();
 			spdlog::info("[film] ChangeSex({}, {}): {}", a_female ? 1 : 0, id, called ? "called" : "not called");
 			if (a_done) {
 				a_done(called);

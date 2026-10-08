@@ -7,6 +7,7 @@
 #include "Edit/Session.h"
 #include "Core/ListSig.h"
 #include "Panel/Bridge.h"
+#include "Panel/RaceMenuFilm.h"
 
 namespace Lifecast::Edit::RacePresets
 {
@@ -17,11 +18,8 @@ namespace Lifecast::Edit::RacePresets
 		using FaceData = RE::TESNPC::FaceData;
 		using RaceFace = RE::TESRace::FaceRelatedData;
 
-		// The head part types a preset brings over: the same five
-		// Edit/Appearance offers one at a time. A type the preset has no part
-		// for is left alone rather than cleared - the game's swap wants both
-		// sides, and a preset that names no scar is not a preset that removes
-		// one.
+		// The head part types the log reads back, the same five Edit/Appearance
+		// offers one at a time.
 		constexpr HPType kPartTypes[] = {
 			HPType::kHair,
 			HPType::kFacialHair,
@@ -165,65 +163,84 @@ namespace Lifecast::Edit::RacePresets
 			return out;
 		}
 
-		// The write itself, shared by the page's pick and the sex swap's reset.
-		// a_setWeight: the sex swap does not touch the weight in the game, a
-		// preset picked by hand does set it.
-		void ApplyTo(RE::TESNPC* npc, RE::TESNPC* preset, int index, const std::string& name, bool a_setWeight)
+		std::string FormText(const RE::TESForm* a_form)
 		{
-			spdlog::info("[race-presets] applying [{}] {} {:08X}", index, name, preset->GetFormID());
-			spdlog::info("[race-presets]   morphs before: {}", MorphLine(npc->faceData));
-			spdlog::info("[race-presets]   parts before:  {}", PartLine(npc));
-			for (int i = 0; i < FaceSliders::kUsableMorphs; ++i) {
-				npc->faceData->morphs[i] = preset->faceData->morphs[i];
+			if (!a_form) {
+				return "-";
 			}
-			// The three slots the game names, and only those. The fourth
-			// (Parts::kUnknown) held -1 on every preset read, and nothing here
-			// knows what it is for: copying a field no one understands is not
-			// fidelity to the preset, it is a write without a reason.
-			npc->faceData->parts[FaceData::Parts::kNose] = preset->faceData->parts[FaceData::Parts::kNose];
-			npc->faceData->parts[FaceData::Parts::kEyes] = preset->faceData->parts[FaceData::Parts::kEyes];
-			npc->faceData->parts[FaceData::Parts::kMouth] = preset->faceData->parts[FaceData::Parts::kMouth];
+			const char* id = a_form->GetFormEditorID();
+			return fmt::format("{:08X}{}{}", a_form->GetFormID(), id && *id ? " " : "", id && *id ? id : "");
+		}
 
-			int swapped = 0;
-			for (const auto type : kPartTypes) {
-				auto* wanted = preset->GetHeadPartByType(type);
-				if (!wanted) {
-					continue;
+		std::string ColorText(const RE::Color& a_color)
+		{
+			return fmt::format("{:02X}{:02X}{:02X}{:02X}", a_color.red, a_color.green, a_color.blue, a_color.alpha);
+		}
+
+		// Every field a preset is supposed to set, read out of the structure, one
+		// line each and the same format before, after and for the preset itself, so
+		// the three can be compared line by line. A probe: it changes nothing.
+		// a_player: the tint masks are the player's own and a preset has none.
+		void LogFields(const char* a_tag, RE::TESNPC* a_npc, bool a_player)
+		{
+			if (!a_npc) {
+				return;
+			}
+			spdlog::info("[race-presets]   {} morphs: {}", a_tag, MorphLine(a_npc->faceData));
+			std::string parts;
+			for (int i = 0; i < a_npc->numHeadParts && a_npc->headParts; ++i) {
+				const auto* part = a_npc->headParts[i];
+				parts += fmt::format("{}{}={}", i ? " " : "", part ? static_cast<int>(part->type.get()) : -1,
+					part ? FormText(part) : "-");
+			}
+			spdlog::info("[race-presets]   {} headparts: {}", a_tag, parts);
+			std::string layers;
+			int         count = 0;
+			if (a_npc->tintLayers) {
+				for (const auto* layer : *a_npc->tintLayers) {
+					if (!layer) {
+						continue;
+					}
+					++count;
+					// The mask type of this layer's index, from the player's race: it is
+					// what says which layers are war paint (7) and which are dirt (14).
+					int type = -1;
+					if (auto* rf = RaceFaceOf(Npc()); rf && rf->tintMasks) {
+						for (const auto* asset : *rf->tintMasks) {
+							if (asset && asset->texture.index == layer->tintIndex) {
+								type = static_cast<int>(asset->texture.skinTone.get());
+								break;
+							}
+						}
+					}
+					layers += fmt::format(" {}(T{}):{}/{}/{}", layer->tintIndex, type, ColorText(layer->tintColor),
+						layer->interpolationValue, layer->preset);
 				}
-				if (npc->GetCurrentHeadPartByType(type) == wanted) {
-					continue;
+			}
+			spdlog::info("[race-presets]   {} tintlayers: n={}{}", a_tag, count, layers);
+			if (a_player) {
+				auto*       player = RE::PlayerCharacter::GetSingleton();
+				auto*       list = player ? player->GetTintList() : nullptr;
+				std::string masks;
+				int         lit = 0;
+				if (list) {
+					for (const auto* mask : *list) {
+						if (!mask || mask->alpha <= 0.0f) {
+							continue;
+						}
+						++lit;
+						masks += fmt::format(" {}:{}:{}:{:.2f}", static_cast<int>(mask->type.get()),
+							mask->texture ? mask->texture->textureName.c_str() : "-", ColorText(mask->color), mask->alpha);
+					}
 				}
-				npc->ChangeHeadPart(wanted);
-				++swapped;
+				spdlog::info("[race-presets]   {} tintmasks (alpha > 0): n={}{}", a_tag, lit, masks);
 			}
-
-			const auto* hrd = preset->headRelatedData;
-			if (hrd && hrd->hairColor) {
-				npc->SetHairColor(hrd->hairColor);
-			}
-			if (hrd && hrd->faceDetails) {
-				npc->SetFaceTexture(hrd->faceDetails);
-			}
-			const float weightBefore = npc->weight;
-			if (a_setWeight) {
-				npc->weight = preset->weight;
-			}
-
-			++g_applied;
-			// DoReset3D(true) is what makes all of this show (Edit/Session.h);
-			// a_now, because applying a preset is a finished edit and not a
-			// drag. Replaced runs first so every section drops the values it
-			// kept from this session's edits before it re-reads.
-			Session::Replaced("a race preset was applied");
-			Session::RequestRedraw(true);
-
-			// Read back out of the structure, not echoed from the preset.
-			spdlog::info("[race-presets]   morphs after:  {}", MorphLine(npc->faceData));
-			spdlog::info("[race-presets]   parts after:   {}", PartLine(npc));
-			spdlog::info("[race-presets] applied [{}] {}: {} head parts swapped, weight {:.1f} -> {:.1f}, "
-				"hair colour {}, complexion {}",
-				index, name, swapped, weightBefore, npc->weight, hrd && hrd->hairColor ? "set" : "unchanged",
-				hrd && hrd->faceDetails ? "set" : "unchanged");
+			const auto* hrd = a_npc->headRelatedData;
+			spdlog::info("[race-presets]   {} complexion: {}", a_tag, hrd ? FormText(hrd->faceDetails) : "(no head data)");
+			spdlog::info("[race-presets]   {} haircolour: {} {}", a_tag, hrd ? FormText(hrd->hairColor) : "(no head data)",
+				hrd && hrd->hairColor ? ColorText(hrd->hairColor->color) : "-");
+			spdlog::info("[race-presets]   {} weight: {:.1f}  bodytint: {}", a_tag, a_npc->weight,
+				ColorText(a_npc->bodyTintColor));
 		}
 
 		void OnApply(const nlohmann::json& a_data)
@@ -262,8 +279,29 @@ namespace Lifecast::Edit::RacePresets
 			}
 
 			const auto name = NameOf(preset);
-			ApplyTo(npc, preset, index, name, true);
-			Answer(index, true, name);
+			spdlog::info("[race-presets] applying [{}] {} {:08X}", index, name, preset->GetFormID());
+			LogFields("before", npc, true);
+			LogFields("wanted", preset, false);
+
+			// The preset is handed to the callback RaceMenu's own Presets slider
+			// calls, and the game does what it does for that slider: nothing here
+			// decides which fields a preset carries or which it clears. Queued on
+			// the UI thread; the callback below runs there once it has returned.
+			Panel::RaceMenuFilm::Apply(Panel::RaceMenuFilm::Slider::kHeadPreset, 0, index, true,
+				[index, name](bool a_delivered, bool) {
+					if (!a_delivered) {
+						Answer(index, false, "RaceMenu's Presets callback could not be called");
+						return;
+					}
+					auto* now = Npc();
+					++g_applied;
+					// Replaced runs so every section drops the values it kept from
+					// this session's edits before it re-reads.
+					Session::Replaced("a race preset was applied");
+					LogFields("after", now, true);
+					spdlog::info("[race-presets] applied [{}] {}: through RaceMenu's ChangeHeadPreset", index, name);
+					Answer(index, true, name);
+				});
 		}
 
 		void OnGet(const nlohmann::json&) { PushList("the page asked"); }
@@ -284,29 +322,7 @@ namespace Lifecast::Edit::RacePresets
 		bool g_installed = false;
 	}
 
-	bool ApplyDefault(const char* a_why)
-	{
-		auto* npc = Npc();
-		if (!npc || !npc->faceData || !EnsureList(a_why) || g_lists.presets.empty()) {
-			spdlog::warn("[race-presets] default preset ({}): nothing to apply (no player, no face data or no presets)",
-				a_why);
-			return false;
-		}
-		// What the race lists first is the one a fresh character starts on.
-		auto* preset = g_lists.presets.front();
-		if (!preset || !preset->faceData) {
-			spdlog::warn("[race-presets] default preset ({}): the first preset has no face data", a_why);
-			return false;
-		}
-		for (std::size_t i = 0; i < g_lists.presets.size(); ++i) {
-			if (g_lists.presets[i] && g_lists.presets[i]->faceData) {
-				spdlog::info("[race-presets]   candidate [{}] {}: {}", i, NameOf(g_lists.presets[i]),
-					MorphLine(g_lists.presets[i]->faceData));
-			}
-		}
-		ApplyTo(npc, preset, 0, NameOf(preset), false);
-		return true;
-	}
+	void LogPlayerFields(const char* a_tag) { LogFields(a_tag, Npc(), true); }
 
 	void Install()
 	{

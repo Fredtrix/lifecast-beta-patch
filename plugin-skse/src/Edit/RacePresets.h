@@ -13,20 +13,12 @@
 // eighteen face morphs, the nose/eye/mouth type indices, its head parts, hair
 // colour, complexion and weight.
 //
-// Applying one copies those from the preset's TESNPC onto the player's, the
-// same fields Edit/FaceSliders and Edit/Appearance already write one at a
-// time, and then goes through Session::Replaced: every editing section drops
-// what it kept and re-reads, so the page shows the preset's values instead of
-// the ones the player had. The character is shown with the shared
-// DoReset3D(true), which is the call that makes morphs, types, head parts,
-// weight and complexion appear at all (Edit/Session.h).
-//
-// What a preset carries and this does NOT copy: the tint layers and the
-// texture lighting. Both are Skin & Paint's grandeza - the section the War
-// Paint Catalog measured (D141) - and writing them from here would reach
-// across a category boundary into a control that is already measured. So the
-// player's war paint and skin tone survive applying a preset, which is a
-// declared limit and not an accident.
+// Applying one does not copy anything: it calls the "Presets" slider of RaceMenu's
+// own film (ChangeHeadPreset, through Panel/RaceMenuFilm), which is the call the
+// native menu makes. The native path writes the tint masks and clears what the
+// new preset does not declare, so the panel and the native menu end up showing
+// the same values. Then Session::Replaced makes every editing section drop what
+// it kept and re-read.
 //
 // Browsing the list costs nothing: the page moves its own index and only the
 // Apply button sends. A preset is one expensive redraw, so it is never
@@ -54,12 +46,8 @@ namespace Lifecast::Edit::RacePresets
 	// kDataLoaded, after Session::Install. Safe to call twice.
 	void Install();
 
-	// NOT CALLED at present: the sex change is handed to RaceMenu's own callback
-	// (Edit/RaceSex), which does its own reset. Kept, unused, as a fallback.
-	//
-	// Puts the player on the first preset the race lists for the current sex, as
-	// the game does when the sex is swapped: morphs, face parts, head parts,
-	// hair colour and complexion, but not the weight. Returns false when there
-	// is nothing to apply. Does not redraw by itself beyond what a preset pick does.
-	bool ApplyDefault(const char* a_why);
+	// Logs, one line per field, the player's appearance as the structure holds
+	// it now: morphs, head parts, tint layers and masks, complexion, hair colour,
+	// weight. A probe; it changes nothing.
+	void LogPlayerFields(const char* a_tag);
 }
