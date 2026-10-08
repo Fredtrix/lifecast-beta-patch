@@ -162,7 +162,13 @@
   let compareOn = false;   // this feature's own belief; the DLL's "compare" reply is the truth
   let compareBusy = false;
 
+  // Hidden until the DLL says the figure will draw this opening; an
+  // unavailable Compare is not shown rather than shown inert.
+  let compareAvailable = false;
+
   function renderCompare() {
+    compareButton.style.display = compareAvailable ? "" : "none";
+    compareNote.style.display = compareAvailable ? "" : "none";
     compareButton.textContent = compareOn ? "Compare Off" : "Compare";
     compareButton.disabled = compareBusy;
   }
@@ -188,6 +194,7 @@
 
   LifecastBridge.on("compare", (data) => {
     compareOn = !!(data && data.on);
+    compareAvailable = !!(data && data.available === true);
     compareBusy = false;
     // The DLL's own words when it refused. Empty when it did not, so a
     // successful toggle clears whatever the last refusal said.

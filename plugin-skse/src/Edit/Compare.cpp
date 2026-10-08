@@ -62,6 +62,15 @@ namespace Lifecast::Edit::Compare
 		std::vector<Core::SkeeLink::MorphValue> g_bodySnapshot;
 		bool                                    g_bodyPending = false;
 
+		// Whether the page may offer Compare at all, decided once per opening.
+		// She draws only when she was BORN in this opening with the console not
+		// open; a figure reused from an earlier opening, or born with the console
+		// open, is present and positioned but not drawn. A button that promises
+		// that comparison and cannot deliver is worse than none, so when this is
+		// false the page does not show the button.
+		bool        g_available = false;
+		std::string g_availableWhy = "no opening yet";
+
 		bool g_installed = false;
 
 		// ----- small helpers ------------------------------------------------------
@@ -158,7 +167,7 @@ namespace Lifecast::Edit::Compare
 						   P(actor->GetPosition()), CellOf(actor), actor->Is3DLoaded() ? "loaded" : "NOT loaded")
 					  : std::string("absent"));
 
-			nlohmann::json out{ { "on", g_on } };
+			nlohmann::json out{ { "on", g_on }, { "available", g_available } };
 			if (!g_why.empty()) {
 				out["why"] = g_why;
 			}
@@ -1428,6 +1437,12 @@ namespace Lifecast::Edit::Compare
 				return;
 			}
 			const bool wantOn = a_data["on"].get<bool>();
+			if (wantOn && !g_available) {
+				g_why = g_availableWhy;
+				spdlog::warn("[compare] compare-set on refused: not available this opening - {}", g_availableWhy);
+				Push("compare-set refused, not available");
+				return;
+			}
 
 			// The character view's own edges, which only the page knows: the
 			// panel covers the left of the screen, so the middle of the window
@@ -1574,9 +1589,17 @@ namespace Lifecast::Edit::Compare
 		{
 			g_on = false;
 			g_why.clear();
+			// Read first, before anything this opening does: the console is still
+			// open here when the editor was opened from it (the switcher only
+			// queues its close).
+			auto*      ui = RE::UI::GetSingleton();
+			const bool consoleOpen = ui && ui->IsMenuOpen(RE::Console::MENU_NAME);
+			bool       bornNow = false;
+			bool       reused = false;
 			// She is back before anything else is asked of her, so the page's
 			// first Compare click finds a body and not a figure still gone.
 			if (TwinHere()) {
+				reused = true;
 				Appear("the menu opened");
 			}
 			if (!TwinHere()) {
@@ -1586,8 +1609,26 @@ namespace Lifecast::Edit::Compare
 				// and the log then says which of the two cases this is.
 				spdlog::warn("[compare] menu opened with no second figure in this room - one is made NOW, with the "
 							 "menu already OPEN - a birth path this module has never measured");
-				Make("born with the menu already open");
+				bornNow = Make("born with the menu already open");
 			}
+
+			// The figure draws only when she was born in THIS opening with the
+			// console not open. Reused, or born with the console open, she is
+			// present but not drawn, so the button is not offered.
+			g_available = bornNow && !consoleOpen;
+			if (g_available) {
+				g_availableWhy = "born in this opening with the console not open";
+			} else if (reused) {
+				g_availableWhy = "the figure was reused from an earlier opening and does not draw";
+			} else if (consoleOpen) {
+				g_availableWhy = "the console was open at birth and the figure does not draw";
+			} else {
+				g_availableWhy = "no figure could be made";
+			}
+			spdlog::info("[compare] availability: {} - {} (console {}, figure {})",
+				g_available ? "AVAILABLE" : "NOT AVAILABLE, the button is not shown", g_availableWhy,
+				consoleOpen ? "OPEN" : "closed", reused ? "reused" : (bornNow ? "born now" : "not made"));
+
 			// Pushed rather than only reset: the page does not reliably ask
 			// again across a Finish and reopen, which is the defect the author
 			// found in Undress.
