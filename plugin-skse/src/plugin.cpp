@@ -28,6 +28,7 @@
 #include "Edit/FaceSliders.h"
 #include "Edit/Finish.h"
 #include "Edit/Session.h"
+#include "Edit/Freeze.h"
 #include "Edit/Light.h"
 #include "Edit/Overlays.h"
 #include "Edit/RacePresets.h"
@@ -89,6 +90,12 @@ namespace
 			Lifecast::Core::ObodyLink::Request();
 			break;
 
+		case SKSE::MessagingInterface::kPreLoadGame:
+		case SKSE::MessagingInterface::kNewGame:
+			// A freeze must never survive into another game.
+			Lifecast::Edit::Freeze::Release("a game is loading");
+			break;
+
 		case SKSE::MessagingInterface::kInputLoaded:
 			// The Meridian author guide is explicit that this is where an
 			// extension is acquired: the platform initializes CEF on its own
@@ -135,6 +142,7 @@ namespace
 			Lifecast::Edit::Tints::Install();
 			Lifecast::Edit::Overlays::Install();
 			Lifecast::Edit::Light::Install();
+			Lifecast::Edit::Freeze::Install();
 			Lifecast::Edit::Undress::Install();
 
 			// The body section, offered only while OBody answers.

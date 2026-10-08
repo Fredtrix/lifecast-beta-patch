@@ -81,6 +81,7 @@ add_commonlibsse_plugin(
         src/Edit/BodyScales.cpp
         src/Edit/Compare.cpp
         src/Edit/FaceSliders.cpp
+        src/Edit/Freeze.cpp
         src/Edit/Finish.cpp
         src/Edit/Light.cpp
         src/Edit/Overlays.cpp

@@ -135,6 +135,88 @@
 
   renderLight();
 
+  // Freeze (Fase 8, E12): same shape. The label says what pressing does; the
+  // DLL's "freeze" reply is the state. It is undone by the DLL when the menu
+  // closes, when a pose is played and when a game loads.
+  const freezeButton = LifecastControls.el("button", "panel-button control-button", "Freeze");
+  freezeButton.type = "button";
+  section.body.appendChild(freezeButton);
+
+  let freezeOn = false;
+  let freezeBusy = false;
+
+  function renderFreeze() {
+    freezeButton.textContent = freezeOn ? "Unfreeze" : "Freeze";
+    freezeButton.disabled = freezeBusy;
+  }
+
+  freezeButton.addEventListener("click", () => {
+    if (freezeBusy) {
+      return;
+    }
+    freezeBusy = true;
+    renderFreeze();
+    if (!LifecastBridge.send("freeze-set", { on: !freezeOn })) {
+      freezeBusy = false;
+      poseNote.textContent = "No bridge to the game - nothing was done.";
+      renderFreeze();
+    }
+  });
+
+  LifecastBridge.on("freeze", (data) => {
+    freezeOn = !!(data && data.on);
+    freezeBusy = false;
+    renderFreeze();
+  });
+
+  // Pose: the list comes from the DLL (it owns the events). Choosing one
+  // plays it and shows what the graph answered; the first option stops.
+  const poseSelect = LifecastControls.el("select", "panel-button control-button", "");
+  const poseNote = LifecastControls.el("span", "control-note", "");
+  section.body.appendChild(poseSelect);
+  section.body.appendChild(poseNote);
+
+  function fillPoses(poses) {
+    poseSelect.textContent = "";
+    const first = LifecastControls.el("option", "", "Pose");
+    first.value = "";
+    poseSelect.appendChild(first);
+    for (const pose of poses) {
+      const option = LifecastControls.el("option", "", String(pose.label));
+      option.value = String(pose.event);
+      poseSelect.appendChild(option);
+    }
+  }
+  fillPoses([]);
+
+  poseSelect.addEventListener("change", () => {
+    poseNote.textContent = "";
+    if (!LifecastBridge.send("pose-play", { event: poseSelect.value })) {
+      poseNote.textContent = "No bridge to the game - nothing was done.";
+    }
+  });
+
+  LifecastBridge.on("poses", (data) => {
+    fillPoses(data && Array.isArray(data.poses) ? data.poses : []);
+  });
+
+  LifecastBridge.on("pose", (data) => {
+    // The DLL's answer is the truth: a refused event says so.
+    poseNote.textContent = (data && data.accepted === false && typeof data.why === "string") ? data.why : "";
+    if (data && data.accepted === false) {
+      poseSelect.value = "";
+    }
+  });
+
+  LifecastBridge.whenAttached((ok) => {
+    if (ok) {
+      LifecastBridge.send("freeze-get");
+      LifecastBridge.send("pose-list");
+    }
+  });
+
+  renderFreeze();
+
   // The character view's edges, as a fraction of the window width. #stage is
   // laid out from the panel's right edge to the window's right edge, so this
   // is exactly the region the camera has to fit the pair into. Read fresh at
