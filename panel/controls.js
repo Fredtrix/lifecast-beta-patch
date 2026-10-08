@@ -327,6 +327,24 @@ const LifecastControls = (() => {
     arrange();
   }
 
+  // The section mounted under a_key, made and mounted the first time anyone
+  // asks for it. Several files add rows to one section (E19: Eye Color from
+  // look.js and a tint layer from tints.js both land in the Eyes section that
+  // face.js owns the sliders of), and section() above makes a NEW one on every
+  // call. The join is by KEY, never by title: titles are not unique (Hair is a
+  // section and a control) and some come from a mod (morphs.js).
+  const slots = new Map();
+
+  function slot(a_title, a_key, a_opts) {
+    let s = slots.get(a_key);
+    if (!s) {
+      s = section(a_title, a_opts);
+      slots.set(a_key, s);
+      mount(s, a_key);
+    }
+    return s;
+  }
+
   // a_opts: { label, min, max, step, button, format(v), send(v, final) }
   // button is how far one press of < or > moves the value.
   // Optional: portrait:false keeps the row out of the portrait; entry(before,
@@ -578,6 +596,6 @@ const LifecastControls = (() => {
     return true;
   }
 
-  return { el: el, section: section, mount: mount, setOrder: setOrder, setGroups: setGroups, row: row, reveal: reveal,
+  return { el: el, section: section, slot: slot, mount: mount, setOrder: setOrder, setGroups: setGroups, row: row, reveal: reveal,
     portrait: portrait, restorePortrait: restorePortrait, addPortraitPart: addPortraitPart };
 })();

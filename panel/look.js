@@ -30,16 +30,19 @@
     },
     {
       title: "Features",
-      controls: [
-        ["nose-type", "Nose Type"],
-        ["eye-shape", "Eye Shape"],
-        ["eyes", "Eye Color"],
-        ["brows", "Brow Type"],
-        ["mouth-shape", "Mouth Shape"],
-        ["scar", "Scar"],
-        ["complexion", "Complexion"],
-      ],
+      controls: [["scar", "Scar"], ["complexion", "Complexion"]],
     },
+  ];
+
+  // Lists that sit in the section of the part of the face they change, the
+  // way RaceMenu's tabs hold them (E19, F35). [key, label, section title];
+  // the section is face.js's, joined by key.
+  const FACE_LISTS = [
+    ["nose-type", "Nose Type", "Nose"],
+    ["eye-shape", "Eye Shape", "Eyes"],
+    ["eyes", "Eye Color", "Eyes"],
+    ["brows", "Brow Type", "Brows"],
+    ["mouth-shape", "Mouth Shape", "Mouth"],
   ];
 
   const PART_KEYS = new Set(["hair", "facial-hair", "eyes", "brows", "scar"]);
@@ -175,6 +178,10 @@
       section.body.appendChild(buildRow(key, label));
     }
     LifecastControls.mount(section, "look:" + s.title);
+  }
+
+  for (const [key, label, title] of FACE_LISTS) {
+    LifecastControls.slot(title, "face:" + title).body.appendChild(buildRow(key, label));
   }
 
   LifecastBridge.on("look", (data) => {

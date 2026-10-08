@@ -25,7 +25,11 @@
   }
 
   for (const group of GROUPS) {
-    const section = LifecastControls.section(group.title);
+    // A slot, not a new section: look.js and tints.js add the lists and tint
+    // layers that belong to this part of the face (E19). The sliders go in
+    // FIRST, as they always sat, whichever file got here earlier.
+    const section = LifecastControls.slot(group.title, "face:" + group.title);
+    const sliders = document.createDocumentFragment();
     for (const [index, label] of group.sliders) {
       const row = LifecastControls.row({
         label: label,
@@ -37,9 +41,9 @@
         send: (v, final) => LifecastBridge.send("face-set", { i: index, v: v, final: final }),
       });
       rows.set(index, row);
-      section.body.appendChild(row.el);
+      sliders.appendChild(row.el);
     }
-    LifecastControls.mount(section, "face:" + group.title);
+    section.body.prepend(sliders);
   }
 
   LifecastBridge.on("face", (data) => {

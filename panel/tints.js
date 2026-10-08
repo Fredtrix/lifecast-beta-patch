@@ -18,6 +18,36 @@
   section.body.appendChild(body);
   LifecastControls.mount(section, "tints");
 
+  // A layer sits in the section of the thing it paints (D210): the face tints
+  // in the face sections, which face.js owns the sliders of. What is not here
+  // stays in this section - the skin itself, and the layers whose object has
+  // no section of its own (D210, closed by the author).
+  const HOME = {
+    "lips": "Mouth",
+    "cheeks": "Cheekbones",
+    "cheeks-lower": "Cheekbones",
+    "eye-socket-upper": "Eyes",
+    "eye-socket-lower": "Eyes",
+    "eyeliner": "Eyes",
+    "nose": "Nose",
+    "chin": "Chin",
+  };
+  const homes = new Map(); // section title -> the div this file keeps in it
+
+  function homeOf(a_layerKey) {
+    const title = HOME[a_layerKey];
+    if (!title) {
+      return body;
+    }
+    let div = homes.get(title);
+    if (!div) {
+      div = LifecastControls.el("div");
+      LifecastControls.slot(title, "face:" + title).body.appendChild(div);
+      homes.set(title, div);
+    }
+    return div;
+  }
+
   let layers = new Map(); // key -> { pick, catalog, r, g, b, alpha, chip, picker, grid, swatches, none }
   let keys = "";
 
@@ -69,7 +99,11 @@
   function build(list) {
     layers = new Map();
     body.replaceChildren();
+    for (const div of homes.values()) {
+      div.replaceChildren();
+    }
     for (const l of list) {
+      const dest = homeOf(l.k);
       const entry = { pick: null, catalog: null, textures: [], texture: "", swatches: null, none: false };
       const head = LifecastControls.el("div", "tint-head");
       const name = LifecastControls.el("span", "slider-name", l.label);
@@ -79,7 +113,7 @@
       entry.chip.title = "Pick any colour";
       name.appendChild(entry.chip);
       head.appendChild(name);
-      body.appendChild(head);
+      dest.appendChild(head);
       entry.picker = LifecastPicker.create({
         label: l.label,
         get: () => colorOf(entry),
@@ -93,7 +127,7 @@
           entry.picker.toggle();
         }
       });
-      body.appendChild(entry.picker.el);
+      dest.appendChild(entry.picker.el);
 
       if (l.kind === "pick") {
         entry.pick = LifecastControls.row({
@@ -106,7 +140,7 @@
           send: (v, final) => send(l.k, { index: v }, final),
         });
         entry.pickList = LifecastList.create({ row: entry.pick, none: true });
-        body.appendChild(entry.pick.el);
+        dest.appendChild(entry.pick.el);
       }
       if (Array.isArray(l.catalog)) {
         // -1 is a texture the catalog does not carry, shown by its own file
@@ -130,7 +164,7 @@
           },
         });
         entry.catalogList = LifecastList.create({ row: entry.catalog });
-        body.appendChild(entry.catalog.el);
+        dest.appendChild(entry.catalog.el);
       }
       entry.r = colorRow(l.k, entry, "Red");
       entry.g = colorRow(l.k, entry, "Green");
@@ -145,10 +179,10 @@
         send: (v, final) => send(l.k, { alpha: v / 100 }, final),
       });
       for (const row of [entry.r, entry.g, entry.b, entry.alpha]) {
-        body.appendChild(row.el);
+        dest.appendChild(row.el);
       }
       entry.grid = LifecastControls.el("div", "swatch-grid");
-      body.appendChild(entry.grid);
+      dest.appendChild(entry.grid);
       layers.set(l.k, entry);
     }
   }

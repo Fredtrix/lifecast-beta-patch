@@ -61,7 +61,8 @@ const LifecastGroups = (() => {
   LifecastControls.setOrder([
     "tints", "overlay:body", "overlay:hand", "overlay:foot", "face:paint",
     "morph:*",
-    "look:Hair", "look:Features", "face:*",
+    "look:Hair", "look:Features",
+    "face:RacePresets", "face:Nose", "face:Jaw", "face:Cheekbones", "face:Eyes", "face:Brows", "face:Mouth", "face:Chin", "face:*",
     "sex", "look:Body", "scales", "obody",
     "race", "delegate",
     "presets",
