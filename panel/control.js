@@ -173,7 +173,13 @@
   // plays it and shows what the graph answered; the first option stops.
   const poseSelect = LifecastControls.el("select", "panel-button control-button", "");
   const poseNote = LifecastControls.el("span", "control-note", "");
+  // Stop: the select does not fire "change" when the item already shown is
+  // chosen again, so after a long pose the first option is not a reachable
+  // command. This sends the same empty event the first option sends.
+  const poseStop = LifecastControls.el("button", "panel-button control-button", "Stop pose");
+  poseStop.type = "button";
   section.body.appendChild(poseSelect);
+  section.body.appendChild(poseStop);
   section.body.appendChild(poseNote);
 
   function fillPoses(poses) {
@@ -192,6 +198,14 @@
   poseSelect.addEventListener("change", () => {
     poseNote.textContent = "";
     if (!LifecastBridge.send("pose-play", { event: poseSelect.value })) {
+      poseNote.textContent = "No bridge to the game - nothing was done.";
+    }
+  });
+
+  poseStop.addEventListener("click", () => {
+    poseNote.textContent = "";
+    poseSelect.value = "";
+    if (!LifecastBridge.send("pose-play", { event: "" })) {
       poseNote.textContent = "No bridge to the game - nothing was done.";
     }
   });

@@ -452,6 +452,18 @@ html[data-belt-region] #sections > .group-heading {
   border-color: var(--accent);
 }
 
+/* A <select> wears .panel-button, but its open list is drawn by the widget and
+   does not inherit the transparent fill: without these two the list is the
+   system's light one under light text. */
+select.panel-button {
+  background-color: var(--panel-bg);
+}
+
+select.panel-button option {
+  background-color: var(--panel-bg);
+  color: var(--text);
+}
+
 #to-racemenu {
   padding: 6px 14px;
 }
