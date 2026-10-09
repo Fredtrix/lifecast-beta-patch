@@ -384,9 +384,22 @@ namespace Lifecast::Panel::RaceMenuFilm
 			const std::array<RE::GFxValue, 2> args{ RE::GFxValue(a_value), RE::GFxValue(found->second) };
 			const RE::FxDelegateArgs          params(RE::GFxValue(), defn->handler.get(), movie, args.data(),
 						 static_cast<std::uint32_t>(args.size()));
+			const auto queuedBefore = RE::MessageBoxMenu::GetQueueSize();
 			const auto start = Clock::now();
 			defn->callback(params);
 			const auto us = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+			if (a_key.first == Slider::kHeadPreset && RE::MessageBoxMenu::GetQueueSize() > queuedBefore) {
+				// With edits made since the last preset, the game asks "Change preset and
+				// lose your changes?" before it applies one. That box is a native menu: the
+				// panel holds the browser focus, so the keyboard never reaches it and the
+				// player has no way to answer. The panel already tells the player what a
+				// preset replaces (the change is one Undo entry), so the question is
+				// answered Ok for them, which runs the same callback the button would.
+				const auto* box = RE::MessageBoxMenu::GetCurrentMessageBoxData();
+				spdlog::info("[film] the Presets callback queued a confirmation box ('{}'): answered Ok",
+					box ? box->bodyText.c_str() : "?");
+				RE::MessageBoxMenu::SelectOption(0);
+			}
 			if (a_key.first == Slider::kHeadPreset) {
 				// The game does not hand the new position back to the film, and the
 				// face the preset set changes other sliders: show both.
