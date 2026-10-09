@@ -395,10 +395,24 @@ namespace Lifecast::Panel::RaceMenuFilm
 				// player has no way to answer. The panel already tells the player what a
 				// preset replaces (the change is one Undo entry), so the question is
 				// answered Ok for them, which runs the same callback the button would.
+				//
+				// Only the game's own question is answered: a box that another mod opened
+				// right after the call (the FSMP's, V140) is the player's, and the
+				// Switcher lets the panel go of the focus so it can be answered.
 				const auto* box = RE::MessageBoxMenu::GetCurrentMessageBoxData();
-				spdlog::info("[film] the Presets callback queued a confirmation box ('{}'): answered Ok",
-					box ? box->bodyText.c_str() : "?");
-				RE::MessageBoxMenu::SelectOption(0);
+				const char* confirm = nullptr;
+				if (auto* gmst = RE::GameSettingCollection::GetSingleton()) {
+					if (auto* setting = gmst->GetSetting("sRSMConfirmDestruction")) {
+						confirm = setting->GetString();
+					}
+				}
+				const bool ours = box && confirm && std::string_view(box->bodyText.c_str()) == confirm;
+				spdlog::info("[film] the Presets callback queued a box ('{}', {} bytes) against the game's sRSMConfirmDestruction ('{}'): {}",
+					box ? box->bodyText.c_str() : "?", box ? std::string_view(box->bodyText.c_str()).size() : 0,
+					confirm ? confirm : "(none)", ours ? "the game's own confirmation, answered Ok" : "NOT the game's confirmation, left to the player");
+				if (ours) {
+					RE::MessageBoxMenu::SelectOption(0);
+				}
 			}
 			if (a_key.first == Slider::kHeadPreset) {
 				// The game does not hand the new position back to the film, and the

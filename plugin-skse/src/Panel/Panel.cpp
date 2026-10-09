@@ -178,6 +178,16 @@ namespace Lifecast::Panel
 		LogState("focus requested");
 	}
 
+	void ReleaseFocus()
+	{
+		if (!g_browser) {
+			return;
+		}
+
+		g_browser->SetBrowserFocused(false);
+		LogState("focus released");
+	}
+
 	bool IsFocused()
 	{
 		return g_browser && g_browser->IsBrowserFocused();

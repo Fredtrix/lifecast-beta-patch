@@ -981,7 +981,6 @@ namespace Lifecast::Edit::Compare
 		}
 #endif
 
-#ifdef LIFECAST_TUNING
 		// E23 - the face by the RaceMenu's own Papyrus natives, the route the Preset
 		// panel already uses (Preset\Save.cpp, Preset\Load.cpp): CharGen.
 		// SaveCharacterPreset(player, file), and when it answers,
@@ -1066,7 +1065,6 @@ namespace Lifecast::Edit::Compare
 			spdlog::info("[face-preset] ({}): CharGen.SaveCharacterPreset(player, \"{}\") dispatched: {}", a_why,
 				Preset::Library::kPreviewName, sent);
 		}
-#endif
 
 		// Once her body is loaded: ApplyBodyMorphs then UpdateModelWeight. The
 		// readback of the call says it was made; only the frame says the body
@@ -1504,9 +1502,14 @@ namespace Lifecast::Edit::Compare
 				RefreshLook(Twin(), "the comparison was turned on");
 #ifdef LIFECAST_TUNING
 				PresetRoute("the comparison was turned on");
-				// FaceByPreset("the comparison was turned on");  // boot 119: the game died inside CharGen.LoadCharacterPresetEx on the copy (see Docs/VERIFY.md V134); boot 129: with the crash fix it survives but a modal from the FSMP config loader goes in front of the panel (V140)
 				RefreshLook(Twin(), "after the preset route");
 #endif
+				// The face: the RaceMenu's own preset route, onto the copy. Without the
+				// SMP-NPC crash fix the game dies inside CharGen.LoadCharacterPresetEx on
+				// a copy under hdtSMP64, which is why that mod is a hard requirement. The
+				// FSMP then opens a message box; the Switcher lets the panel go of the
+				// focus while it is there.
+				FaceByPreset("the comparison was turned on");
 				Panel::Stage::FramePair(true, left, right);
 				g_on = true;
 			} else {

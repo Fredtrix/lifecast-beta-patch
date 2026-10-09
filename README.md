@@ -7,6 +7,15 @@ Meridian UI.
 
 **Status: early development.** Nothing here is released yet.
 
+## Requirements
+
+- SKSE, Address Library for SKSE Plugins
+- RaceMenu
+- Meridian UI
+- **SMP-NPC crash fix** - required. The comparison view copies the player's face onto a
+  second figure with RaceMenu's own preset loader. With hdtSMP64 installed and without this
+  fix, the game crashes inside that call.
+
 ## License
 
 Lifecast is released under the GNU General Public License v3.0 (GPL-3.0). See [LICENSE](LICENSE).

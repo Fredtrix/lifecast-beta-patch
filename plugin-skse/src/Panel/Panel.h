@@ -55,6 +55,10 @@ namespace Lifecast::Panel
 	// Only call this with a way out already armed.
 	void RequestFocus();
 
+	// Gives Meridian's focus up, so the keyboard and the mouse reach the game again.
+	// Applied on the next frame (the read-back right after the call still says focused).
+	void ReleaseFocus();
+
 	// Whether this panel currently owns Meridian's focus.
 	bool IsFocused();
 

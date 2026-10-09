@@ -41,6 +41,14 @@ namespace Lifecast::Panel::Switcher
 		bool              g_focusSeen = false;
 		Clock::time_point g_shownAt{};
 
+		// A native MessageBoxMenu is open over the Lifecast, and the panel has let go of
+		// the focus so the box can be answered. A focused browser keeps the keyboard
+		// from reaching a native menu and takes the mouse as well (measured in
+		// Docs/MEDIDO-E23.md: Esc closes such a box with the panel released, never
+		// with it focused). While this is set the focus watch does not count the
+		// loss as the player leaving.
+		bool g_boxSuspended = false;
+
 		std::uint32_t g_opens = 0;
 		std::uint32_t g_swaps = 0;
 
@@ -109,7 +117,7 @@ namespace Lifecast::Panel::Switcher
 		// screen but no longer owns focus, or never got it.
 		void Watch()
 		{
-			if (g_mode != Mode::kLifecast) {
+			if (g_mode != Mode::kLifecast || g_boxSuspended) {
 				return;
 			}
 
@@ -154,9 +162,49 @@ namespace Lifecast::Panel::Switcher
 			ShowLifecast();
 		}
 
+		// A message box that is not the Lifecast's own (the Lifecast answers its own the
+		// instant the game queues it, see RaceMenuFilm) opens over the panel: give the
+		// focus up while it is there and take it back when it is gone.
+		void OnBoxOpened()
+		{
+			if (g_mode != Mode::kLifecast) {
+				return;
+			}
+
+			// The Lifecast answers the game's own box the instant it is queued, and the
+			// event for it can still arrive after the answer: an empty queue is that.
+			const auto* box = RE::MessageBoxMenu::GetCurrentMessageBoxData();
+			if (!box) {
+				spdlog::info("[switch] a message box opened and its queue is empty - answered already, focus kept");
+				return;
+			}
+			spdlog::info("[switch] a message box opened over the Lifecast ('{}') - the panel lets go of the focus",
+				box ? box->bodyText.c_str() : "?");
+			g_boxSuspended = true;
+			Panel::ReleaseFocus();
+		}
+
+		void OnBoxClosed()
+		{
+			if (!g_boxSuspended) {
+				return;
+			}
+
+			g_boxSuspended = false;
+			if (g_mode != Mode::kLifecast) {
+				return;
+			}
+
+			spdlog::info("[switch] the message box closed - the panel takes the focus back");
+			g_focusSeen = false;
+			g_shownAt = Clock::now();
+			Panel::RequestFocus();
+		}
+
 		void OnMenuClosed()
 		{
 			spdlog::info("[switch] RaceSex Menu closed");
+			g_boxSuspended = false;
 
 			// What the page shows for a moment - a refusal, a save preview, a
 			// way to RaceMenu - belongs to the menu session it was shown in,
@@ -212,6 +260,12 @@ namespace Lifecast::Panel::Switcher
 						OnMenuOpened();
 					} else {
 						OnMenuClosed();
+					}
+				} else if (a_event && a_event->menuName == RE::MessageBoxMenu::MENU_NAME) {
+					if (a_event->opening) {
+						OnBoxOpened();
+					} else {
+						OnBoxClosed();
 					}
 				}
 				return RE::BSEventNotifyControl::kContinue;
