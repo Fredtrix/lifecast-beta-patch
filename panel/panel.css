@@ -1411,19 +1411,47 @@ html.card-mode body > *:not(#back-card) {
 }
 
 .back-card {
+  /* A small sign hanging from the top edge, in the free strip between the
+     filter box and the tabs of RaceMenu's own film. Two short cords hold it. */
   position: fixed;
-  top: 12px;
-  left: 12px;
+  top: 18px;
+  left: 40vw;
   z-index: 2147483647;
-  padding: 5px 10px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  color: var(--text-dim);
+  padding: 9px 22px 10px;
+  background: linear-gradient(180deg, rgba(20, 34, 26, 0.97), rgba(10, 18, 14, 0.97));
+  border: 1px solid rgba(160, 230, 185, 0.38);
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 3px rgba(12, 22, 17, 0.9), inset 0 0 0 4px rgba(160, 230, 185, 0.14), 0 4px 10px rgba(0, 0, 0, 0.55);
+  color: var(--text);
   font-family: var(--font);
-  font-size: var(--text-size);
+  font-size: 21px;
+  line-height: 1.25;
+  white-space: nowrap;
   pointer-events: none;
   user-select: none;
+}
+
+.back-card::before,
+.back-card::after {
+  content: "";
+  position: absolute;
+  top: -19px;
+  width: 2px;
+  height: 18px;
+  background: rgba(190, 170, 120, 0.85);
+}
+
+.back-card::before {
+  left: 22px;
+}
+
+.back-card::after {
+  right: 22px;
+}
+
+.back-card b {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .back-card[hidden] {

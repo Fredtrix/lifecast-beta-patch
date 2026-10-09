@@ -34,7 +34,10 @@
     const on = !!(data && data.on);
     if (on) {
       const key = data && typeof data.key === "string" ? data.key : "F4";
-      card.textContent = "Press " + key + " to return to Lifecast";
+      const strong = document.createElement("b");
+      strong.textContent = key;
+      card.textContent = "Press ";
+      card.append(strong, " to return to Lifecast");
     }
     card.hidden = !on;
     document.documentElement.classList.toggle("card-mode", on);
