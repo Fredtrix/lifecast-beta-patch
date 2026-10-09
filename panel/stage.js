@@ -94,7 +94,9 @@
     if (!state || !state.ready || !amount) {
       return;
     }
-    if (key === "tilt" && !state.tilt) {
+    // With the lock on the DLL holds the head's height by tilt (E21, F30), so a tilt asked for by hand would be
+    // taken back at once: the lock has to be off for the tilt to be the player's.
+    if (key === "tilt" && (!state.tilt || state.lock !== false)) {
       return;
     }
     pending[key] += amount;
@@ -159,9 +161,9 @@
   ]);
   const tiltGroup = group("Tilt", [
     button("\u25B2", "Tilt one way", () => move("tilt", TILT_STEP),
-      (s) => s.tiltDeg >= s.limits.tiltMax - near),
+      (s) => s.lock !== false || s.tiltDeg >= s.limits.tiltMax - near),
     button("\u25BC", "Tilt the other way", () => move("tilt", -TILT_STEP),
-      (s) => s.tiltDeg <= -s.limits.tiltMax + near),
+      (s) => s.lock !== false || s.tiltDeg <= -s.limits.tiltMax + near),
   ]);
   const reframe = LifecastControls.el("button", "panel-button stage-reframe", "Reframe");
   reframe.type = "button";

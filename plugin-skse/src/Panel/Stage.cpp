@@ -260,6 +260,18 @@ namespace Lifecast::Panel::Stage
 
 		bool g_lockOn = true;
 
+		// THE VERTICAL HALF OF THE LOCK (Fase 8, E21, F30). The rule above solved PAN alone, which keeps the
+		// figure centred sideways and says nothing of up and down: lifting or lowering the camera, or tilting it,
+		// took the head out of the window with the lock on exactly as with it off (boot E21, 206 steps: the head's
+		// y was the same within 0.02 either way while its x stayed at 0.50 only with the lock on). So the lock now
+		// also holds the height the head landed at when the free camera took over, by TILT - the one axis that
+		// turns the view without moving the camera. g_oneY0 is that height, 0..1 of the window; it is read the
+		// first time the aim is measured with the camera still at the opening (lift 0, tilt 0) and dropped with
+		// every new reading of the frame. The band is of the window's height, as kTrackBand is of the view's width.
+		bool   g_oneY0Have = false;
+		double g_oneY0 = 0.0;
+		constexpr double kTrackBandY = 0.01;
+
 		void SetOneOn(bool a_on)
 		{
 			g_oneOn = a_on;
@@ -768,6 +780,8 @@ namespace Lifecast::Panel::Stage
 			double        perpX{ 0.0 };
 			double        perpY{ 0.0 };
 			double        aimX{ 0.0 };
+			double        aimY{ 0.0 };  // where the aim lands vertically, 0..1 of the window (E21: the lock holds it)
+			RE::NiPoint3  camPos;       // the world camera's position, the pivot a tilt turns about
 			double        perUnit{ 0.0 };
 		};
 
@@ -825,6 +839,8 @@ namespace Lifecast::Panel::Stage
 			a_look.perpX = -g_frame.dirY;
 			a_look.perpY = g_frame.dirX;
 			a_look.aimX = ax;
+			a_look.aimY = ay;
+			a_look.camPos = cam->world.translate;
 			a_look.perUnit = sep / kProbeStep;
 			return true;
 		}
@@ -948,6 +964,66 @@ namespace Lifecast::Panel::Stage
 			return true;
 		}
 
+		// WHERE THE AIM WOULD LAND vertically if the camera pitched a_by degrees more than it is now, read from the
+		// projection and not extrapolated: a pitch of the camera about its own position is the same as turning the
+		// world the other way about that position, so the aim is rotated with the transpose of the very matrix
+		// WriteTilt turns the camera by (same axis, same sign), about the camera's world position, and projected
+		// with the camera as it stands. Nothing moves to take the sample.
+		bool LandingYAt(const Look& a_look, double a_by, double& a_y)
+		{
+			const RE::NiMatrix3 r = AxisAngle(g_frame.rightX, g_frame.rightY, 0.0, a_by);
+			const RE::NiPoint3  moved = a_look.camPos + r.Transpose() * (a_look.aim - a_look.camPos);
+			double              x = 0.0;
+			double              d = 0.0;
+			return ScreenX(a_look.cam, moved, x, a_y, d);
+		}
+
+		// The tilt that puts the aim back at the height it had at the opening, by the same secant the pan uses.
+		// Writes the TARGET only. Returns whether the target moved. At the limit it stops at kTiltMax and says so:
+		// the figure then comes out short of where it was, and that is the truth of the limit, not a failure to solve.
+		bool TiltFrom(const Look& a_look, const char* a_when, bool a_quiet)
+		{
+			if (!g_frame.node || !g_oneY0Have) {
+				return false;
+			}
+			double d0 = 0.0;
+			double f0 = a_look.aimY - g_oneY0;
+			double y1 = 0.0;
+			double d1 = f0 > 0.0 ? 1.0 : -1.0;
+			if (!LandingYAt(a_look, d1, y1)) {
+				return false;
+			}
+			double f1 = y1 - g_oneY0;
+			for (int i = 0; i < kSolveSteps && std::abs(f1) > 0.002; ++i) {
+				const double slope = f1 - f0;
+				if (std::abs(slope) < 1e-9) {
+					break;
+				}
+				const double next = d1 - f1 * (d1 - d0) / slope;
+				double       y = 0.0;
+				if (!LandingYAt(a_look, next, y)) {
+					break;
+				}
+				d0 = d1;
+				f0 = f1;
+				d1 = next;
+				f1 = y - g_oneY0;
+			}
+			const double wanted = g_at.tilt + d1;
+			const double tilt = Clamp(wanted, -kTiltMax, kTiltMax);  // silent: the tracker asks every 100 ms
+			const bool   moved = std::abs(tilt - g_target.tilt) > 0.01;
+			if (moved && !a_quiet) {
+				spdlog::info("[stage] frame {}: the head sits at y {:.4f}, it was {:.4f} at the opening - tilt {:.2f} -> {:.2f} "
+							 "(wanted {:.2f}){}",
+					a_when, a_look.aimY, g_oneY0, g_at.tilt, tilt, wanted,
+					tilt != wanted ? " - THE TILT LIMIT WAS HIT, so the head comes out short of its height" : "");
+			}
+			if (moved) {
+				g_target.tilt = tilt;
+			}
+			return moved;
+		}
+
 		bool SolveOne(const char* a_when, bool a_quiet = false)
 		{
 			const double span = g_oneRight - g_oneLeft;
@@ -960,7 +1036,18 @@ namespace Lifecast::Panel::Stage
 			if (!MeasureOne(look, a_when, a_quiet)) {
 				return false;
 			}
-			return PanFrom(look, a_when, a_quiet);
+			const bool panned = PanFrom(look, a_when, a_quiet);
+			// The height of the opening is the first one read with the camera still there; after that the lock
+			// brings the head back to it.
+			if (!g_oneY0Have && g_at.lift == 0.0 && g_at.tilt == 0.0 && g_target.lift == 0.0 && g_target.tilt == 0.0) {
+				g_oneY0 = look.aimY;
+				g_oneY0Have = true;
+				spdlog::info("[stage] frame {}: the head lands at y {:.4f} at the opening - the lock holds it by tilt (E21)",
+					a_when, g_oneY0);
+			} else if (g_oneY0Have) {
+				TiltFrom(look, a_when, a_quiet);
+			}
+			return panned;
 		}
 
 		// What the slide actually produced, projected again at the camera it
@@ -1037,21 +1124,39 @@ namespace Lifecast::Panel::Stage
 			}
 			const double centre = (g_oneLeft + g_oneRight) / 2.0;
 			const double off = look.aimX - centre;
-			if (std::abs(off) <= span * kTrackBand) {
+			const bool   xOut = std::abs(off) > span * kTrackBand;
+			const bool   yOut = g_frame.node && g_oneY0Have && std::abs(look.aimY - g_oneY0) > kTrackBandY;
+			if (!xOut && !yOut) {
 				return;
 			}
-			const double was = g_target.pan;
-			if (!PanFrom(look, "track", true)) {
+			bool did = false;
+			if (xOut) {
+				const double was = g_target.pan;
+				if (PanFrom(look, "track", true)) {
+					++g_oneTracks;
+					did = true;
+					// One line per correction, not one per look: this is the record of
+					// how much the figure moved and how often, and it is also how a
+					// tracker that was written and never acted is told apart from one
+					// that works - P6 of the E4e prediction.
+					spdlog::info("[stage] frame track #{}: the aim had drifted to {:+.2f}% of the view (aim from {}), pan "
+								 "{:.2f} -> {:.2f}",
+						g_oneTracks, off / span * 100.0, look.from, was, g_target.pan);
+				}
+			}
+			if (yOut) {
+				const double was = g_target.tilt;
+				if (TiltFrom(look, "track", true)) {
+					++g_oneTracks;
+					did = true;
+					spdlog::info("[stage] frame track #{}: the head had drifted to y {:.4f} from {:.4f} (aim from {}), tilt "
+								 "{:.2f} -> {:.2f}",
+						g_oneTracks, look.aimY, g_oneY0, look.from, was, g_target.tilt);
+				}
+			}
+			if (!did) {
 				return;
 			}
-			++g_oneTracks;
-			// One line per correction, not one per look: this is the record of
-			// how much the figure moved and how often, and it is also how a
-			// tracker that was written and never acted is told apart from one
-			// that works - P6 of the E4e prediction.
-			spdlog::info("[stage] frame track #{}: the aim had drifted to {:+.2f}% of the view (aim from {}), pan "
-						 "{:.2f} -> {:.2f}",
-				g_oneTracks, off / span * 100.0, look.from, was, g_target.pan);
 			g_moving.store(true, std::memory_order_relaxed);
 		}
 
@@ -1106,6 +1211,7 @@ namespace Lifecast::Panel::Stage
 				g_firstDistance = f.distance;
 			}
 			g_frame = f;
+			g_oneY0Have = false;
 			g_at = At{};
 			g_at.distance = f.distance;
 			g_target = g_at;
@@ -2106,6 +2212,7 @@ namespace Lifecast::Panel::Stage
 					g_freeBefore = false;
 					g_pairForced = false;
 					g_lockOn = true;
+					g_oneY0Have = false;
 					SetOneOn(false);
 					g_oneSolves = 0;
 					g_oneTracks = 0;
