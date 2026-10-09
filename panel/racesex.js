@@ -40,6 +40,8 @@
   const ANSWER_TIMEOUT_MS = 8000;
   const ROWS_TIMEOUT_MS = 3000;
   const ROWS_MARGIN_MS = 150;
+  const LOOK_TIMEOUT_MS = 800;
+  const LOOK_SETTLE_MS = 40;
 
   // --- Race: one row per playable race, the current one marked.
   const raceSection = LifecastControls.section("Race");
@@ -54,20 +56,53 @@
   const sexBar = LifecastControls.el("div", "preset-bar");
   const sexButtons = {};
 
+  // The "look" the page holds can be older than the character: RaceMenu applies
+  // the saved free hair colour AFTER the panel came up, and nothing tells the
+  // page (the portrait read hair colour preset 0 while the hair on screen was
+  // red). Ask again and wait for the answer, so the portrait that is about to
+  // be taken reads what is on screen. Resolves after the answer, or after the
+  // cap, never rejects. The bridge keeps ONE handler per type and look.js owns
+  // "look", so this listens to the event look.js raises once the rows are set.
+  let lookWaiter = null;
+  document.addEventListener("lifecast-look", () => {
+    if (lookWaiter !== null) {
+      const w = lookWaiter;
+      lookWaiter = null;
+      setTimeout(w, LOOK_SETTLE_MS); // a beat, so the rows are painted
+    }
+  });
+  function freshLook() {
+    return new Promise((resolve) => {
+      const t = setTimeout(() => {
+        if (lookWaiter === resolve) {
+          lookWaiter = null;
+        }
+        resolve();
+      }, LOOK_TIMEOUT_MS);
+      lookWaiter = () => {
+        clearTimeout(t);
+        resolve();
+      };
+      LifecastBridge.send("look-get");
+    });
+  }
+
   // A change the player asked for: what the character holds now is taken
   // BEFORE the message goes, because it is what the change is about to erase.
   function begin(kind, target) {
-    gesture = {
-      kind: kind,
-      target: target,
-      from: { race: cur.race, female: cur.female, portrait: LifecastControls.portrait() },
-    };
-    pending = kind;
-    if (kind === "sex") {
-      LifecastBridge.send("sex-set", { female: target.female });
-    } else {
-      LifecastBridge.send("race-set", { i: target.race });
-    }
+    pending = kind; // the portrait waits for a fresh look; a second click must not start another change
+    freshLook().then(() => {
+      gesture = {
+        kind: kind,
+        target: target,
+        from: { race: cur.race, female: cur.female, portrait: LifecastControls.portrait() },
+      };
+      if (kind === "sex") {
+        LifecastBridge.send("sex-set", { female: target.female });
+      } else {
+        LifecastBridge.send("race-set", { i: target.race });
+      }
+    });
   }
 
   for (const [female, label] of [[false, "Male"], [true, "Female"]]) {

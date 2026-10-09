@@ -295,6 +295,8 @@
         paintChip(entry, c.index);
       }
     }
+    // Whoever needs a reading that is up to date (racesex.js, before it takes a portrait) waits on this.
+    document.dispatchEvent(new CustomEvent("lifecast-look"));
   });
 
   // The whole lists the pop-ups choose from. Each is checked against the
