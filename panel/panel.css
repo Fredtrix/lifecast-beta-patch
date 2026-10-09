@@ -1400,3 +1400,32 @@ html[data-belt-open] .stage {
   padding-left: 6px;
   padding-right: 6px;
 }
+
+/* The card for the way back (card.js): the browser stays on screen over RaceMenu's
+   own film with no focus, so everything but the card is made invisible and takes
+   no pointer. Hidden with visibility, not display: the layout the stage reads
+   stays where it was. */
+html.card-mode body > *:not(#back-card) {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.back-card {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 2147483647;
+  padding: 5px 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: var(--text-size);
+  pointer-events: none;
+  user-select: none;
+}
+
+.back-card[hidden] {
+  display: none;
+}

@@ -39,6 +39,13 @@ namespace Lifecast::Panel
 	void SetVisible(bool a_visible);
 	bool IsVisible();
 
+	// RaceMenu's film is in front: the browser stays on screen but without focus,
+	// so the keyboard and the mouse belong to the film, and the page draws only a
+	// small card saying which key brings the panel back. Not "visible" in the
+	// sense of IsVisible(): the panel itself is not on screen. SetVisible() ends
+	// the card, either way.
+	void ShowCard(const char* a_key);
+
 	// Registers the focus chord on the current browser: up to two DirectInput
 	// scan codes, the second one 0 for a single key. Meridian evaluates it
 	// before a focused browser can swallow the key, and consumes it - it

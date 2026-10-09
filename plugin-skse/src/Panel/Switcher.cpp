@@ -390,9 +390,9 @@ namespace Lifecast::Panel::Switcher
 		++g_swaps;
 		spdlog::info("[switch] show RaceMenu (swap #{})", g_swaps);
 
-		// Hiding the browser releases its focus. The chord comes off with it,
-		// so F4 reaches the game again and brings the Lifecast back.
-		Panel::SetVisible(false);
+		// The panel gives its focus up and shows only its card. The chord comes
+		// off with it, so F4 reaches the game again and brings the Lifecast back.
+		Panel::ShowCard("F4");
 		Panel::DisarmFocusChord();
 		SetFilmVisible(true);
 		RaceMenuFilm::Sync();

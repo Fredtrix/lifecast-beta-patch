@@ -16,6 +16,7 @@ namespace Lifecast::Panel
 		MUI::IUIPlatformAPI::BrowserRefHandle g_handle = MUI::IUIPlatformAPI::InvalidBrowserRefHandle;
 		Meridian::CEF::IBrowser* g_browser = nullptr;
 		bool g_visible = false;
+		bool g_card = false;
 
 		// Set by Meridian's shutdown callback. From then on no browser call
 		// is allowed, and Ensure() must not create a new one.
@@ -73,11 +74,20 @@ namespace Lifecast::Panel
 				{ "visible", g_visible },
 			});
 		}
+
+		// The page says what it drew for the card, read from its own DOM: the
+		// browser's state in the log is the browser's, this is the page's.
+		void OnCardState(const nlohmann::json& a_data)
+		{
+			spdlog::info("[panel] card state from the page: {}", a_data.dump());
+			LogState("card state read");
+		}
 	}
 
 	void Init()
 	{
 		Bridge::On("hello", &OnHello);
+		Bridge::On("card-state", &OnCardState);
 	}
 
 	bool Ensure()
@@ -136,6 +146,11 @@ namespace Lifecast::Panel
 			return;
 		}
 
+		if (g_card) {
+			g_card = false;
+			Bridge::Send("card", { { "on", false } });
+		}
+
 		g_browser->SetBrowserVisible(a_visible);
 		g_visible = a_visible;
 		LogState(a_visible ? "shown" : "hidden");
@@ -146,6 +161,22 @@ namespace Lifecast::Panel
 	bool IsVisible()
 	{
 		return g_browser && g_visible;
+	}
+
+	void ShowCard(const char* a_key)
+	{
+		if (!g_browser) {
+			return;
+		}
+
+		g_browser->SetBrowserFocused(false);
+		g_browser->SetBrowserVisible(true);
+		g_visible = false;
+		g_card = true;
+		LogState("card shown");
+
+		Bridge::Send("visibility", { { "visible", false } });
+		Bridge::Send("card", { { "on", true }, { "key", a_key } });
 	}
 
 	void ArmFocusChord(std::uint32_t a_key1, std::uint32_t a_key2)
