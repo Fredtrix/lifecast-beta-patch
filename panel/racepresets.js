@@ -185,6 +185,7 @@
     // decides whether its button exists by whether the section is in the DOM
     // (belt.js), so hiding the section would leave a button that leads
     // nowhere.
+    row.el.dataset.empty = count === 0 ? "1" : ""; // the search respects it (F4)
     row.el.hidden = count === 0;
     const key = names.join("|");
     if (key !== listKey) {

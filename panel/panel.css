@@ -991,6 +991,11 @@ html[data-belt-all] #sections .all-line-slider .slider-name {
   border-top: none;
 }
 
+/* The search hid every row of this layer: the head would label nothing. */
+.tint-head.search-off {
+  display: none;
+}
+
 /* The part a list row points at, as RaceMenu names it. */
 .part-name {
   grid-column: 1 / -1;

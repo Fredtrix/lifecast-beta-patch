@@ -37,6 +37,23 @@
     }
   }
 
+  // A tint layer is a head (its name and colour chip) followed by its rows
+  // under the same parent; the rows are named Red, Green, Blue, Intensity,
+  // so the layer's own name is on the head and not on any row.
+  function headOf(row) {
+    for (let e = row.previousElementSibling; e; e = e.previousElementSibling) {
+      if (e.classList.contains("tint-head")) {
+        return e;
+      }
+    }
+    return null;
+  }
+
+  function textOf(el, selector) {
+    const n = el ? el.querySelector(selector) : null;
+    return n ? n.textContent.toLowerCase() : "";
+  }
+
   function apply() {
     const q = searchInput.value.trim().toLowerCase();
     const changedOnly = filterButton.getAttribute("aria-pressed") === "true";
@@ -62,12 +79,26 @@
       }
       totalSections += 1;
 
+      // The name of a section, and of a tint layer, stands for every row under
+      // it: asking for "paint" or for a layer's name finds the thing, not
+      // only a row that happens to repeat the word (Texture, Glow, Intensity).
+      const titleHit = q !== "" && textOf(section, ".section-title").includes(q);
+      const heads = new Map(); // tint head -> some row of its layer is visible
       let sectionHasVisible = false;
       rows.forEach((row) => {
+        // A list the race has no entries for (look.js, racepresets.js flag it,
+        // F4) is no slider here: it stays hidden whatever the query says, and
+        // the counter does not count what nobody can see.
+        if (row.dataset.empty === "1") {
+          row.hidden = true;
+          return;
+        }
         totalRows += 1;
         const nameEl = row.querySelector(".slider-name");
         const label = nameEl ? nameEl.textContent.toLowerCase() : "";
-        const matchesQuery = q === "" || label.includes(q);
+        const head = headOf(row);
+        const layerHit = q !== "" && head !== null && textOf(head, ".slider-name").includes(q);
+        const matchesQuery = q === "" || titleHit || layerHit || label.includes(q);
         const isChanged = row.dataset.changed === "1";
         const matchesChanged = !changedOnly || isChanged;
         const visible = matchesQuery && matchesChanged;
@@ -81,6 +112,14 @@
         if (visible) {
           sectionHasVisible = true;
         }
+        if (head) {
+          heads.set(head, heads.get(head) || visible);
+        }
+      });
+
+      // A layer's head with none of its rows showing is a label over nothing.
+      section.querySelectorAll(".tint-head").forEach((head) => {
+        head.classList.toggle("search-off", active && heads.get(head) === false);
       });
 
       if (active) {

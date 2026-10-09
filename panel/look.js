@@ -138,13 +138,24 @@
       // A swatch does not go through the row's own send, so it records its
       // own entry: read the index BEFORE set() moves it, then pick.
       const pick = (index) => {
+        if (typeof index === "string") {
+          // A free colour put back (undo of a swatch click made over one, F33).
+          entry.color = index;
+          entry.chip.style.background = index;
+          entry.picker.refresh();
+          send("hair-rgb", index, true);
+          return;
+        }
         entry.row.set(index);
+        entry.index = index; // the DLL's answer says so too; a second click before it must see it
         entry.color = entry.swatches && entry.swatches[index];
         paintChip(entry, index);
         send("hair-color", index, true);
       };
       b.addEventListener("click", () => {
-        const before = Number(entry.row.input.value);
+        // Over a free colour the row rests on a stand-in 0: the colour is the "before".
+        const before =
+          entry.index < 0 && typeof entry.color === "string" ? entry.color : Number(entry.row.input.value);
         pick(i);
         LifecastHistory.record({ label: "Hair Color", before: before, after: i, apply: pick });
       });
@@ -203,6 +214,9 @@
 
       entry.kind = "list";
       entry.count = c.count;
+      // The flag is what the search respects: it re-sets "hidden" on every
+      // row it reprocesses, and would otherwise show an empty list again (F4).
+      entry.row.el.dataset.empty = c.count === 0 ? "1" : "";
       entry.row.el.hidden = c.count === 0;
       if (c.count === 0) {
         entry.row.set(null); // no stale values from the last list behind the hidden row
@@ -223,7 +237,8 @@
         // Enabled, but showing that the current value is not a list entry.
         entry.row.set(0);
         entry.row.mark(true);
-        entry.row.valueEl.textContent = "--";
+        // A free hair colour is no list entry, but the DLL sends it: show it (F15).
+        entry.row.valueEl.textContent = typeof c.color === "string" ? c.color.toUpperCase() : "--";
       } else {
         entry.row.set(c.index);
       }
