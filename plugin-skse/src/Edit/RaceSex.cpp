@@ -266,6 +266,9 @@ namespace Lifecast::Edit::RaceSex
 			}
 			g_wait.active = false;
 			spdlog::info("[race-sex]   settled: {}", State());
+			if (std::string_view(g_wait.what) == "race") {
+				Panel::RaceMenuFilm::LogRaceMarker("race settled");
+			}
 			Appearance::ListsChanged();
 			++g_changes;
 			Session::Replaced("RaceMenu changed the race or sex");
@@ -284,7 +287,11 @@ namespace Lifecast::Edit::RaceSex
 
 		void OnGet(const nlohmann::json&) { Push("the page asked"); }
 
-		void OnShown() { Push("the panel came on screen"); }
+		void OnShown()
+		{
+			Push("the panel came on screen");
+			Panel::RaceMenuFilm::LogRaceMarker("panel shown");
+		}
 
 		void OnOpened()
 		{

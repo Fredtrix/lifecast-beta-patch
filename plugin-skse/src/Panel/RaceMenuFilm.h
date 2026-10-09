@@ -81,4 +81,8 @@ namespace Lifecast::Panel::RaceMenuFilm
 	// runs there with whether the callback was called.
 	void ChangeSex(bool a_female, std::function<void(bool a_called)> a_done);
 	void ChangeRace(std::string a_raceName, std::function<void(bool a_called)> a_done);
+
+	// Queued on the UI thread; returns at once. Logs which row the film's race list
+	// marks as the player's own (listState.activeEntry), and why it was read.
+	void LogRaceMarker(std::string a_why);
 }

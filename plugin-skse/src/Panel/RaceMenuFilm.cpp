@@ -534,6 +534,54 @@ namespace Lifecast::Panel::RaceMenuFilm
 			return a_s;
 		}
 
+		// The race list marks the player's race with the entry kept in
+		// listState.activeEntry: RaceMenu's own click on a race sets it, then asks
+		// the list to redraw (onItemPress), and only then calls ChangeRace. Reading
+		// it back says which row the film is drawing as the player's.
+		void ReadRaceMarker(RE::GFxMovieView* a_movie, const char* a_why)
+		{
+			RE::GFxValue list;
+			RE::GFxValue state;
+			RE::GFxValue active;
+			RE::GFxValue entries;
+			if (!a_movie || !a_movie->GetVariable(&list, kRaceList) || !list.IsObject() ||
+				!list.GetMember("listState", &state) || !state.IsObject()) {
+				spdlog::info("[film] race marker ({}): no race list state", a_why);
+				return;
+			}
+			std::uint32_t count = 0;
+			if ((list.GetMember("entryList", &entries) || list.GetMember("_entryList", &entries)) && entries.IsArray()) {
+				count = entries.GetArraySize();
+			}
+			double selected = -2;
+			Num(list, "_selectedIndex", selected);
+			if (!state.GetMember("activeEntry", &active) || !active.IsObject()) {
+				spdlog::info("[film] race marker ({}): no active entry; list selected index {}, {} entries", a_why, selected,
+					count);
+				return;
+			}
+			double raceID = -1;
+			Num(active, "raceID", raceID);
+			spdlog::info("[film] race marker ({}): active entry raceID {} '{}'; list selected index {}, {} entries", a_why,
+				raceID, Str(active, "text"), selected, count);
+		}
+
+		// What RaceMenu's click does before ChangeRace: the entry becomes the list's
+		// active one and the list is told to redraw. ChangeRace called straight
+		// moves the player and leaves the old row marked.
+		void MarkRace(RE::GFxValue& a_list, const RE::GFxValue& a_entry)
+		{
+			RE::GFxValue state;
+			if (!a_list.GetMember("listState", &state) || !state.IsObject()) {
+				spdlog::warn("[film] ChangeRace: the race list has no listState - the marker stays where it was");
+				return;
+			}
+			const bool set = state.SetMember("activeEntry", a_entry);
+			const bool redrawn = a_list.Invoke("requestUpdate");
+			spdlog::info("[film] race marker moved to the new race: set {}, redraw asked {}", set, redrawn);
+		}
+
+
 		void DoChangeSex(bool a_female, const std::function<void(bool)>& a_done)
 		{
 			auto* ui = RE::UI::GetSingleton();
@@ -584,6 +632,7 @@ namespace Lifecast::Panel::RaceMenuFilm
 					spdlog::info("[film]   race list [{}] '{}' raceID {}", i, text, raceID);
 					if (Lower(text) == wanted) {
 						found = static_cast<int>(i);
+						MarkRace(list, entry);
 						called = CallNative(movie, menu.get(), "ChangeRace", raceID, -1.0);
 						spdlog::info("[film] ChangeRace({}, -1) for '{}': {}", raceID, a_name,
 							called ? "called" : "not called");
@@ -621,6 +670,19 @@ namespace Lifecast::Panel::RaceMenuFilm
 		}
 		tasks->AddUITask(
 			[name = std::move(a_raceName), a_done = std::move(a_done)]() { DoChangeRace(name, a_done); });
+	}
+
+	void LogRaceMarker(std::string a_why)
+	{
+		auto* tasks = SKSE::GetTaskInterface();
+		if (!tasks) {
+			return;
+		}
+		tasks->AddUITask([why = std::move(a_why)]() {
+			auto* ui = RE::UI::GetSingleton();
+			auto  menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			ReadRaceMarker(menu ? menu->uiMovie.get() : nullptr, why.c_str());
+		});
 	}
 
 	void ReadNativePreset(std::function<void(int)> a_found)
