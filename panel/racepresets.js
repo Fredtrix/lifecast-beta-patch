@@ -220,6 +220,20 @@
     status.textContent = ok ? "applied " + labelFor(i) : "not applied" + (why ? " - " + why : "");
   });
 
+  // The player chose a preset on RaceMenu's own slider while the panel was
+  // away: the face already shows it, so the row rests on it too. Nothing is
+  // sent back - the preset is already worn.
+  LifecastBridge.on("race-preset-native", (data) => {
+    const i = data && typeof data.i === "number" ? data.i : -1;
+    if (i < 0 || i >= count) {
+      return;
+    }
+    row.set(i);
+    applied = i;
+    showName();
+    status.textContent = "RaceMenu is on " + labelFor(i);
+  });
+
   LifecastBridge.whenAttached((ok) => {
     if (ok) {
       LifecastBridge.send("race-presets-get");

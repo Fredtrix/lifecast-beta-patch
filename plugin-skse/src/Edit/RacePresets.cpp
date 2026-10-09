@@ -306,7 +306,21 @@ namespace Lifecast::Edit::RacePresets
 
 		void OnGet(const nlohmann::json&) { PushList("the page asked"); }
 
-		void OnShown() { PushList("the panel came on screen"); }
+		void OnShown()
+		{
+			PushList("the panel came on screen");
+			// The player may have chosen a preset on RaceMenu's own slider meanwhile;
+			// the face already shows it (the other sections re-read), the row must too.
+			Panel::RaceMenuFilm::ReadNativePreset([](int a_index) {
+				if (a_index < 0 || a_index >= static_cast<int>(g_lists.presets.size())) {
+					spdlog::warn("[race-presets] RaceMenu's own slider rests on {}, outside the list of {}", a_index,
+						g_lists.presets.size());
+					return;
+				}
+				spdlog::info("[race-presets] RaceMenu's own slider rests on [{}]: the row follows", a_index);
+				Panel::Bridge::Send("race-preset-native", { { "i", a_index } });
+			});
+		}
 
 		void OnOpened()
 		{

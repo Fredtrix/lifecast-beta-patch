@@ -153,6 +153,34 @@ namespace Lifecast::Panel::RaceMenuFilm
 		RE::GFxMovieView* g_presetMovie = nullptr;
 		int               g_presetPos = -1;
 
+		// What the Presets entry's "position" held the last time the Lifecast was done
+		// with the film (SyncNow reads it back after writing), and the film it was
+		// read from. If the entry holds something else when the panel comes back,
+		// the player moved RaceMenu's own slider meanwhile (ReadNativePreset).
+		RE::GFxMovieView* g_baseMovie = nullptr;
+		double            g_presetBase = -1.0;
+
+		// RaceMenu's own Presets slider: the entry, and its position.
+		bool PresetEntry(RE::GFxMovieView* a_movie, RE::GFxValue& a_entry)
+		{
+			RE::GFxValue list;
+			RE::GFxValue entries;
+			if (!a_movie->GetVariable(&list, kList) || !list.IsObject() || !list.GetMember("_entryList", &entries) ||
+				!entries.IsArray()) {
+				return false;
+			}
+			const auto n = entries.GetArraySize();
+			for (std::uint32_t i = 0; i < n; ++i) {
+				RE::GFxValue entry;
+				if (entries.GetElement(i, &entry) && entry.IsObject() && Str(entry, "callbackName") == "ChangeHeadPreset" &&
+					Str(entry, "text") == "Presets") {
+					a_entry = entry;
+					return true;
+				}
+			}
+			return false;
+		}
+
 		bool Set(RE::GFxValue& a_entry, double a_value, int& a_written)
 		{
 			double pos = 0;
@@ -269,6 +297,12 @@ namespace Lifecast::Panel::RaceMenuFilm
 						break;
 					}
 				}
+			}
+			RE::GFxValue presets;
+			double       presetPos = 0;
+			if (PresetEntry(movie, presets) && Num(presets, "position", presetPos)) {
+				g_baseMovie = movie;
+				g_presetBase = presetPos;
 			}
 			const auto us = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
 			spdlog::info("[film] RaceMenu's sliders: {} checked, {} updated, refresh {}, {} us{}{}", seen, written,
@@ -587,6 +621,43 @@ namespace Lifecast::Panel::RaceMenuFilm
 		}
 		tasks->AddUITask(
 			[name = std::move(a_raceName), a_done = std::move(a_done)]() { DoChangeRace(name, a_done); });
+	}
+
+	void ReadNativePreset(std::function<void(int)> a_found)
+	{
+		auto* tasks = SKSE::GetTaskInterface();
+		if (!tasks) {
+			return;
+		}
+		tasks->AddUITask([a_found = std::move(a_found)]() {
+			auto* ui = RE::UI::GetSingleton();
+			auto  menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto* movie = menu ? menu->uiMovie.get() : nullptr;
+			RE::GFxValue entry;
+			double       pos = 0;
+			if (!movie || !PresetEntry(movie, entry) || !Num(entry, "position", pos)) {
+				spdlog::info("[film] the native Presets slider could not be read (film {})", movie != nullptr);
+				return;
+			}
+			// With a baseline for this film, any change is the player's. Without
+			// one (the panel's first showing, nothing handed over yet), only a
+			// slider off its resting end can be told from an untouched one.
+			const bool known = g_baseMovie == movie && g_presetBase >= 0.0;
+			const bool moved = known ? std::abs(pos - g_presetBase) > 0.0005 : pos > 0.0005;
+			spdlog::info("[film] the native Presets slider reads {} (baseline {}, Lifecast's last {}): {}", pos,
+				known ? fmt::format("{}", g_presetBase) : "none", g_presetPos, moved ? "moved by the player" : "unchanged");
+			if (!moved) {
+				return;
+			}
+			const int index = static_cast<int>(std::lround(pos));
+			g_presetMovie = movie;
+			g_presetPos = index;
+			g_baseMovie = movie;
+			g_presetBase = pos;
+			if (a_found) {
+				a_found(index);
+			}
+		});
 	}
 
 	void Sync()

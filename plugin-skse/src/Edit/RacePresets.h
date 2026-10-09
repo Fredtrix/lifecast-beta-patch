@@ -33,6 +33,8 @@
 //                                        "Prisoner", which names nothing
 //   page -> dll  "race-preset-apply"   { "i": index }
 //   dll -> page  "race-preset-applied" { "i", "ok": bool, "why": text }
+//   dll -> page  "race-preset-native"  { "i" }   the player moved RaceMenu's own
+//                                        Presets slider while the panel was away
 //
 // The DLL pushes "race-presets" when the panel comes on screen, because
 // RaceMenu may have changed race or sex meanwhile and the list is per race

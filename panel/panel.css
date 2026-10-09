@@ -294,10 +294,11 @@ html:not([data-belt-open]) .belt-panel {
   display: none;
 }
 
-/* All, search and Changed: the panel takes the whole height under the
-   finder, so the results hang from the field that asked for them (D129). */
+/* All, search and Changed: the panel takes the whole height, finder
+   included - the finder is the panel's top (F43), so the results hang from
+   the field that asked for them (D129). */
 html[data-belt-wide] .belt-panel {
-  height: calc(100vh - var(--belt-height) - var(--finder-height) - var(--gap) * 2);
+  height: calc(100vh - var(--belt-height) - var(--gap));
   max-height: none;
 }
 
@@ -486,29 +487,23 @@ select.panel-button option {
   max-width: 460px;
 }
 
-/* Search and the "changed" filter (D129), over the upper left corner, as
-   wide as the small panel; a search opens the panel under it. Reuses
-   .preset-field and .panel-button - no new token. */
+/* Search and the "changed" filter (D129, F43): the top row of the small
+   panel, so it is as wide as the panel and moves with it when a menu changes
+   the panel's size. Reuses .preset-field and .panel-button - no new token. */
 .finder {
-  position: absolute;
-  top: var(--gap);
-  left: 0;
+  flex: none;
   box-sizing: border-box;
-  width: calc(var(--panel-width) * var(--panel-scale));
   height: var(--finder-height);
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 0 calc(var(--gap) * 1.5);
-  font-size: calc(var(--text-size) * var(--panel-scale));
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-left: none;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 /* Hidden, not disabled, while no category is open: the field cannot be used
-   with the belt closed, so it is not on screen. Any category, All, a search
-   in progress or Changed sets data-belt-open and brings it back. The name
+   with the belt closed, so it is not on screen. The panel it lives in is
+   already display:none then; this keeps the rule explicit (F29). The name
    field in the footer is a different control and is not touched. */
 html:not([data-belt-open]) .finder {
   display: none;

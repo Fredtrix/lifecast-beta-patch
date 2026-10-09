@@ -47,6 +47,12 @@ namespace Lifecast::Panel::RaceMenuFilm
 	// film is made visible again.
 	void Sync();
 
+	// Queued on the UI thread; returns at once. Call when the panel comes back
+	// on screen. Reads RaceMenu's own Presets slider and, if the player moved it
+	// while the panel was away, calls a_found with the preset index it rests on
+	// (and remembers it, so the next Sync writes it back unchanged).
+	void ReadNativePreset(std::function<void(int)> a_found);
+
 	enum class Slider
 	{
 		kMorph,       // a_which: the faceData morph index, 0 to 17

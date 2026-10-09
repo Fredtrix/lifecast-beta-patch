@@ -11,9 +11,15 @@
 // as it was; the pop-up is one more way in, not a replacement.
 //
 // It opens inline under the row like the colour picker does (nothing floats
-// over the stage), and it carries no text field - typed text is the one input
-// the in-game browser still mangles. When the entries come from more than one
-// plugin it offers a strip of plugin chips that narrows the list to one.
+// over the stage). When the entries come from more than one plugin it offers
+// a strip of plugin chips that narrows the list to one. A long list also gets
+// a text field: what is typed narrows the entries by name, AND with the chip
+// (an entry shows when it is from the chosen plugin and its name has every
+// word typed), so the chip never shows one plugin while the field lists
+// another. The field only hides entries: the row's value, the highlighted
+// entry and the list itself stay as they were, and the entry the row rests on
+// is still the current one while the filter hides it. The field is typed text,
+// which keyboard.js corrects for the in-game browser like every other field.
 //
 // Every list that reaches a pop-up is also checked against the DLL. The DLL
 // stamps each list it sends with the FNV-1a signature and byte length of the
@@ -83,17 +89,41 @@ const LifecastList = (() => {
     chip.title = "Choose from the whole list";
     row.el.firstChild.appendChild(chip);
 
+    const find = LifecastControls.el("input", "preset-field listpop-find");
+    find.type = "text";
+    find.spellcheck = false;
+    find.autocomplete = "off";
+    find.placeholder = "Search this list";
+    find.hidden = true;
+
     const wrap = LifecastControls.el("div", "listpop");
     wrap.hidden = true;
     const origins = LifecastControls.el("div", "listpop-origins");
     const count = LifecastControls.el("div", "listpop-count");
     const body = LifecastControls.el("div", "listpop-items");
+    wrap.appendChild(find);
     wrap.appendChild(origins);
     wrap.appendChild(count);
     wrap.appendChild(body);
     row.el.appendChild(wrap);
 
-    const state = { items: [], key: "", current: lowest - 1, origin: null, buttons: new Map(), originChips: new Map() };
+    const state = {
+      items: [],
+      key: "",
+      current: lowest - 1,
+      origin: null,
+      words: [],
+      buttons: new Map(),
+      originChips: new Map(),
+    };
+
+    // Lists shorter than this are read at a glance; a field would be clutter.
+    const FIND_FROM = 16;
+
+    // Case and accents do not matter to a player looking for a name.
+    function fold(text) {
+      return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    }
 
     function sourcesOf(items) {
       const seen = new Set();
@@ -106,7 +136,16 @@ const LifecastList = (() => {
     }
 
     function visible(it) {
-      return state.origin === null || it.source === state.origin;
+      if (state.origin !== null && it.source !== state.origin) {
+        return false;
+      }
+      if (state.words.length === 0) {
+        return true;
+      }
+      if (it.folded === undefined) {
+        it.folded = fold(it.name === "" ? "" : it.name);
+      }
+      return state.words.every((w) => it.folded.includes(w));
     }
 
     function markSelected() {
@@ -122,10 +161,18 @@ const LifecastList = (() => {
           shown += 1;
         }
       }
-      count.textContent =
-        state.origin === null
-          ? String(state.items.length) + " entries"
-          : String(shown) + " of " + String(state.items.length) + " entries - " + state.origin;
+      const narrowed = state.origin !== null || state.words.length > 0;
+      let text = narrowed
+        ? String(shown) + " of " + String(state.items.length) + " entries"
+        : String(state.items.length) + " entries";
+      if (state.origin !== null) {
+        text += " - " + state.origin;
+      }
+      const cur = state.current >= 0 ? state.items[state.current] : undefined;
+      if (narrowed && cur !== undefined && !visible(cur)) {
+        text += " (the one in use is hidden)";
+      }
+      count.textContent = text;
     }
 
     function applyFilter() {
@@ -140,10 +187,28 @@ const LifecastList = (() => {
       updateCount();
     }
 
+    function setWords(text) {
+      state.words = fold(text)
+        .split(/\s+/)
+        .filter((w) => w !== "");
+    }
+
+    function clearFind() {
+      find.value = "";
+      state.words = [];
+    }
+
+    find.addEventListener("input", () => {
+      setWords(find.value);
+      applyFilter();
+    });
+
     function pick(value) {
       row.choose(value);
       state.current = value;
       markSelected();
+      clearFind();
+      applyFilter();
       wrap.hidden = true;
     }
 
@@ -166,6 +231,8 @@ const LifecastList = (() => {
         state.key = key;
         state.items = a_items;
         state.origin = null;
+        clearFind();
+        find.hidden = a_items.length < FIND_FROM;
         state.buttons = new Map();
         state.originChips = new Map();
         body.replaceChildren();
@@ -205,6 +272,7 @@ const LifecastList = (() => {
     function setCurrent(a_value) {
       state.current = typeof a_value === "number" ? a_value : lowest - 1;
       markSelected();
+      updateCount();
     }
 
     chip.addEventListener("click", () => {
@@ -225,6 +293,12 @@ const LifecastList = (() => {
       setCurrent: setCurrent,
       close: () => {
         wrap.hidden = true;
+      },
+      // For the measurement: types into the field as a player would.
+      find: (text) => {
+        find.value = text;
+        setWords(text);
+        applyFilter();
       },
       // For the measurement: what the pop-up offers right now, in the order
       // of the list, with what the filter hides marked.

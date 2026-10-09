@@ -41,6 +41,17 @@
       region shows (E2 item 5) - outside #sections, see belt.js.
     -->
     <div class="belt-panel">
+      <!--
+        Search and the "changed" filter (E2 items 3, 4; D129; moved here by
+        F43): the top of the small panel, so it follows the panel when a menu
+        changes its size, and exists only while the panel does (no category
+        open, no field - F29). Outside #sections, because a tool for finding a
+        slider is useless if it scrolls away with the sliders - search.js.
+      -->
+      <div id="finder" class="finder">
+        <input id="search" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Search sliders">
+        <button id="filter-changed" class="panel-button" type="button" aria-pressed="false">Changed</button>
+      </div>
       <div class="belt-head">
         <div id="regions" class="region-chips"></div>
         <span id="row-counter" class="versions"></span>
@@ -88,18 +99,6 @@
       <button id="to-racemenu" class="panel-button is-primary" type="button" title="F4">RaceMenu (F4)</button>
     </footer>
   </aside>
-
-  <!--
-    Search and the "changed" filter (E2 items 3, 4; D129): over the screen's
-    upper left corner, where the small panel's results hang from it - a
-    search opens the panel at full height, under this field. Outside the
-    scrolled list, because a tool for finding a slider is useless if it
-    scrolls away with the sliders - search.js.
-  -->
-  <div id="finder" class="finder">
-    <input id="search" class="preset-field" type="text" spellcheck="false" autocomplete="off" placeholder="Search sliders">
-    <button id="filter-changed" class="panel-button" type="button" aria-pressed="false">Changed</button>
-  </div>
 
   <!--
     The character view. Transparent: the character inside it is the game's
