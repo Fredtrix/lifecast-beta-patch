@@ -97,7 +97,10 @@
     "HAIR": { section: "look:Hair" },
     "$EXTRA": { door: "extra" },
     "$EXPRESSIONS": { door: "expressions" },
-    "$COLORS": { section: "tints" },
+    // The 15 colours of the film's COLORS tab live in seven sections: the skin
+    // layers in tints, hair in look, and the face tints in the face sections
+    // that tints.js files them under. All seven must be there.
+    "$COLORS": { sections: ["tints", "look:Hair", "face:Mouth", "face:Eyes", "face:Cheekbones", "face:Nose", "face:Chin"] },
     "$MAKEUP": { section: "tints" },
     "$BODY PAINT": { section: "overlay:body" },
     "$HAND PAINT": { section: "overlay:hand" },
@@ -129,6 +132,7 @@
       return null;
     }
     const orphans = [];
+    const missing = [];
     for (const e of lastEntries) {
       const label = e.text;
       if (label === "$ALL") {
@@ -137,7 +141,17 @@
       const home = HOME[label];
       let ok;
       if (home) {
-        ok = home.door ? hasDoor(home.door) : hasSection(home.section);
+        if (home.door) {
+          ok = hasDoor(home.door);
+        } else {
+          ok = true;
+          for (const sec of home.sections || [home.section]) {
+            if (!hasSection(sec)) {
+              ok = false;
+              missing.push(label + " (no section " + sec + ")");
+            }
+          }
+        }
       } else if (typeof e.key === "string" && e.key !== "") {
         ok = hasSection("morph:" + e.key);
       } else {
@@ -147,7 +161,7 @@
         orphans.push(label);
       }
     }
-    return { total: lastEntries.length, orphans: orphans };
+    return { total: lastEntries.length, orphans: orphans, missing: missing };
   }
 
   // The page settles a moment after the list arrives: the DLL's sections mount
