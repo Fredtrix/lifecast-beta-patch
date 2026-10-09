@@ -251,8 +251,11 @@
 
   const compareButton = LifecastControls.el("button", "panel-button control-button", "Compare");
   compareButton.type = "button";
+  const updateButton = LifecastControls.el("button", "panel-button control-button", "Update copy");
+  updateButton.type = "button";
   const compareNote = LifecastControls.el("span", "control-note", "");
   section.body.appendChild(compareButton);
+  section.body.appendChild(updateButton);
   section.body.appendChild(compareNote);
 
   let compareOn = false;   // this feature's own belief; the DLL's "compare" reply is the truth
@@ -267,7 +270,30 @@
     compareNote.style.display = compareAvailable ? "" : "none";
     compareButton.textContent = compareOn ? "Compare Off" : "Compare";
     compareButton.disabled = compareBusy;
+    // Only with the comparison on: it makes the copy again from the character as
+    // she is now. Nothing refreshes it by itself.
+    updateButton.style.display = compareAvailable ? "" : "none";
+    updateButton.disabled = compareBusy || !compareOn;
   }
+
+  updateButton.addEventListener("click", () => {
+    if (compareBusy || !compareOn) {
+      return;
+    }
+    const where = frame();
+    compareBusy = true;
+    compareNote.textContent = "";
+    renderCompare();
+    const message = {};
+    if (where) {
+      message.frame = where;
+    }
+    if (!LifecastBridge.send("compare-update", message)) {
+      compareBusy = false;
+      compareNote.textContent = "No bridge to the game - nothing was done.";
+      renderCompare();
+    }
+  });
 
   compareButton.addEventListener("click", () => {
     if (compareBusy) {

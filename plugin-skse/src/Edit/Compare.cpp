@@ -73,6 +73,22 @@ namespace Lifecast::Edit::Compare
 
 		bool g_installed = false;
 
+		// E28: every base this module made (to tell her figures from anyone else's
+		// when they are counted), and the resync in flight that remakes the copy
+		// from the player NOW.
+		std::vector<RE::TESNPC*>         g_bases;
+		struct Rebirth
+		{
+			bool              pending = false;
+			bool              wasOn = false;
+			double            left = 0.0;
+			double            right = 1.0;
+			Clock::time_point deadline{};
+			std::string       why;
+			bool              inPlace = false;  // route A: the same reference, its base and its 3D rewritten
+			const void*       oldRoot = nullptr;
+		} g_rebirth;
+
 		// ----- small helpers ------------------------------------------------------
 
 		RE::PlayerCharacter* Player() { return RE::PlayerCharacter::GetSingleton(); }
@@ -1167,6 +1183,27 @@ namespace Lifecast::Edit::Compare
 				return false;
 			}
 
+			// E28: a copy is the player as she is NOW, sex and race included. The
+			// duplicate is read back against the base it came from; a difference is
+			// written over and logged, so the log says whether the engine carried
+			// them (the author saw a female head on a male body).
+			{
+				const bool pf = base->GetSex() == RE::SEX::kFemale;
+				const bool df = dup->GetSex() == RE::SEX::kFemale;
+				spdlog::info("[e28] {}: duplicate sex {} / player base sex {}; race {:08X} / {:08X}", a_when, df ? 1 : 0, pf ? 1 : 0,
+					FormIdOf(dup->race), FormIdOf(base->race));
+				if (df != pf) {
+					dup->SetActorBaseFlag(RE::ACTOR_BASE_DATA::Flag::kFemale, pf, false);
+					spdlog::info("[e28] {}: duplicate sex was wrong - written, now reads {}", a_when,
+						dup->GetSex() == RE::SEX::kFemale ? 1 : 0);
+				}
+				if (dup->race != base->race) {
+					dup->race = base->race;
+					spdlog::info("[e28] {}: duplicate race was wrong - written, now {:08X}", a_when, FormIdOf(dup->race));
+				}
+			}
+			g_bases.push_back(dup);
+
 			// E22.1, prevention: her own outfit and bag are the source of the
 			// shield, bow and dagger on her back. Assigned on the DUPLICATE only,
 			// by plain assignment (no change flag, so nothing of it is save data).
@@ -1402,6 +1439,234 @@ namespace Lifecast::Edit::Compare
 					 : a_fallback;
 		}
 
+
+
+		// ----- E28: the copy is the player as she is NOW ---------------------------
+
+		std::string HeadClasses(RE::TESNPC* a_npc)
+		{
+			if (!a_npc || !a_npc->headParts) {
+				return "none";
+			}
+			std::vector<std::string> items;
+			for (std::int8_t i = 0; i < a_npc->numHeadParts; ++i) {
+				if (auto* part = a_npc->headParts[i]) {
+					items.push_back(fmt::format("{}:{:08X}", static_cast<std::uint32_t>(part->type.get()), part->GetFormID()));
+				}
+			}
+			std::sort(items.begin(), items.end());
+			std::string out;
+			for (auto& item : items) {
+				out += (out.empty() ? "" : " ") + item;
+			}
+			return fmt::format("{} parts [{}]", items.size(), out);
+		}
+
+		// What the instrument reads: sex, race and the head part LIST of each, from
+		// the base and from the actor, side by side. Logged also when they agree
+		// (the positive control of the gate).
+		void LogIdentity(const char* a_why)
+		{
+			auto* player = Player();
+			auto* pbase = player ? player->GetActorBase() : nullptr;
+			auto* actor = Twin();
+			auto* tbase = actor ? actor->GetActorBase() : nullptr;
+			if (!pbase || !tbase) {
+				spdlog::info("[e28] identity ({}): no copy to read", a_why);
+				return;
+			}
+			const auto sexOf = [](RE::TESNPC* n) { return n->GetSex() == RE::SEX::kFemale ? 1 : 0; };
+			const bool same = sexOf(pbase) == sexOf(tbase) && pbase->race == tbase->race && player->GetRace() == actor->GetRace();
+			spdlog::info("[e28] identity ({}): player base {:08X} sex {} race {:08X} actorRace {:08X} | copy base {:08X} (is g_base {}) "
+						 "sex {} race {:08X} actorRace {:08X} | sex+race {}",
+				a_why, pbase->GetFormID(), sexOf(pbase), FormIdOf(pbase->race), FormIdOf(player->GetRace()), tbase->GetFormID(),
+				tbase == g_base, sexOf(tbase), FormIdOf(tbase->race), FormIdOf(actor->GetRace()), same ? "SAME" : "DIFFERENT");
+			const auto pc = HeadClasses(pbase);
+			const auto tc = HeadClasses(tbase);
+			spdlog::info("[e28] identity ({}): head parts player {} | copy {} | {}", a_why, pc, tc, pc == tc ? "SAME" : "DIFFERENT");
+		}
+
+		// The figures of the copy standing in the player's room, a LIST: every
+		// reference whose base is one this module made.
+		void CountFigures(const char* a_why)
+		{
+			auto* player = Player();
+			auto* cell = player ? player->GetParentCell() : nullptr;
+			if (!cell) {
+				spdlog::info("[e28] figures ({}): no cell", a_why);
+				return;
+			}
+			std::string list;
+			int         n = 0;
+			cell->ForEachReference([&](RE::TESObjectREFR* a_ref) {
+				auto* actor = a_ref ? a_ref->As<RE::Actor>() : nullptr;
+				auto* b = actor ? actor->GetActorBase() : nullptr;
+				if (b && std::find(g_bases.begin(), g_bases.end(), b) != g_bases.end()) {
+					++n;
+					list += fmt::format(" [{:08X} base {:08X} {} 3D {}{}]", actor->GetFormID(), b->GetFormID(),
+						actor->IsDisabled() ? "disabled" : "ENABLED", actor->Is3DLoaded() ? "loaded" : "none",
+						actor == Twin() ? " CURRENT" : "");
+				}
+				return RE::BSContainer::ForEachResult::kContinue;
+			});
+			spdlog::info("[e28] figures ({}): {} in cell {:08X}:{}", a_why, n, CellOf(player), list.empty() ? " none" : list);
+		}
+
+		bool Stale()
+		{
+			auto* player = Player();
+			auto* actor = Twin();
+			auto* pbase = player ? player->GetActorBase() : nullptr;
+			auto* tbase = actor ? actor->GetActorBase() : nullptr;
+			if (!pbase || !tbase) {
+				return false;
+			}
+			return pbase->GetSex() != tbase->GetSex() || pbase->race != tbase->race || player->GetRace() != actor->GetRace();
+		}
+
+		// What turning the comparison on does to a body that is already there.
+		void Present(const char* a_why)
+		{
+			Dress(a_why, true);
+			Show();
+			ApplyBody(a_why);
+			RefreshLook(Twin(), a_why);
+			FaceByPreset(a_why);
+		}
+
+		// Route A: the SAME reference, which draws; its base is made the player's
+		// (sex, race, head parts, face) and its 3D is rebuilt. No new reference,
+		// so nothing is left in the world.
+		bool StartResync(const char* a_why, double a_left, double a_right, bool a_wasOn)
+		{
+			spdlog::info("[e28] resync ({}): start", a_why);
+			LogIdentity("resync, before");
+			CountFigures("resync, before");
+			auto* player = Player();
+			auto* actor = Twin();
+			auto* pbase = player ? player->GetActorBase() : nullptr;
+			if (!actor || !pbase || !g_base) {
+				g_why = "there is no copy to update";
+				return false;
+			}
+			const bool pf = pbase->GetSex() == RE::SEX::kFemale;
+			g_base->SetActorBaseFlag(RE::ACTOR_BASE_DATA::Flag::kFemale, pf, false);
+			g_base->race = pbase->race;
+			spdlog::info("[e28] resync: base {:08X} sex now reads {}, race {:08X}", g_base->GetFormID(),
+				g_base->GetSex() == RE::SEX::kFemale ? 1 : 0, FormIdOf(g_base->race));
+			CopyFace(pbase, g_base);
+			// CopyFace adds and replaces; it cannot take away. A part the copy holds
+			// and the player does not (a beard the player no longer has) is dropped
+			// by closing the gap in the copy's OWN array (its pointer is distinct
+			// from the player's: logged by CopyFace).
+			if (g_base->headParts && g_base->headParts != pbase->headParts) {
+				std::int8_t kept = 0;
+				for (std::int8_t i = 0; i < g_base->numHeadParts; ++i) {
+					auto*      part = g_base->headParts[i];
+					bool       playerHas = false;
+					for (std::int8_t j = 0; j < pbase->numHeadParts; ++j) {
+						playerHas = playerHas || pbase->headParts[j] == part;
+					}
+					if (playerHas) {
+						g_base->headParts[kept++] = part;
+					} else {
+						spdlog::info("[e28] resync: head part '{}' ({:08X}, class {}) is not the player's - dropped", FormLabel(part),
+							FormIdOf(part), part ? static_cast<std::uint32_t>(part->type.get()) : 99u);
+					}
+				}
+				g_base->numHeadParts = kept;
+			}
+			auto* root = actor->Get3D(false);
+			g_rebirth.oldRoot = root;
+			if (root) {
+				root->SetAppCulled(true);
+			}
+			spdlog::info("[e28] resync: DoReset3D(true) on {:08X} (root {})", actor->GetFormID(), static_cast<const void*>(root));
+			actor->DoReset3D(true);
+			g_rebirth.pending = true;
+			g_rebirth.inPlace = true;
+			g_rebirth.wasOn = a_wasOn;
+			g_rebirth.left = a_left;
+			g_rebirth.right = a_right;
+			g_rebirth.why = a_why;
+			g_rebirth.deadline = Clock::now() + std::chrono::milliseconds(8000);
+			g_settleUntil = Clock::now() + kSettle;
+			return true;
+		}
+
+		// Called every tick while a rebirth is owed.
+		void TryFinishRebirth()
+		{
+			if (!g_rebirth.pending) {
+				return;
+			}
+			auto* actor = Twin();
+			if (Clock::now() >= g_rebirth.deadline) {
+				g_rebirth.pending = false;
+				g_why = "the new copy's body did not arrive";
+				spdlog::warn("[e28] rebirth: the new body did not arrive in 8 s");
+				Panel::Stage::FramePair(false, g_rebirth.left, g_rebirth.right);
+				g_on = false;
+				Push("rebirth failed");
+				return;
+			}
+			if (!actor || g_cull || !actor->Get3D(false) || !actor->Is3DLoaded()) {
+				return;
+			}
+			if (g_rebirth.inPlace && static_cast<const void*>(actor->Get3D(false)) == g_rebirth.oldRoot &&
+				Clock::now() < g_rebirth.deadline - std::chrono::milliseconds(5000)) {
+				return;  // the 3D is still the old one
+			}
+			// E28: the pair is measured on her head, and a head read the instant her body
+			// arrived put her at the edge of the screen (boot E28a). She settles first.
+			if (Clock::now() < g_settleUntil) {
+				return;
+			}
+			g_rebirth.pending = false;
+			g_why.clear();
+			if (g_rebirth.inPlace) {
+				auto* now = actor->Get3D(false);
+				spdlog::info("[e28] resync: 3D root {} -> {} ({})", g_rebirth.oldRoot, static_cast<const void*>(now),
+					static_cast<const void*>(now) == g_rebirth.oldRoot ? "the SAME node" : "a new node");
+				if (now) {
+					now->SetAppCulled(true);
+				}
+			}
+			if (!Place()) {
+				Panel::Stage::FramePair(false, g_rebirth.left, g_rebirth.right);
+				g_on = false;
+				Push("rebirth refused");
+				return;
+			}
+			Present("the copy was made again");
+			Panel::Stage::FramePair(true, g_rebirth.left, g_rebirth.right);
+			g_on = true;
+			LogIdentity("update, after");
+			CountFigures("update, after");
+			Push("update done");
+		}
+
+		void OnCompareUpdate(const nlohmann::json& a_data)
+		{
+			if (!Session::MenuOpen() || !g_on) {
+				spdlog::warn("[e28] compare-update with the editor closed or the comparison off - ignored");
+				Push("compare-update ignored");
+				return;
+			}
+			double left = 0.0;
+			double right = 1.0;
+			if (a_data.is_object() && a_data.contains("frame") && a_data["frame"].is_object()) {
+				left = Num(a_data["frame"], "left", 0.0);
+				right = Num(a_data["frame"], "right", 1.0);
+			}
+			g_why.clear();
+			if (!StartResync("the page asked for an update", left, right, true)) {
+				Panel::Stage::FramePair(false, left, right);
+				g_on = false;
+				Push("compare-update refused");
+			}
+		}
+
 		void OnCompareGet(const nlohmann::json&) { Push("the page asked"); }
 
 #ifdef LIFECAST_TUNING
@@ -1462,6 +1727,14 @@ namespace Lifecast::Edit::Compare
 				return;
 			}
 
+			if (wantOn && Stale()) {
+				// E28: the copy was made for another sex or race than the player has
+				// now. A copy is the player as she is, so it is made again.
+				if (!StartResync("the comparison was turned on and the copy was stale", left, right, false)) {
+					Push("compare-set refused");
+				}
+				return;
+			}
 			if (wantOn) {
 				// Every failure below leaves the panel whole: g_why says what
 				// happened, g_on stays false, and nothing else in the panel
@@ -1510,8 +1783,10 @@ namespace Lifecast::Edit::Compare
 				// FSMP then opens a message box; the Switcher lets the panel go of the
 				// focus while it is there.
 				FaceByPreset("the comparison was turned on");
-				Panel::Stage::FramePair(true, left, right);
+					Panel::Stage::FramePair(true, left, right);
 				g_on = true;
+				LogIdentity("the comparison was turned on");
+				CountFigures("the comparison was turned on");
 			} else {
 				Park("the comparison was turned off");
 				Panel::Stage::FramePair(false, left, right);
@@ -1569,6 +1844,7 @@ namespace Lifecast::Edit::Compare
 				}
 			}
 			TryVanish();
+			TryFinishRebirth();
 
 			if (!g_arm || Session::MenuOpen()) {
 				return;
@@ -1662,6 +1938,7 @@ namespace Lifecast::Edit::Compare
 		Session::OnTick(&OnTick);
 		Panel::Bridge::On("compare-get", &OnCompareGet);
 		Panel::Bridge::On("compare-set", &OnCompareSet);
+		Panel::Bridge::On("compare-update", &OnCompareUpdate);
 #ifdef LIFECAST_TUNING
 		Panel::Bridge::On("compare-dress", &OnCompareDress);
 		Panel::Bridge::On("compare-graph", &OnCompareGraph);
