@@ -258,7 +258,9 @@ namespace Lifecast::Panel::Stage
 		double PanLo() { return -kPanMax; }
 		double PanHi() { return kPanMax; }
 
-		bool g_lockOn = true;
+		// Born OFF (E26, F14/F30, the author: the lock is switched on by hand). It was born ON in every mode, the first
+		// "stage" payload of a boot already said lock:true with free:false.
+		bool g_lockOn = false;
 
 		// THE VERTICAL HALF OF THE LOCK (Fase 8, E21, F30). The rule above solved PAN alone, which keeps the
 		// figure centred sideways and says nothing of up and down: lifting or lowering the camera, or tilting it,
@@ -2211,7 +2213,7 @@ namespace Lifecast::Panel::Stage
 					g_free = false;
 					g_freeBefore = false;
 					g_pairForced = false;
-					g_lockOn = true;
+					g_lockOn = false;
 					g_oneY0Have = false;
 					SetOneOn(false);
 					g_oneSolves = 0;
