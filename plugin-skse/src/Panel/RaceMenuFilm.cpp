@@ -396,15 +396,26 @@ namespace Lifecast::Panel::RaceMenuFilm
 				g_calls.clear();
 				g_idsFor = movie;
 			}
+			// The id is read from the film on every delivery. The film keeps
+			// ONE movie while the menu is open but rebuilds its slider list when
+			// the character's sex changes, and the same callback and label can
+			// then sit under another sliderID: a cached id made "Nose Length"
+			// land on the Nose Height morph after a sex change. The walk stops
+			// at the first match, so it is short for the callbacks that go
+			// through here.
+			double id = 0;
+			if (!FindSliderID(movie, target, id)) {
+				spdlog::warn("[film] {} '{}': no such entry in RaceMenu's list - not handed to RaceMenu",
+					target.callback, target.text ? target.text : "(first)");
+				return false;
+			}
 			auto found = g_ids.find(a_key);
 			if (found == g_ids.end()) {
-				double id = 0;
-				if (!FindSliderID(movie, target, id)) {
-					spdlog::warn("[film] {} '{}': no such entry in RaceMenu's list - not handed to RaceMenu",
-						target.callback, target.text ? target.text : "(first)");
-					return false;
-				}
 				found = g_ids.emplace(a_key, id).first;
+			} else if (found->second != id) {
+				spdlog::info("[film] {} '{}': sliderID {} -> {} (the film's list was rebuilt)", target.callback,
+					target.text ? target.text : "(first)", found->second, id);
+				found->second = id;
 			}
 
 			auto* defn = menu->fxDelegate->callbacks.Get(RE::GString(target.callback));

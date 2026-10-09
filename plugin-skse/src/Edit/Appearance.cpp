@@ -711,20 +711,62 @@ namespace Lifecast::Edit::Appearance
 				return;
 			}
 
-			// The page's indices point into the lists it was last sent. If
-			// RaceMenu changed race or sex since, they point into the wrong
-			// lists: refuse, and send the new ones.
-			if (npc->GetRace() != g_lists.race || npc->GetSex() != g_lists.sex) {
-				spdlog::warn("[look] look-set: race or sex changed since the lists were sent - ignored, resending");
-				PushLook("race or sex changed");
-				return;
-			}
-
 			const auto key = a_data["k"].get<std::string>();
 			const bool final = a_data.contains("final") && a_data["final"].is_boolean() && a_data["final"].get<bool>();
 
+			// A head part may come with who it is (name and plugin): a value the
+			// page put back from an older reading (undo) holds an index of the
+			// list as it was then, and the list is built in RaceMenu's own order
+			// while the menu is fresh and in the data handler's once a race or
+			// sex swap has settled (E31). The part is what the page means.
+			const bool byPart = a_data.contains("n") && a_data["n"].is_string();
+
+			// The page's indices point into the lists it was last sent. If
+			// RaceMenu changed race or sex since, they point into the wrong
+			// lists: refuse, and send the new ones. A part that says who it is
+			// does not need the old list, so the lists are rebuilt and it goes on.
+			if (npc->GetRace() != g_lists.race || npc->GetSex() != g_lists.sex) {
+				if (!byPart || !EnsureLists("look-set by part") || npc->GetRace() != g_lists.race ||
+					npc->GetSex() != g_lists.sex) {
+					spdlog::warn("[look] look-set: race or sex changed since the lists were sent - ignored, resending");
+					PushLook("race or sex changed");
+					return;
+				}
+			}
+
+			nlohmann::json value = a_data["v"];
+			if (byPart) {
+				const auto name = a_data["n"].get<std::string>();
+				const auto source = a_data.contains("s") && a_data["s"].is_string() ? a_data["s"].get<std::string>() :
+				                                                                       std::string();
+				for (const auto& p : kPartLists) {
+					if (key != p.key) {
+						continue;
+					}
+					const auto& list = g_lists.parts[p.key];
+					int         found = -1;
+					for (std::size_t i = 0; i < list.size(); ++i) {
+						if (list[i] && PartName(list[i]) == name && PartSource(list[i]) == source) {
+							found = static_cast<int>(i);
+							break;
+						}
+					}
+					if (found < 0) {
+						spdlog::warn("[look] look-set {}: '{}' ({}) is not in the list this race and sex have - ignored",
+							key, name, source);
+						return;
+					}
+					if (!a_data["v"].is_number_integer() || a_data["v"].get<int>() != found) {
+						spdlog::info("[look] look-set {}: '{}' is index {} here, the page said {} - went by the part", key,
+							name, found, a_data["v"].dump());
+					}
+					value = found;
+					break;
+				}
+			}
+
 			bool redraw = false;
-			if (!Apply(npc, key, a_data["v"], final, redraw)) {
+			if (!Apply(npc, key, value, final, redraw)) {
 				return;
 			}
 			++g_sets;

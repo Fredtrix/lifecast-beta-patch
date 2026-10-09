@@ -298,6 +298,12 @@ namespace Lifecast::Edit::BodyMorphs
 			}
 			const std::string why = a_why;
 			tasks->AddUITask([why]() {
+				// The signature goes with the read: a read made while the film is
+				// rebuilding sees no tabs, and the watch in OnTick must then see the
+				// rebuilt film as a CHANGE, not as the signature it saw before the
+				// rebuild (a race change straight after another change left the page
+				// with no body morph rows).
+				g_signature = Signature();
 				ReadNow();
 				Push(why.c_str());
 			});

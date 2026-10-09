@@ -100,19 +100,51 @@ const LifecastHistory = (() => {
     return true;
   }
 
+  // An entry's apply() may return a promise (E31: a race or sex change is the
+  // game's own and settles a moment later). While one is out, `busy` holds
+  // the history still: nothing is undone or redone on top of a character
+  // that has not finished changing. A promise that resolves to false, or
+  // rejects, means the step did not land.
+  let busy = false;
+
+  // Returns null for an entry that applied at once, else a promise of whether
+  // it landed.
   function run(a_entry, a_value, a_what) {
     applying = true;
+    let result;
     try {
-      a_entry.apply(a_value);
+      result = a_entry.apply(a_value);
     } catch (e) {
       console.error("[history] apply threw", e);
     } finally {
       applying = false;
     }
     note(a_what, { label: a_entry.label, to: shown(a_entry, a_value) });
+    if (!result || typeof result.then !== "function") {
+      return null;
+    }
+    busy = true;
+    return result
+      .then(
+        (ok) => ok !== false,
+        (e) => {
+          console.error("[history] apply rejected", e);
+          return false;
+        }
+      )
+      .then((ok) => {
+        busy = false;
+        note(a_what + "-settled", { label: a_entry.label, ok: ok });
+        changed();
+        return ok;
+      });
   }
 
   function undo() {
+    if (busy) {
+      note("undo-busy");
+      return false;
+    }
     if (at === 0) {
       note("undo-empty");
       return false;
@@ -125,6 +157,10 @@ const LifecastHistory = (() => {
   }
 
   function redo() {
+    if (busy) {
+      note("redo-busy");
+      return false;
+    }
     if (at >= entries.length) {
       note("redo-empty");
       return false;
@@ -138,15 +174,30 @@ const LifecastHistory = (() => {
 
   // Back to where the panel opened (F28, D192): every entry the history
   // holds, newest first, each through its own undo(). Nothing is thrown away,
-  // so Redo walks the same way forward and a misclick costs nothing.
-  function undoAll() {
+  // so Redo walks the same way forward and a misclick costs nothing. An entry
+  // that settles later (a race or sex change, E31) is waited for before the
+  // next one starts, and the walk stops at one that did not land: what lies
+  // below it was recorded on a character that is not there. Entries that
+  // apply at once never wait, so the loop runs through them in one turn.
+  async function undoAll() {
+    if (busy) {
+      note("undo-all-busy");
+      return false;
+    }
     if (at === 0) {
       note("undo-all-empty");
       return false;
     }
     const steps = at;
     while (at > 0) {
-      undo();
+      const entry = entries[at - 1];
+      at -= 1;
+      const waiting = run(entry, entry.before, "undo");
+      changed();
+      if (waiting !== null && (await waiting) === false) {
+        note("undo-all-stopped", { label: entry.label, left: at });
+        return false;
+      }
     }
     note("undo-all", { steps: steps });
     return true;
@@ -173,10 +224,10 @@ const LifecastHistory = (() => {
     redoButton.addEventListener("click", () => redo());
     undoAllButton.addEventListener("click", () => undoAll());
     const paint = () => {
-      undoButton.disabled = at === 0;
-      undoAllButton.disabled = at === 0;
+      undoButton.disabled = busy || at === 0;
+      undoAllButton.disabled = busy || at === 0;
       undoAllButton.title = at === 0 ? "Nothing to undo" : "Undo everything since the panel opened";
-      redoButton.disabled = at >= entries.length;
+      redoButton.disabled = busy || at >= entries.length;
       undoButton.title = at === 0 ? "Nothing to undo" : "Undo " + entries[at - 1].label;
       redoButton.title = at >= entries.length ? "Nothing to redo" : "Redo " + entries[at].label;
     };

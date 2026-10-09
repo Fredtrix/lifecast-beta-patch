@@ -52,12 +52,24 @@
 
   const rows = new Map(); // key -> { row, kind, count, chip, picker, color, grid, swatches }
 
-  function send(key, v, final) {
-    LifecastBridge.send("look-set", { k: key, v: v, final: final });
+  // a_id: { n, s } - the part's name and plugin as the DLL sent them. A head
+  // part's index is only good inside the list it was read from, and the DLL
+  // builds that list in one order while the menu is fresh and in another once a
+  // race or sex swap has settled (E31): a value put back from an older reading
+  // goes by who it is, and the DLL finds that part in the list it has now.
+  function send(key, v, final, a_id) {
+    const message = { k: key, v: v, final: final };
+    if (a_id && typeof a_id.n === "string") {
+      message.n = a_id.n;
+      message.s = typeof a_id.s === "string" ? a_id.s : "";
+    }
+    LifecastBridge.send("look-set", message);
   }
 
   function buildRow(key, label) {
-    const entry = { kind: key === "weight" ? "range" : "list", count: 0, chip: null, grid: null };
+    const entry = { kind: key === "weight" ? "range" : "list", count: 0, chip: null, grid: null, ident: null,
+      pendingAfter: null };
+    const isPart = PART_KEYS.has(key);
     entry.row = LifecastControls.row({
       label: label,
       min: 0,
@@ -65,7 +77,27 @@
       step: 1,
       button: 1,
       format: (v) => (entry.kind === "list" ? String(v) + " / " + String(entry.count - 1) : String(Math.round(v))),
-      send: (v, final) => send(key, v, final),
+      send: (v, final, id) => send(key, v, final, id),
+      identity: isPart ? () => entry.ident : undefined,
+      // A head part's step carries who it was and who it became, not only the
+      // two numbers. The "after" is learned from the DLL's next answer.
+      entry: isPart
+        ? (before, after, put) => {
+            if (before === after) {
+              return null;
+            }
+            const was = entry.index === before && entry.ident ? entry.ident : null;
+            const to = { i: after, id: null };
+            entry.pendingAfter = to;
+            return {
+              label: label,
+              before: { i: before, id: was },
+              after: to,
+              apply: (v) => put(v.i, v.id),
+              describe: (v) => v.i,
+            };
+          }
+        : undefined,
     });
 
     if (PART_KEYS.has(key)) {
@@ -201,6 +233,7 @@
       const c = controls[key];
       if (!c) {
         entry.row.set(null);
+        entry.ident = null;
         continue;
       }
       if (c.kind === "range") {
@@ -220,10 +253,18 @@
       entry.row.el.hidden = c.count === 0;
       if (c.count === 0) {
         entry.row.set(null); // no stale values from the last list behind the hidden row
+        entry.ident = null;
         continue;
       }
       entry.row.setRange(0, c.count - 1);
       entry.index = c.index;
+      if (PART_KEYS.has(key)) {
+        entry.ident = c.index >= 0 && typeof c.name === "string" ? { n: c.name, s: typeof c.source === "string" ? c.source : "" } : null;
+        if (entry.pendingAfter && entry.ident && entry.pendingAfter.i === c.index) {
+          entry.pendingAfter.id = entry.ident;
+          entry.pendingAfter = null;
+        }
+      }
       if (entry.list) {
         entry.list.setCurrent(c.index);
       }

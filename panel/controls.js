@@ -385,13 +385,15 @@ const LifecastControls = (() => {
       value.textContent = a_opts.format(v);
     }
 
-    function send(final) {
+    // a_id is who the value is (a head part: name and plugin), for a row whose
+    // index means a different part in another build of the game's list.
+    function send(final, a_id) {
       if (state.timer !== null) {
         clearTimeout(state.timer);
         state.timer = null;
       }
       state.lastSent = performance.now();
-      a_opts.send(Number(input.value), final);
+      a_opts.send(Number(input.value), final, a_id);
     }
 
     // One finished gesture, offered to the history. state.last is the value
@@ -403,14 +405,14 @@ const LifecastControls = (() => {
     // "before" survive the echoes that arrive mid-drag.
     // The same write the player's own gesture would do, with another value:
     // set the input, show it, and send it as final.
-    function put(v) {
+    function put(v, a_id) {
       if (input.disabled) {
         return false;
       }
       input.value = String(v);
       show(Number(input.value));
       state.last = Number(input.value);
-      send(true);
+      send(true, a_id);
       return true;
     }
 
@@ -527,8 +529,24 @@ const LifecastControls = (() => {
       portraitRows.add({
         el: wrap,
         snapshot: () => (input.disabled || state.fake ? null : Number(input.value)),
-        // false when there is nothing to do: the row already holds it.
-        restore: (v) => (typeof v !== "number" || input.disabled || Number(input.value) === v ? false : put(v)),
+        // Who the value is, when the row can say (a_opts.identity: a head part,
+        // whose index is only good inside the list it came from, E31).
+        ident: () => (typeof a_opts.identity === "function" ? a_opts.identity() : null),
+        // false when there is nothing to do: the row already holds it. With an
+        // identity the question is "is it this part", not "is it this number".
+        restore: (v, a_id) => {
+          if (typeof v !== "number" || input.disabled) {
+            return false;
+          }
+          if (a_id) {
+            const now = typeof a_opts.identity === "function" ? a_opts.identity() : null;
+            if (now && now.n === a_id.n && now.s === a_id.s) {
+              return false;
+            }
+            return put(v, a_id);
+          }
+          return Number(input.value) === v ? false : put(v);
+        },
       });
     }
     return handle;
@@ -538,15 +556,42 @@ const LifecastControls = (() => {
     portraitParts.set(a_key, a_part);
   }
 
-  // Rows that left the page (a tint layer list rebuilt) are dropped here.
-  function portrait() {
-    const rows = [];
+  // The rows that are on the page now, each with the key that finds it again
+  // after a section rebuilds its rows (tints, scales, overlays do): the
+  // section it sits in, its label, and which of that label it is, in document
+  // order. Rows that left the page are dropped here.
+  function liveRows() {
+    const live = [];
     for (const r of portraitRows) {
       if (!r.el.isConnected) {
         portraitRows.delete(r);
         continue;
       }
-      rows.push([r, r.snapshot()]);
+      live.push(r);
+    }
+    live.sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    const seen = new Map();
+    return live.map((r) => {
+      const sec = r.el.closest("[data-key]");
+      const nm = r.el.querySelector(".slider-name");
+      const base = (sec ? sec.dataset.key : "") + "|" + (nm ? nm.textContent.trim() : "");
+      const n = (seen.get(base) || 0) + 1;
+      seen.set(base, n);
+      return [r, base + "|" + String(n)];
+    });
+  }
+
+  // How many rows the portrait would hold right now. A race or sex change
+  // rebuilds some sections a moment after the game answered (E31); this is
+  // what the history waits on before it puts values back.
+  function portraitSize() {
+    return liveRows().length;
+  }
+
+  function portrait() {
+    const rows = [];
+    for (const [r, key] of liveRows()) {
+      rows.push([r, r.snapshot(), key, r.ident()]);
     }
     const parts = {};
     for (const [key, part] of portraitParts) {
@@ -557,11 +602,23 @@ const LifecastControls = (() => {
 
   // Puts back only what differs from the portrait. Called after every step
   // newer than the portrait was undone, so what differs is what the step
-  // changed. Returns how many values were written.
+  // changed. A row that left the page since the portrait (its section
+  // rebuilt) is found again by its key. Returns how many values were written.
   function restorePortrait(a_portrait) {
     let written = 0;
-    for (const [r, v] of a_portrait.rows) {
-      if (v !== null && r.el.isConnected && r.restore(v)) {
+    let byKey = null;
+    for (const [r, v, key, id] of a_portrait.rows) {
+      if (v === null) {
+        continue;
+      }
+      let row = r;
+      if (!r.el.isConnected) {
+        if (byKey === null) {
+          byKey = new Map(liveRows().map(([lr, lk]) => [lk, lr]));
+        }
+        row = byKey.get(key);
+      }
+      if (row && row.restore(v, id)) {
         written += 1;
       }
     }
@@ -597,5 +654,5 @@ const LifecastControls = (() => {
   }
 
   return { el: el, section: section, slot: slot, mount: mount, setOrder: setOrder, setGroups: setGroups, row: row, reveal: reveal,
-    portrait: portrait, restorePortrait: restorePortrait, addPortraitPart: addPortraitPart };
+    portrait: portrait, restorePortrait: restorePortrait, portraitSize: portraitSize, addPortraitPart: addPortraitPart };
 })();
