@@ -102,5 +102,11 @@ namespace Lifecast::Edit::Compare
 	// The twin mirrors what is CONTEXT and freezes what is under comparison
 	// (D106), and clothes are context: comparing a dressed "before" against
 	// an undressed "after" compares the clothes.
+	// E36: no figure of this module may be in a save. Called on kSaveGame.
+	void BeforeSave();
+
+	// A game is loading or a new one starts: forget the old game's figure.
+	void GameChanged();
+
 	void MirrorWorn();
 }

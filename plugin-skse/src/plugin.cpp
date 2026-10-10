@@ -94,6 +94,12 @@ namespace
 		case SKSE::MessagingInterface::kNewGame:
 			// A freeze must never survive into another game.
 			Lifecast::Edit::Freeze::Release("a game is loading");
+			Lifecast::Edit::Compare::GameChanged();
+			break;
+
+		case SKSE::MessagingInterface::kSaveGame:
+			// Sent before the save is written: the second figure must not be in it.
+			Lifecast::Edit::Compare::BeforeSave();
 			break;
 
 		case SKSE::MessagingInterface::kInputLoaded:

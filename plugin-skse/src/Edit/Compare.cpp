@@ -29,23 +29,27 @@ namespace Lifecast::Edit::Compare
 
 		// ----- what is kept, and for how long ------------------------------------
 		//
-		// One twin at a time. She is never deleted - SetDelete poisons the next
-		// duplicate (V099, and it is what took boots 76 and 77) - so replacing
-		// her leaves the old reference standing in its cell, disabled (E19: it
-		// is disabled while the editor is closed, not only culled), with its
-		// AI off. That is a declared leak, bounded by how many rooms the player
-		// opens the editor in during one game session, and it is the price of
-		// not calling the one function that is measured to crash.
+		// One twin at a time, and none outlives the opening she was born in.
+		// A reference left standing in the world - disabled - went into the
+		// save, and the game that wrote it no longer loaded (E36: a new game
+		// with Compare used, saved, closed and loaded crashed every time, with
+		// this plugin installed or not). So when the editor closes she is
+		// disabled, and once her body is gone she is deleted (Retire), and the
+		// next opening makes a new one - which is also the only figure that
+		// draws (g_available). Deleted with her body still loaded and in the
+		// same tick as the Disable is what poisoned the next duplicate in V099;
+		// Retire never does that on the close path. The duplicated base has no
+		// unmake and stays behind, unreferenced.
 
 		RE::TESNPC*         g_base = nullptr;  // the duplicate she is made of
 		RE::ObjectRefHandle g_twin{};          // her reference
+		std::vector<RE::ObjectRefHandle> g_made;  // every reference this module placed, this game, until retired
 		RE::FormID          g_cellId = 0;      // the cell she was born in
 		bool                g_bornInMenu = false;
 		Clock::time_point   g_bornAt{};
 
 		bool        g_on = false;  // the comparison, this opening
 		std::string g_why;         // why the last request refused, for the page
-		bool        g_arm = false;  // make her on the next tick with the menu closed
 		bool        g_cull = false;  // cull her as soon as she has a body to cull
 		bool        g_bornBodyless = false;  // g_cull was set when she had no 3D at all
 
@@ -1378,6 +1382,7 @@ namespace Lifecast::Edit::Compare
 
 			g_base = dup;
 			g_twin = placed->CreateRefHandle();
+			g_made.push_back(g_twin);
 			g_hidden = false;
 			g_hidePending = false;
 			g_cellId = CellOf(placed.get());
@@ -1571,6 +1576,41 @@ namespace Lifecast::Edit::Compare
 			g_watch = true;
 			g_watchAt = Clock::now() + std::chrono::milliseconds(3000);
 			g_watchFrom = from;
+		}
+
+		// E36: every figure this module placed is disabled (if she is not) and
+		// deleted, and the module forgets her. Called 3 s after the vanish on
+		// the close path, and before a save as the net for a save written
+		// inside those 3 s - the only case that can delete a body still loaded.
+		void Retire(const char* a_why)
+		{
+			std::size_t n = 0;
+			for (auto& handle : g_made) {
+				auto ptr = handle.get();
+				auto* ref = ptr.get();
+				if (!ref || ref->IsDeleted()) {
+					continue;
+				}
+				const bool wasDisabled = ref->IsDisabled();
+				const bool had3D = ref->Is3DLoaded();
+				if (!wasDisabled) {
+					ref->Disable();
+				}
+				ref->SetDelete(true);
+				++n;
+				spdlog::info("[compare] retire ({}): {:08X} (base {:08X}) - {}, 3D {} - SetDelete(true), deleted now reads {}",
+					a_why, ref->GetFormID(), FormIdOf(ref->GetBaseObject()),
+					wasDisabled ? "already disabled" : "disabled NOW, in this tick", had3D ? "LOADED" : "not loaded",
+					ref->IsDeleted());
+			}
+			spdlog::info("[compare] retire ({}): {} figure(s) deleted; the next opening makes a new one", a_why, n);
+			g_made.clear();
+			g_twin = {};
+			g_base = nullptr;
+			g_hidden = false;
+			g_hidePending = false;
+			g_cull = false;
+			g_cellId = 0;
 		}
 
 		// ----- the bridge ---------------------------------------------------------
@@ -1985,26 +2025,15 @@ namespace Lifecast::Edit::Compare
 					spdlog::info("[compare] watch, 3 s later: {} | moved {:.2f} units from where she was", Read(actor),
 						actor->GetPosition().GetDistance(g_watchFrom));
 				}
+				// The watch after a vanish is the moment she has been disabled for
+				// 3 s with her body gone: she is retired here, never in the tick
+				// of the Disable.
+				if (g_hidden && !Session::MenuOpen()) {
+					Retire("the editor is closed");
+				}
 			}
 			TryVanish();
 			TryFinishRebirth();
-
-			if (!g_arm || Session::MenuOpen()) {
-				return;
-			}
-
-			auto* player = Player();
-			if (!player || !player->Is3DLoaded() || CellOf(player) == 0) {
-				return;  // not ready - still armed, try again next tick
-			}
-			g_arm = false;  // one attempt per arming, and it is not retried on failure
-
-			// The figure already in this room stays, however she was born: being
-			// born with the menu open is not what decides whether she draws.
-			if (TwinHere()) {
-				return;
-			}
-			Make("born in the world, with the menu closed");
 		}
 
 		void OnOpened()
@@ -2064,8 +2093,8 @@ namespace Lifecast::Edit::Compare
 			}
 			g_on = false;
 			g_why.clear();
-			g_arm = true;
-			// E19: she goes when the editor does. TryVanish waits for her body.
+			// E19: she goes when the editor does. TryVanish waits for her body,
+			// and the watch 3 s after the Disable retires her (E36).
 			g_hidePending = true;
 			g_settleUntil = Clock::now() + kSettle;
 		}
@@ -2094,6 +2123,29 @@ namespace Lifecast::Edit::Compare
 #endif
 		g_installed = true;
 		spdlog::info("[compare] installed");
+	}
+
+	void BeforeSave()
+	{
+		if (g_made.empty()) {
+			return;
+		}
+		Retire("a save is being written");
+	}
+
+	void GameChanged()
+	{
+		// The references of the game being left are that game's, and the
+		// handles to them are about to mean nothing. Nothing is called on them.
+		g_made.clear();
+		g_twin = {};
+		g_base = nullptr;
+		g_hidden = false;
+		g_hidePending = false;
+		g_watch = false;
+		g_cull = false;
+		g_cellId = 0;
+		g_on = false;
 	}
 
 	void MirrorWorn()
