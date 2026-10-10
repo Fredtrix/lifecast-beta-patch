@@ -24,8 +24,18 @@ namespace Lifecast::Preset::Save
 		using Clock = std::chrono::steady_clock;
 		namespace fs = std::filesystem;
 
-		// RaceMenu's native, and how long it gets to answer before the save
-		// counts as not available.
+		// The save goes through RaceMenu's own preset editor in the menu's
+		// film, the code its Save button runs on the file the player names.
+		// Inside it the save is a synchronous call into SKEE, so the Papyrus
+		// queue, which a heavy script order keeps busy for tens of seconds,
+		// is not on the way. It writes the same file the Papyrus native does
+		// (both are SKEE's JSON preset of the player, at the same path).
+		constexpr auto kEditor = "_root.RaceSexMenuBaseInstance.RaceSexPanelsInstance.presetEditor";
+		constexpr auto kFolder = "Data\\SKSE\\Plugins\\CharGen\\Presets";
+
+		// The way it went before, and still goes when the editor cannot be
+		// reached: RaceMenu's Papyrus native. And how long a save gets to
+		// answer, either way, before it counts as not available.
 		constexpr auto kClass = "CharGen";
 		constexpr auto kFunction = "SaveCharacterPreset";
 		constexpr auto kTimeout = std::chrono::seconds(5);
@@ -324,6 +334,105 @@ namespace Lifecast::Preset::Save
 			std::uint32_t _id;
 		};
 
+		// The film's own answer to its save: the "savedPreset" event the
+		// editor dispatches right after writing.
+		class Heard : public RE::GFxFunctionHandler
+		{
+		public:
+			void Call(Params& a_params) override
+			{
+				heard = true;
+				RE::GFxValue success;
+				if (a_params.argCount > 0 && a_params.args[0].IsObject() &&
+					a_params.args[0].GetMember("success", &success) && success.IsBool()) {
+					ok = success.GetBool();
+				}
+			}
+
+			bool heard{ false };
+			bool ok{ false };
+		};
+
+		// UI thread. False: the editor is not there, nothing was asked of it.
+		// The outcome goes back to the game thread, where Finish reads the
+		// file as it does for the Papyrus path.
+		bool SaveThroughTheEditor(std::uint32_t a_id, const std::string& a_file)
+		{
+			auto*        ui = RE::UI::GetSingleton();
+			auto         menu = ui ? ui->GetMenu<RE::RaceSexMenu>() : nullptr;
+			auto*        movie = menu ? menu->uiMovie.get() : nullptr;
+			RE::GFxValue editor;
+			if (!movie || !movie->GetVariable(&editor, kEditor) || !editor.IsObject() ||
+				!editor.HasMember("onSaveFile") || !editor.HasMember("addEventListener")) {
+				return false;
+			}
+
+			auto         heard = RE::make_gptr<Heard>();
+			RE::GFxValue fn;
+			RE::GFxValue scope;
+			RE::GFxValue type;
+			RE::GFxValue member;
+			movie->CreateFunction(&fn, heard.get());
+			movie->CreateObject(&scope);
+			scope.SetMember("heard", fn);
+			movie->CreateString(&type, "savedPreset");
+			movie->CreateString(&member, "heard");
+			const std::array<RE::GFxValue, 3> listener{ type, scope, member };
+
+			// With the extension: the editor adds ".jslot" only to a path
+			// without a dot, and a preset name may carry one.
+			const std::string file = a_file + Library::kExtension;
+			RE::GFxValue      folder;
+			RE::GFxValue      input;
+			RE::GFxValue      ev;
+			movie->CreateString(&folder, kFolder);
+			movie->CreateString(&input, file.c_str());
+			movie->CreateObject(&ev);
+			ev.SetMember("directoryPath", folder);
+			ev.SetMember("input", input);
+
+			editor.Invoke("addEventListener", listener);
+			const auto start = Clock::now();
+			const bool invoked = editor.Invoke("onSaveFile", nullptr, &ev, 1);
+			const auto us = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+			editor.Invoke("removeEventListener", listener);
+
+			spdlog::info("[preset-save] #{} RaceMenu's preset editor onSaveFile(\"{}\") invoked {} in {} us - "
+						 "savedPreset {}, success {}",
+				a_id, file, invoked, us, heard->heard ? "heard" : "NOT heard", heard->ok);
+			const bool answered = heard->heard;
+			const auto how = !answered      ? "RaceMenu's editor did not answer" :
+			                 heard->ok      ? "saved by RaceMenu's editor" :
+			                                  "refused by RaceMenu's editor";
+			if (auto* tasks = SKSE::GetTaskInterface()) {
+				tasks->AddTask([a_id, answered, how]() { Finish(a_id, answered, how); });
+			}
+			return true;
+		}
+
+		// Game thread.
+		void SaveThroughPapyrus(std::uint32_t a_id, const std::string& a_file)
+		{
+			if (!g_pending || g_pending->id != a_id) {
+				return;
+			}
+			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+			auto* player = RE::PlayerCharacter::GetSingleton();
+			if (!vm || !player) {
+				spdlog::warn("[preset-save] #{} no {} - not saved", a_id, vm ? "player" : "Papyrus VM");
+				Finish(a_id, false, "the game is not ready");
+				return;
+			}
+			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new Done(a_id));
+			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(a_file));
+			if (!vm->DispatchStaticCall(kClass, kFunction, args, callback)) {
+				spdlog::warn("[preset-save] #{} DispatchStaticCall({}.{}) refused", a_id, kClass, kFunction);
+				Finish(a_id, false, "dispatch refused");
+				return;
+			}
+			spdlog::info("[preset-save] #{} {}.{}(player, \"{}\") dispatched", a_id, kClass, kFunction, a_file);
+		}
+
 		void Dispatch(Pending a_pending)
 		{
 			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
@@ -342,16 +451,24 @@ namespace Lifecast::Preset::Save
 			const bool overwrite = !a_pending.existing.empty();
 			const auto kind = a_pending.kind;
 			g_pending = std::move(a_pending);
+			spdlog::info("[preset-save] #{} \"{}\" asked - {}, overwrite {}", id, file,
+				kind == Kind::kPreview ? "preview" : "save", overwrite);
 
-			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new Done(id));
-			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(file));
-			if (!vm->DispatchStaticCall(kClass, kFunction, args, callback)) {
-				spdlog::warn("[preset-save] #{} DispatchStaticCall({}.{}) refused", id, kClass, kFunction);
-				Finish(id, false, "dispatch refused");
-				return;
+			if (auto* tasks = SKSE::GetTaskInterface()) {
+				tasks->AddUITask([id, file]() {
+					if (SaveThroughTheEditor(id, file)) {
+						return;
+					}
+					spdlog::warn("[preset-save] #{} RaceMenu's preset editor cannot be reached - through CharGen's "
+								 "Papyrus native instead",
+						id);
+					if (auto* tasks = SKSE::GetTaskInterface()) {
+						tasks->AddTask([id, file]() { SaveThroughPapyrus(id, file); });
+					}
+				});
+			} else {
+				SaveThroughPapyrus(id, file);
 			}
-			spdlog::info("[preset-save] #{} {}.{}(player, \"{}\") dispatched - {}, overwrite {}", id, kClass, kFunction,
-				file, kind == Kind::kPreview ? "preview" : "save", overwrite);
 
 			std::thread([id]() {
 				std::this_thread::sleep_for(kTimeout);
@@ -514,7 +631,8 @@ namespace Lifecast::Preset::Save
 		g_installed = true;
 		// A preview file left by a game that ended mid-preview.
 		RemovePreviewFile();
-		spdlog::info("[preset-save] installed - delegates to {}.{}, overwrite preview file \"{}\"", kClass, kFunction,
-			Library::kPreviewName);
+		spdlog::info("[preset-save] installed - delegates to RaceMenu's preset editor; {}.{} when it cannot be "
+					 "reached; overwrite preview file \"{}\"",
+			kClass, kFunction, Library::kPreviewName);
 	}
 }

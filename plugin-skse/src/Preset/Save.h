@@ -3,8 +3,10 @@
 //
 // Saving a preset: RaceMenu writes the file, the Lifecast asks it to.
 //
-// The call is RaceMenu's own Papyrus native CharGen.SaveCharacterPreset
-// (Actor, string), dispatched through the Papyrus VM. RaceMenu writes every
+// The call is RaceMenu's own preset editor in the menu's film (onSaveFile),
+// the code its Save button runs; when the editor cannot be reached, its
+// Papyrus native CharGen.SaveCharacterPreset (Actor, string), dispatched
+// through the Papyrus VM, which writes the same file. RaceMenu writes every
 // section it knows - including its extended sliders, sculpt and overrides,
 // which no interface reachable from a plugin can read - into
 // Data\SKSE\Plugins\CharGen\Presets\<name>.jslot. A preset written by anyone
