@@ -172,9 +172,19 @@ namespace Lifecast::Edit::Finish
 					   "button");
 				return;
 			}
-			if (Preset::Save::Busy() || Preset::Load::Busy()) {
-				Refuse(Preset::Save::Busy() ? "a preset is still being saved - wait for it" :
-				                              "a preset is still being loaded - wait for it");
+			if (Preset::Save::Busy()) {
+				Refuse("a preset is still being saved - wait for it");
+				return;
+			}
+			// Finishing while a load is out would let that preset land after the menu
+			// closed, unseen. So it stays refused, and the page is told the way out:
+			// waiting always works; loading another preset only once the running one
+			// has gone unanswered long enough to be replaced (Preset::Load).
+			if (Preset::Load::Busy()) {
+				Refuse(Preset::Load::Replaceable() ?
+				           "RaceMenu has not finished applying the last preset - wait for it, or load another preset "
+				           "to replace it" :
+				           "RaceMenu is still applying the last preset - wait for it to finish");
 				return;
 			}
 			auto* queue = RE::UIMessageQueue::GetSingleton();

@@ -80,11 +80,26 @@ const LifecastBelt = (() => {
   nav.appendChild(track);
   nav.appendChild(next);
 
+  // A clipped strip starts at its RIGHT end (autor, 2026-10-10): RACE and
+  // BODY are what a new character goes to first. It stays pinned there,
+  // through every relayout (fonts, scale, resize), until the player moves it
+  // - the wheel or an arrow - and from then on it stays where they left it.
+  // The page lives for the whole run of the game, so this is the first open
+  // of each game; a strip that fits is never touched.
+  let pinRight = true;
+
+  function unpin() {
+    pinRight = false;
+  }
+
   // The arrows are on screen only while the strip is clipped: a strip that
   // fits has nothing to scroll, and the wide row is then the row it was
   // before the strip existed.
   function reach() {
     const max = track.scrollWidth - track.clientWidth;
+    if (pinRight && max > 0.5 && track.scrollLeft < max - 0.5) {
+      track.scrollLeft = max;
+    }
     prev.hidden = next.hidden = max <= 0.5;
     prev.disabled = track.scrollLeft <= 0.5;
     next.disabled = track.scrollLeft >= max - 0.5;
@@ -94,14 +109,15 @@ const LifecastBelt = (() => {
     track.scrollBy({ left: dir * Math.max(80, track.clientWidth * 0.6), behavior: "smooth" });
   }
 
-  prev.addEventListener("click", () => slide(-1));
-  next.addEventListener("click", () => slide(1));
+  prev.addEventListener("click", () => { unpin(); slide(-1); });
+  next.addEventListener("click", () => { unpin(); slide(1); });
   track.addEventListener("scroll", reach);
   // The wheel over the strip rolls it sideways; the camera's wheel is on
   // #stage (stage.js) and never gets here, so there is nothing to share.
   track.addEventListener("wheel", (e) => {
     const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
     if (d !== 0 && track.scrollWidth > track.clientWidth) {
+      unpin();
       track.scrollLeft += d;
       reach();
       e.preventDefault();
@@ -124,6 +140,16 @@ const LifecastBelt = (() => {
     b.addEventListener("click", () => choose(name));
     (name === "All" ? nav : track).appendChild(b);
     buttons.set(name, b);
+  }
+
+  // The strip's reach changes whenever a category's width does - its count
+  // arrives, the fonts load, the narrow fold drops the counts - and none of
+  // that resizes the window. Measured at 1280x720: pinned at 89 px, the
+  // strip then grew to 153 and the pin was left short.
+  if (typeof ResizeObserver !== "undefined") {
+    const watch = new ResizeObserver(reach);
+    watch.observe(track);
+    Array.prototype.forEach.call(track.children, (b) => watch.observe(b));
   }
 
   // Settings (D132): a category like the others, but its button is the

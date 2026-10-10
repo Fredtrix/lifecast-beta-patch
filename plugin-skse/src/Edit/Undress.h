@@ -13,10 +13,14 @@
 // Captured on undress: for every worn TESBoundObject, the exact
 // ExtraDataList* that RE::ExtraDataList::GetWorn() finds true among that
 // object's InventoryEntryData::extraLists (an object can have more than one
-// stack; only the worn one is ever touched). Re-equip on dress uses the same
-// object/extraList pair - re-resolved from the inventory at that moment,
-// never a pointer held from undress, since the engine is free to have
-// reorganized the list in between (commonlib-scout, 2026-09-29).
+// stack; only the worn one is ever touched). Re-equip on dress looks the
+// kept ExtraDataList* up among the object's lists at that moment, by
+// address only, and hands it back only if it is still there. A list that
+// carried nothing but the worn flag is freed by the engine as the item comes
+// off - every time, measured - and handing that pointer to EquipObject read
+// freed memory and crashed the game on some cycles. Such an item goes back
+// with no list (the engine picks its stack); a list with data on it (temper,
+// enchantment) survives the unequip and goes back as the same instance.
 //
 // Mirrors Light's close-time symmetry: whatever this feature changed is put
 // back before the menu closes, same OnMenuClosed hook. A forced close

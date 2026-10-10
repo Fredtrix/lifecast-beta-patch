@@ -64,4 +64,8 @@ namespace Lifecast::Preset::Load
 	// answered yet. Stays true after the long warning too, until the answer or
 	// until a new load replaces it. Game thread only.
 	bool Busy();
+
+	// The running load has gone kSilent without an answer and the page was
+	// told so: a new load is now accepted and replaces it. Game thread only.
+	bool Replaceable();
 }

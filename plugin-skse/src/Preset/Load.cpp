@@ -21,6 +21,20 @@ namespace Lifecast::Preset::Load
 		using Clock = std::chrono::steady_clock;
 		namespace fs = std::filesystem;
 
+		// The load goes through RaceMenu's own Load button: its preset editor's
+		// onLoadFile, invoked on the UI thread with the event its file dialog
+		// would send. Inside it the load is a synchronous call into SKEE, so it
+		// waits for nothing - the Papyrus queue, which a heavy script order
+		// keeps busy for tens of seconds while a new game starts, is not on the
+		// way. What RaceMenu does after its own load (sliders reloaded, hair
+		// colour, tint layers) it does here too, because it is its own code.
+		// Player only: the editor always loads onto the player.
+		constexpr auto kEditor = "_root.RaceSexMenuBaseInstance.RaceSexPanelsInstance.presetEditor";
+		constexpr auto kFolder = "Data\\SKSE\\Plugins\\CharGen\\Presets";
+
+		// The way it went before, and still goes when the editor cannot be
+		// reached: CharGen's Papyrus native, which waits for its turn in the
+		// Papyrus queue.
 		constexpr auto kClass = "CharGen";
 		constexpr auto kFunction = "LoadCharacterPresetEx";
 		// The call is never given up on: the native may return at any time and apply the
@@ -93,7 +107,11 @@ namespace Lifecast::Preset::Load
 				++g_loads;
 				spdlog::info("[preset-load] #{} {} true after {} ms - load {} of this game session", a_id, a_how,
 					ms, g_loads);
-				Core::RaceMenuSync::PresetLoaded();
+				// RaceMenu's editor sends this one itself after its own load;
+				// only the Papyrus path has to ask for it.
+				if (a_how == "returned") {
+					Core::RaceMenuSync::PresetLoaded();
+				}
 				Guard::Remember(p.name, std::move(p.bytes));
 				Edit::Session::Replaced("preset loaded");
 				Reply(p.name, true, {}, false, ms);
@@ -118,6 +136,28 @@ namespace Lifecast::Preset::Load
 		std::atomic<int> g_simDelayMs{ 0 };
 #endif
 
+		// One answer, from either path, handed to the game thread.
+		void Answer(std::uint32_t a_id, bool a_value, const char* a_how)
+		{
+#ifdef LIFECAST_TUNING
+			if (const int sim = g_simDelayMs.exchange(0); sim > 0) {
+				spdlog::warn("[preset-load] #{} SIMULATED delay of {} ms before the answer is handled "
+							 "(development build)",
+					a_id, sim);
+				std::thread([a_id, a_value, a_how, sim]() {
+					std::this_thread::sleep_for(std::chrono::milliseconds(sim));
+					if (auto* tasks = SKSE::GetTaskInterface()) {
+						tasks->AddTask([a_id, a_value, a_how]() { Finish(a_id, a_value ? 1 : 0, a_how); });
+					}
+				}).detach();
+				return;
+			}
+#endif
+			if (auto* tasks = SKSE::GetTaskInterface()) {
+				tasks->AddTask([a_id, a_value, a_how]() { Finish(a_id, a_value ? 1 : 0, a_how); });
+			}
+		}
+
 		class Done : public RE::BSScript::IStackCallbackFunctor
 		{
 		public:
@@ -131,24 +171,7 @@ namespace Lifecast::Preset::Load
 				const bool value = isBool && a_result.GetBool();
 				spdlog::info("[preset-load] #{} {}.{} returned (bool {}, value {})", _id, kClass, kFunction, isBool,
 					value);
-				const auto id = _id;
-#ifdef LIFECAST_TUNING
-				if (const int sim = g_simDelayMs.exchange(0); sim > 0) {
-					spdlog::warn("[preset-load] #{} SIMULATED delay of {} ms before the answer is handled "
-								 "(development build)",
-						id, sim);
-					std::thread([id, value, sim]() {
-						std::this_thread::sleep_for(std::chrono::milliseconds(sim));
-						if (auto* tasks = SKSE::GetTaskInterface()) {
-							tasks->AddTask([id, value]() { Finish(id, value ? 1 : 0, "returned"); });
-						}
-					}).detach();
-					return;
-				}
-#endif
-				if (auto* tasks = SKSE::GetTaskInterface()) {
-					tasks->AddTask([id, value]() { Finish(id, value ? 1 : 0, "returned"); });
-				}
+				Answer(_id, value, "returned");
 			}
 
 			void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
@@ -156,6 +179,93 @@ namespace Lifecast::Preset::Load
 		private:
 			std::uint32_t _id;
 		};
+
+		// The editor tells how its load went only through the event it
+		// dispatches right after it, "loadedPreset" { success }. This handler is
+		// that event's listener for the length of one Invoke.
+		class Heard : public RE::GFxFunctionHandler
+		{
+		public:
+			void Call(Params& a_params) override
+			{
+				heard = true;
+				RE::GFxValue success;
+				if (a_params.argCount > 0 && a_params.args[0].IsObject() &&
+					a_params.args[0].GetMember("success", &success) && success.IsBool()) {
+					ok = success.GetBool();
+				}
+			}
+
+			bool heard{ false };
+			bool ok{ false };
+		};
+
+		// UI thread. False: the editor is not there, nothing was asked of it.
+		bool LoadThroughTheEditor(std::uint32_t a_id, const std::string& a_name)
+		{
+			auto*        ui = RE::UI::GetSingleton();
+			auto         menu = ui ? ui->GetMenu<RE::RaceSexMenu>() : nullptr;
+			auto*        movie = menu ? menu->uiMovie.get() : nullptr;
+			RE::GFxValue editor;
+			if (!movie || !movie->GetVariable(&editor, kEditor) || !editor.IsObject() ||
+				!editor.HasMember("onLoadFile") || !editor.HasMember("addEventListener")) {
+				return false;
+			}
+
+			auto         heard = RE::make_gptr<Heard>();
+			RE::GFxValue fn;
+			RE::GFxValue scope;
+			RE::GFxValue type;
+			RE::GFxValue member;
+			movie->CreateFunction(&fn, heard.get());
+			movie->CreateObject(&scope);
+			scope.SetMember("heard", fn);
+			movie->CreateString(&type, "loadedPreset");
+			movie->CreateString(&member, "heard");
+			const std::array<RE::GFxValue, 3> listener{ type, scope, member };
+
+			const std::string file = a_name + ".jslot";
+			RE::GFxValue      folder;
+			RE::GFxValue      input;
+			RE::GFxValue      ev;
+			movie->CreateString(&folder, kFolder);
+			movie->CreateString(&input, file.c_str());
+			movie->CreateObject(&ev);
+			ev.SetMember("directoryPath", folder);
+			ev.SetMember("input", input);
+
+			editor.Invoke("addEventListener", listener);
+			const auto start = Clock::now();
+			const bool invoked = editor.Invoke("onLoadFile", nullptr, &ev, 1);
+			const auto us = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+			editor.Invoke("removeEventListener", listener);
+
+			spdlog::info("[preset-load] #{} RaceMenu's preset editor onLoadFile(\"{}\") invoked {} in {} us - "
+						 "loadedPreset {}, success {}",
+				a_id, file, invoked, us, heard->heard ? "heard" : "NOT heard", heard->ok);
+			Answer(a_id, heard->heard && heard->ok,
+				heard->heard ? "loaded by RaceMenu's editor" : "RaceMenu's editor did not answer");
+			return true;
+		}
+
+		void LoadThroughPapyrus(std::uint32_t a_id, const std::string& a_name, bool a_skinCleared);
+
+		// What the page is told while an answer is late, whichever path the load
+		// took. Waiting() does nothing once the load has been answered, which on
+		// the editor's path is within the same frame.
+		void WatchForALateAnswer(std::uint32_t a_id)
+		{
+			std::thread([a_id]() {
+				std::this_thread::sleep_for(kApplying);
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddTask([a_id]() { Waiting(a_id, false); });
+				}
+				std::this_thread::sleep_for(kSilent - kApplying);
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddTask([a_id]() { Waiting(a_id, true); });
+				}
+			}).detach();
+		}
 
 		void OnPresetLoad(const json& a_data)
 		{
@@ -218,41 +328,60 @@ namespace Lifecast::Preset::Load
 			// are cleared first, and "load A" leaves the character with A's
 			// skin and nothing else.
 			const bool skinCleared = Core::SkeeLink::ClearSkinOverrides(player);
+			spdlog::info("[preset-load] #{} \"{}\" asked - file {} bytes, sections {}, skin overrides cleared before {}",
+				id, name, g_pending->bytes.size(), sections.dump(), skinCleared);
 
-			auto* hairColor = Core::RaceMenuSync::HairColorForm();
+			WatchForALateAnswer(id);
+			auto* tasks = SKSE::GetTaskInterface();
+			if (!tasks) {
+				LoadThroughPapyrus(id, name, skinCleared);
+				return;
+			}
+			tasks->AddUITask([id, name, skinCleared]() {
+				if (LoadThroughTheEditor(id, name)) {
+					return;
+				}
+				spdlog::warn("[preset-load] #{} RaceMenu's preset editor cannot be reached - through CharGen's "
+							 "Papyrus native instead",
+					id);
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddTask([id, name, skinCleared]() { LoadThroughPapyrus(id, name, skinCleared); });
+				}
+			});
+		}
+
+		// Game thread.
+		void LoadThroughPapyrus(std::uint32_t a_id, const std::string& a_name, bool a_skinCleared)
+		{
+			if (!g_pending || g_pending->id != a_id) {
+				return;
+			}
+			const auto id = a_id;
+			auto*      vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+			auto*      player = RE::PlayerCharacter::GetSingleton();
+			auto*      hairColor = Core::RaceMenuSync::HairColorForm();
 			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new Done(id));
-			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(name),
+			auto* args = RE::MakeFunctionArguments(static_cast<RE::Actor*>(player), std::string(a_name),
 				static_cast<RE::BGSColorForm*>(hairColor), std::int32_t(kFlags));
-			if (!vm->DispatchStaticCall(kClass, kFunction, args, callback)) {
+			if (!vm || !player || !vm->DispatchStaticCall(kClass, kFunction, args, callback)) {
 				spdlog::warn("[preset-load] #{} DispatchStaticCall({}.{}) refused{}", id, kClass, kFunction,
-					skinCleared ? " - the skin overrides were already cleared" : "");
-				if (skinCleared) {
+					a_skinCleared ? " - the skin overrides were already cleared" : "");
+				if (a_skinCleared) {
 					Edit::Session::Replaced("skin overrides cleared, then the load was refused");
 				}
 				Finish(id, -1, "dispatch refused");
 				return;
 			}
-			spdlog::info("[preset-load] #{} {}.{}(player, \"{}\", hair colour {}, flags {:#x}) dispatched - file {} bytes, "
-						 "sections {}, skin overrides cleared before {}",
-				id, kClass, kFunction, name, hairColor ? "RaceMenu's" : "NONE", static_cast<std::uint32_t>(kFlags),
-				g_pending->bytes.size(), sections.dump(), skinCleared);
-
-			std::thread([id]() {
-				std::this_thread::sleep_for(kApplying);
-				if (auto* tasks = SKSE::GetTaskInterface()) {
-					tasks->AddTask([id]() { Waiting(id, false); });
-				}
-				std::this_thread::sleep_for(kSilent - kApplying);
-				if (auto* tasks = SKSE::GetTaskInterface()) {
-					tasks->AddTask([id]() { Waiting(id, true); });
-				}
-			}).detach();
+			spdlog::info("[preset-load] #{} {}.{}(player, \"{}\", hair colour {}, flags {:#x}) dispatched", id, kClass,
+				kFunction, a_name, hairColor ? "RaceMenu's" : "NONE", static_cast<std::uint32_t>(kFlags));
 		}
 
 		bool g_installed = false;
 	}
 
 	bool Busy() { return g_pending.has_value(); }
+
+	bool Replaceable() { return g_pending.has_value() && g_pending->silent; }
 
 	void Install()
 	{
@@ -267,6 +396,8 @@ namespace Lifecast::Preset::Load
 		});
 #endif
 		g_installed = true;
-		spdlog::info("[preset-load] installed - delegates to {}.{}, flags {:#x}", kClass, kFunction, static_cast<std::uint32_t>(kFlags));
+		spdlog::info("[preset-load] installed - delegates to RaceMenu's preset editor; {}.{} (flags {:#x}) when it "
+					 "cannot be reached",
+			kClass, kFunction, static_cast<std::uint32_t>(kFlags));
 	}
 }

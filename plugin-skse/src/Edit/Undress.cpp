@@ -14,8 +14,8 @@ namespace Lifecast::Edit::Undress
 		bool g_on = false;
 
 		// Every worn (object, exact worn extraList) pair, as found the moment
-		// undress ran. Re-dress re-resolves from the inventory rather than
-		// trusting these pointers to still be valid - see Undress.h.
+		// undress ran. The extraList is only a key to look for at re-dress,
+		// never a pointer to use: it may be freed by then - see Undress.h.
 		struct Worn
 		{
 			RE::TESBoundObject* object = nullptr;
@@ -71,20 +71,47 @@ namespace Lifecast::Edit::Undress
 				g_worn.clear();
 				return;
 			}
-			// Re-resolve from the current inventory rather than trust the
-			// pointers captured at undress - see Undress.h.
-			const auto stillOff = CollectWorn(player);
-			std::size_t reequipped = 0;
+			// The pointer kept at undress is never handed back as it is: a list
+			// that held nothing but the worn flag is freed by the engine the
+			// moment the item comes off, and EquipObject would then read freed
+			// memory - see Undress.h. It is looked for among the object's lists
+			// NOW, by address only (never dereferenced): found, the item goes
+			// back on that same instance, temper and enchantment included; not
+			// found, it goes back with no list and the engine picks the stack.
+			const auto  wornNow = CollectWorn(player);
+			auto        inventory = player->GetInventory();
+			std::size_t sameList = 0;
+			std::size_t engineList = 0;
+			std::size_t gone = 0;
 			for (auto& kept : g_worn) {
-				const bool alreadyWorn = std::any_of(stillOff.begin(), stillOff.end(),
-					[&](const Worn& w) { return w.object == kept.object && w.extraList == kept.extraList; });
+				const auto it = inventory.find(kept.object);
+				if (it == inventory.end() || it->second.first <= 0) {
+					spdlog::info("[undress] {:08X} is no longer in the inventory - not re-equipped",
+						kept.object ? kept.object->GetFormID() : 0);
+					++gone;
+					continue;
+				}
+				RE::ExtraDataList* list = nullptr;
+				if (auto* entry = it->second.second.get(); entry && entry->extraLists) {
+					for (auto* xList : *entry->extraLists) {
+						if (xList == kept.extraList) {
+							list = xList;
+							break;
+						}
+					}
+				}
+				const bool alreadyWorn = std::any_of(wornNow.begin(), wornNow.end(), [&](const Worn& w) {
+					return w.object == kept.object && (!list || w.extraList == list);
+				});
 				if (alreadyWorn) {
 					continue;
 				}
-				equipManager->EquipObject(player, kept.object, kept.extraList);
-				++reequipped;
+				equipManager->EquipObject(player, kept.object, list);
+				++(list ? sameList : engineList);
 			}
-			spdlog::info("[undress] re-equipped {} item(s)", reequipped);
+			spdlog::info("[undress] re-equipped {} item(s): {} on the list they came off, {} on a list the engine "
+						 "picks; {} no longer in the inventory",
+				sameList + engineList, sameList, engineList, gone);
 			g_worn.clear();
 		}
 
