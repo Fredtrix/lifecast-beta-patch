@@ -18,6 +18,9 @@
 #include "Panel/Stage.h"
 #include "Preset/Library.h"
 
+#include <atomic>
+#include <thread>
+
 namespace Lifecast::Edit::Compare
 {
 	namespace
@@ -1024,8 +1027,84 @@ namespace Lifecast::Edit::Compare
 
 		void FaceLoaded(const char* a_why)
 		{
+			{
+				auto* p = Player() ? Player()->GetActorBase() : nullptr;
+				auto* c = Twin() ? Twin()->GetActorBase() : nullptr;
+				spdlog::info("[face-preset] ({}): player morphs[0] {:.4f}, copy morphs[0] {:.4f}", a_why,
+					p && p->faceData ? p->faceData->morphs[0] : 0.0f, c && c->faceData ? c->faceData->morphs[0] : 0.0f);
+			}
 			RefreshLook(Twin(), a_why);
 		}
+
+		// F50 - the copy is the player of the instant the comparison was turned on.
+		// The preset route goes through the Papyrus queue: SaveCharacterPreset reads
+		// the player WHEN IT RUNS, and with the queue stalled that can be long after
+		// the switch-on, by which time the player may have taken another preset from
+		// RaceMenu. The Load would then put THAT face on the copy. So the face is
+		// copied directly at the instant (CopyFace, no sculpt), a stamp of the
+		// player's record is taken with it, and the Load - which brings the sculpt
+		// and the extended sliders in - is dispatched only if the stamp still holds
+		// when the Save returns. Not covered: a change held only by SKEE (sculpt,
+		// extended sliders) that leaves the record alone.
+		std::uint64_t g_faceStamp = 0;
+
+		std::uint64_t FaceStamp(RE::TESNPC* a_npc)
+		{
+			std::uint64_t h = 0xcbf29ce484222325ull;
+			const auto mix = [&h](const void* a_data, std::size_t a_size) {
+				const auto* b = static_cast<const unsigned char*>(a_data);
+				for (std::size_t i = 0; i < a_size; ++i) {
+					h ^= b[i];
+					h *= 0x100000001b3ull;
+				}
+			};
+			if (!a_npc) {
+				return h;
+			}
+			const auto id = [&mix](const RE::TESForm* a_form) {
+				const auto v = a_form ? a_form->GetFormID() : 0u;
+				mix(&v, sizeof(v));
+			};
+			const auto sex = static_cast<int>(a_npc->GetSex());
+			mix(&sex, sizeof(sex));
+			id(a_npc->race);
+			mix(&a_npc->weight, sizeof(a_npc->weight));
+			mix(&a_npc->height, sizeof(a_npc->height));
+			mix(&a_npc->bodyTintColor, sizeof(a_npc->bodyTintColor));
+			if (a_npc->headRelatedData) {
+				id(a_npc->headRelatedData->hairColor);
+				id(a_npc->headRelatedData->faceDetails);
+			}
+			mix(&a_npc->numHeadParts, sizeof(a_npc->numHeadParts));
+			if (a_npc->headParts) {
+				for (std::int8_t i = 0; i < a_npc->numHeadParts; ++i) {
+					id(a_npc->headParts[i]);
+				}
+			}
+			if (a_npc->faceData) {
+				mix(a_npc->faceData->parts, sizeof(a_npc->faceData->parts));
+				mix(a_npc->faceData->morphs, sizeof(a_npc->faceData->morphs));
+			}
+			if (a_npc->tintLayers) {
+				for (auto* layer : *a_npc->tintLayers) {
+					if (layer) {
+						mix(&layer->tintIndex, sizeof(layer->tintIndex));
+						mix(&layer->tintColor, sizeof(layer->tintColor));
+						mix(&layer->preset, sizeof(layer->preset));
+						mix(&layer->interpolationValue, sizeof(layer->interpolationValue));
+					}
+				}
+			}
+			return h;
+		}
+
+#ifdef LIFECAST_TUNING
+		// Development build only (E32 P2): the Save is dispatched this many ms late, as
+		// a stalled queue would run it, and the guard can be switched off to see what
+		// the same sequence did before it. "e32-f50" { "delay": ms, "guard": bool }.
+		std::atomic<int>  g_saveDelayMs{ 0 };
+		std::atomic<bool> g_guardOff{ false };
+#endif
 
 		void FaceLoadStart()
 		{
@@ -1035,6 +1114,28 @@ namespace Lifecast::Edit::Compare
 			if (!player || !actor || !vm || !actor->Get3D(false)) {
 				spdlog::info("[face-preset] no player, figure 3D or VM - the load is not dispatched");
 				return;
+			}
+			{
+				auto*      pn = player->GetActorBase();
+				const auto now = FaceStamp(pn);
+				const bool held = now == g_faceStamp;
+				const float m0 = pn && pn->faceData ? pn->faceData->morphs[0] : 0.0f;
+				auto*       tb = actor->GetActorBase();
+				const float c0 = tb && tb->faceData ? tb->faceData->morphs[0] : 0.0f;
+#ifdef LIFECAST_TUNING
+				const bool off = g_guardOff.load();
+#else
+				const bool off = false;
+#endif
+				spdlog::info("[face-preset] stamp of the player at the switch-on {:016x}, now {:016x}: {}; player morphs[0] {:.4f}, "
+							 "copy morphs[0] {:.4f}{}",
+					g_faceStamp, now, held ? "HELD" : "CHANGED", m0, c0, off ? " (guard OFF, development build)" : "");
+				if (!held && !off) {
+					spdlog::warn("[face-preset] the player changed between the switch-on and the Save returning - the Load is NOT "
+								 "dispatched: the copy keeps the face it had at the switch-on");
+					FaceLoaded("the load was not dispatched, the player changed");
+					return;
+				}
 			}
 			auto*      mine = player->GetActorBase();
 			auto*      hers = actor->GetActorBase();
@@ -1067,12 +1168,54 @@ namespace Lifecast::Edit::Compare
 			void SetObject(const RE::BSTSmartPointer<RE::BSScript::Object>&) override {}
 		};
 
+		void FaceByPresetSave(const char* a_why);
+
 		void FaceByPreset(const char* a_why)
 		{
 			auto* player = Player();
 			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
 			if (!player || !vm) {
 				spdlog::info("[face-preset] ({}): no player or VM", a_why);
+				return;
+			}
+			// The face of the instant goes onto the copy directly, and the stamp is taken
+			// with it (see FaceStamp). The Save and the Load below only add what a
+			// direct copy cannot carry.
+			g_faceStamp = FaceStamp(player->GetActorBase());
+#ifdef LIFECAST_TUNING
+			const bool guarded = !g_guardOff.load();
+#else
+			const bool guarded = true;
+#endif
+			if (guarded) {
+				if (auto* twin = Twin(); twin && twin->GetActorBase() && player->GetActorBase() &&
+										 twin->GetActorBase() != player->GetActorBase()) {
+					CopyFace(player->GetActorBase(), twin->GetActorBase());
+					RefreshLook(twin, "the face of the switch-on");
+				}
+			}
+#ifdef LIFECAST_TUNING
+			if (const int delay = g_saveDelayMs.exchange(0); delay > 0) {
+				spdlog::warn("[face-preset] ({}): the Save is held {} ms before it is dispatched, as a stalled queue would "
+							 "(development build); stamp {:016x}",
+					a_why, delay, g_faceStamp);
+				std::thread([delay]() {
+					std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+					if (auto* tasks = SKSE::GetTaskInterface()) {
+						tasks->AddTask([]() { FaceByPresetSave("after the simulated stall"); });
+					}
+				}).detach();
+				return;
+			}
+#endif
+			FaceByPresetSave(a_why);
+		}
+
+		void FaceByPresetSave(const char* a_why)
+		{
+			auto* player = Player();
+			auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+			if (!player || !vm) {
 				return;
 			}
 			RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback(new FaceSaveDone());
@@ -1942,6 +2085,12 @@ namespace Lifecast::Edit::Compare
 #ifdef LIFECAST_TUNING
 		Panel::Bridge::On("compare-dress", &OnCompareDress);
 		Panel::Bridge::On("compare-graph", &OnCompareGraph);
+		Panel::Bridge::On("e32-f50", [](const nlohmann::json& a_data) {
+			g_saveDelayMs = a_data.value("delay", 0);
+			g_guardOff = !a_data.value("guard", true);
+			spdlog::warn("[face-preset] development build: the next Save is held {} ms, guard {}", g_saveDelayMs.load(),
+				g_guardOff.load() ? "OFF" : "ON");
+		});
 #endif
 		g_installed = true;
 		spdlog::info("[compare] installed");

@@ -686,6 +686,20 @@
     render();
   });
 
+  // The call is still out. The DLL never gives up on it, so this is not a
+  // failure: RaceMenu answers late when the game is busy, and the answer is
+  // "preset-loaded" whenever it comes.
+  LifecastBridge.on("preset-loading", (data) => {
+    if (!loading || !data || loadingName === null || !same(loadingName, String(data.name))) {
+      return;
+    }
+    notice = data.silent
+      ? "RaceMenu has not answered after " + Math.round(Number(data.ms) / 1000) + " s - " + data.name +
+        " may still apply"
+      : "applying " + data.name + " - the game is busy, RaceMenu will answer when it can";
+    render();
+  });
+
   LifecastBridge.whenAttached((ok) => {
     if (ok) {
       LifecastBridge.send("presets-get");

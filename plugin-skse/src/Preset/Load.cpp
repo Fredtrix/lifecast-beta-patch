@@ -10,7 +10,7 @@
 #include "Preset/Guard.h"
 #include "Preset/Library.h"
 
-#include <map>
+#include <atomic>
 #include <thread>
 
 namespace Lifecast::Preset::Load
@@ -23,7 +23,11 @@ namespace Lifecast::Preset::Load
 
 		constexpr auto kClass = "CharGen";
 		constexpr auto kFunction = "LoadCharacterPresetEx";
-		constexpr auto kTimeout = std::chrono::seconds(5);
+		// The call is never given up on: the native may return at any time and apply the
+		// preset, and a page that said "failed" would then be lying. These two only
+		// change what the page is told while it waits.
+		constexpr auto kApplying = std::chrono::seconds(5);
+		constexpr auto kSilent = std::chrono::seconds(120);
 
 		// One load at a time. Game thread only; the VM callback and the
 		// timeout hop back to it.
@@ -35,16 +39,7 @@ namespace Lifecast::Preset::Load
 			Clock::time_point sentAt{};
 		};
 
-		// A load given up on at the timeout. The native may still return and
-		// apply the preset after that, so it is kept until it does.
-		struct Abandoned
-		{
-			std::string       name;
-			Clock::time_point sentAt{};
-		};
-
 		std::optional<Pending>                    g_pending;
-		std::map<std::uint32_t, Abandoned>        g_abandoned;
 		std::uint32_t                             g_nextId = 0;
 		std::uint32_t                             g_loads = 0;  // returned true, this game session
 
@@ -62,65 +57,36 @@ namespace Lifecast::Preset::Load
 				true);
 		}
 
-		// The native returned for a load already given up on at the timeout.
-		// No provenance is ever written here: a late load never authorizes an
-		// overwrite. If no later load has started, this answer describes the
-		// character, so it is re-read and the page is told. If a later load
-		// has started, the screen belongs to that one: re-reading, the tint
-		// request and a "loaded" to the page would all describe the wrong
-		// preset, so they are skipped - but provenance is still dropped,
-		// because the native that ran late may have applied over the later
-		// load, and a dropped provenance can only refuse, never allow.
-		void Late(std::uint32_t a_id, int a_result)
+		// The call has been out for a while and has not returned. It is still
+		// alive, so this is not a failure and the busy flag stays: the page is
+		// told it is applying, and later that RaceMenu has not answered yet.
+		void Waiting(std::uint32_t a_id, bool a_silent)
 		{
-			const auto it = g_abandoned.find(a_id);
-			if (it == g_abandoned.end()) {
-				spdlog::info("[preset-load] #{} returned after the load was already settled - ignored", a_id);
+			if (!g_pending || g_pending->id != a_id) {
 				return;
 			}
-			Abandoned a = std::move(it->second);
-			g_abandoned.erase(it);
-
-			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - a.sentAt).count();
-			Guard::Forget("a load returned after its timeout");
-			if (a_id != g_nextId) {
-				spdlog::warn("[preset-load] #{} returned {} LATE and SUPERSEDED, after {} ms (timeout {} ms) - "
-							 "load #{} started since; page, redraw and tints left to it",
-					a_id, a_result == 1 ? "true" : "false", ms,
-					std::chrono::duration_cast<std::chrono::milliseconds>(kTimeout).count(), g_nextId);
-				return;
-			}
-			spdlog::warn("[preset-load] #{} returned {} LATE, after {} ms (timeout {} ms)", a_id,
-				a_result == 1 ? "true" : "false", ms,
-				std::chrono::duration_cast<std::chrono::milliseconds>(kTimeout).count());
-			if (a_result == 1) {
-				++g_loads;
-				spdlog::info("[preset-load] #{} counted as load {} of this game session", a_id, g_loads);
-				Core::RaceMenuSync::PresetLoaded();
-			}
-			Edit::Session::Replaced(a_result == 1 ? "preset loaded late" : "preset load failed late");
-			Reply(a.name, a_result == 1,
-				a_result == 1 ? std::string() : std::string("RaceMenu could not load this preset"), a_result != 1,
-				ms, true);
+			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_pending->sentAt).count();
+			spdlog::info("[preset-load] #{} still running after {} ms - the page is told \"{}\", not \"failed\"", a_id, ms,
+				a_silent ? "no answer yet" : "applying");
+			Panel::Bridge::Send("preset-loading", {
+													   { "name", g_pending->name },
+													   { "ms", ms },
+													   { "silent", a_silent },
+												   },
+				true);
 		}
 
 		void Finish(std::uint32_t a_id, int a_result, const std::string& a_how)
 		{
-			// a_result: 1 returned true, 0 returned false, -1 did not return
+			// a_result: 1 returned true, 0 returned false, -1 never ran (dispatch refused)
 			if (!g_pending || g_pending->id != a_id) {
-				if (a_result >= 0) {
-					Late(a_id, a_result);
-				}
+				spdlog::info("[preset-load] #{} answered after the load was already settled - ignored", a_id);
 				return;
 			}
 			Pending p = std::move(*g_pending);
 			g_pending.reset();
 
 			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - p.sentAt).count();
-			if (a_how == "timed out") {
-				g_abandoned[a_id] = Abandoned{ p.name, p.sentAt };
-			}
-
 			if (a_result == 1) {
 				++g_loads;
 				spdlog::info("[preset-load] #{} {} true after {} ms - load {} of this game session", a_id, a_how,
@@ -140,10 +106,15 @@ namespace Lifecast::Preset::Load
 			if (a_how != "dispatch refused") {
 				Edit::Session::Replaced("preset load failed");
 			}
-			Reply(p.name, false,
-				a_result == 0 ? "RaceMenu could not load this preset" : "RaceMenu did not answer the load", true,
-				ms);
+			Reply(p.name, false, a_result == 0 ? "RaceMenu could not load this preset" : "the load was refused", true, ms);
 		}
+
+#ifdef LIFECAST_TUNING
+		// Development build only: the next load answers this many ms late, as if the
+		// Papyrus queue had been stalled. The seam is the return, so everything after
+		// it is the production path. "e32-sim-delay" { "ms": n } arms it once.
+		std::atomic<int> g_simDelayMs{ 0 };
+#endif
 
 		class Done : public RE::BSScript::IStackCallbackFunctor
 		{
@@ -158,8 +129,22 @@ namespace Lifecast::Preset::Load
 				const bool value = isBool && a_result.GetBool();
 				spdlog::info("[preset-load] #{} {}.{} returned (bool {}, value {})", _id, kClass, kFunction, isBool,
 					value);
+				const auto id = _id;
+#ifdef LIFECAST_TUNING
+				if (const int sim = g_simDelayMs.exchange(0); sim > 0) {
+					spdlog::warn("[preset-load] #{} SIMULATED delay of {} ms before the answer is handled "
+								 "(development build)",
+						id, sim);
+					std::thread([id, value, sim]() {
+						std::this_thread::sleep_for(std::chrono::milliseconds(sim));
+						if (auto* tasks = SKSE::GetTaskInterface()) {
+							tasks->AddTask([id, value]() { Finish(id, value ? 1 : 0, "returned"); });
+						}
+					}).detach();
+					return;
+				}
+#endif
 				if (auto* tasks = SKSE::GetTaskInterface()) {
-					const auto id = _id;
 					tasks->AddTask([id, value]() { Finish(id, value ? 1 : 0, "returned"); });
 				}
 			}
@@ -239,9 +224,13 @@ namespace Lifecast::Preset::Load
 				g_pending->bytes.size(), sections.dump(), skinCleared);
 
 			std::thread([id]() {
-				std::this_thread::sleep_for(kTimeout);
+				std::this_thread::sleep_for(kApplying);
 				if (auto* tasks = SKSE::GetTaskInterface()) {
-					tasks->AddTask([id]() { Finish(id, -1, "timed out"); });
+					tasks->AddTask([id]() { Waiting(id, false); });
+				}
+				std::this_thread::sleep_for(kSilent - kApplying);
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddTask([id]() { Waiting(id, true); });
 				}
 			}).detach();
 		}
@@ -257,6 +246,12 @@ namespace Lifecast::Preset::Load
 			return;
 		}
 		Panel::Bridge::On("preset-load", &OnPresetLoad);
+#ifdef LIFECAST_TUNING
+		Panel::Bridge::On("e32-sim-delay", [](const json& a_data) {
+			g_simDelayMs = a_data.value("ms", 0);
+			spdlog::warn("[preset-load] next load will answer {} ms late (development build)", g_simDelayMs.load());
+		});
+#endif
 		g_installed = true;
 		spdlog::info("[preset-load] installed - delegates to {}.{}, flags {:#x}", kClass, kFunction, static_cast<std::uint32_t>(kFlags));
 	}

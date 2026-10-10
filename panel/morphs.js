@@ -21,6 +21,41 @@
   // [{ key, el, rows }], in the order the film lists the tabs.
   let built = [];
   let signature = "";
+  // The text for an install with no body morph tabs at all (F49). The DLL's
+  // "ready" is true as soon as the film was read, and a mod registers its tabs
+  // a moment AFTER that - measured at about a second, and five in an earlier
+  // round - so zero tabs is only believed after it has stayed zero.
+  const NONE_AFTER_MS = 6000;
+  let noneTimer = null;
+  let noneSection = null;
+
+  function clearNone() {
+    if (noneTimer !== null) {
+      clearTimeout(noneTimer);
+      noneTimer = null;
+    }
+    if (noneSection !== null) {
+      noneSection.remove();
+      noneSection = null;
+    }
+  }
+
+  function showNone() {
+    noneTimer = null;
+    if (noneSection !== null || built.length > 0) {
+      return;
+    }
+    const section = LifecastControls.section("Body morphs");
+    section.body.appendChild(
+      LifecastControls.el(
+        "div",
+        "delegate-note",
+        "There are no body morph sliders in this installation: no mod has added any to RaceMenu. A mod that adds them for one sex only shows nothing here for the other."
+      )
+    );
+    LifecastControls.mount(section, "morph:none");
+    noneSection = section;
+  }
 
   function decimals(step) {
     if (step >= 1) {
@@ -78,6 +113,14 @@
       if (!Array.isArray(cat.sliders)) {
         cat.sliders = [];
       }
+    }
+
+    if (cats.length === 0) {
+      if (noneSection === null && noneTimer === null) {
+        noneTimer = setTimeout(showNone, NONE_AFTER_MS);
+      }
+    } else {
+      clearNone();
     }
 
     // Every tab, every label and every callback in one signature, and when it
