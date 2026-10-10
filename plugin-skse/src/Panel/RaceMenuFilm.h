@@ -67,6 +67,16 @@ namespace Lifecast::Panel::RaceMenuFilm
 	// finished edit.
 	using Done = std::function<void(bool a_delivered, bool a_final)>;
 
+	// After a sex change, RaceMenu's extended face sliders (the "$EFM_*", "$CME_*"... ChangeDoubleMorph
+	// entries) can end up stored under other names: skee names a slider by its position in ONE list per
+	// race, the one of the sex whose sliders the game loaded last, and going back to the sex loaded first
+	// leaves its sliders against the other sex's list. The film keeps showing the right values; the face is
+	// another face. ChangeSex keeps the film's entries before it calls RaceMenu; this waits until the film's
+	// list stops being rebuilt and, if skee's list is the other sex's, sends each value through the slider
+	// that reaches its name. Queued on the UI thread; a_done runs there too, also when there was nothing to
+	// put back (8 s at most).
+	void ReassertExtendedSliders(std::function<void()> a_done);
+
 	// Queued on the UI thread; returns at once. Requests for the same slider
 	// that arrive before the queued call runs fold into one, with the last
 	// value and the last a_done.

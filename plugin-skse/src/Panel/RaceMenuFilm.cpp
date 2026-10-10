@@ -537,6 +537,294 @@ namespace Lifecast::Panel::RaceMenuFilm
 			return true;
 		}
 
+		// E31 - RaceMenu's extended face sliders (the "$EFM_*", "$CME_*", "$EXPR_*"... ChangeDoubleMorph
+		// entries) after a sex change. Read from RaceMenu's public skee64 source, and confirmed against the
+		// log: the callback carries no name. skee resolves the slider's baked index against ONE list per
+		// race, the names of the sliders of the sex it loaded LAST, sorted without case. The game loads a
+		// sex's sliders the first time that sex is shown in a menu and keeps them after; so going back to
+		// the sex that was loaded first leaves its baked indices against the other sex's list, and every
+		// value the player's edits (or RaceMenu's own ChangeSex) send lands on the name that sits at the same
+		// position in that list: same numbers, other names (a lip value on EXPR_Aah, a chin value on the
+		// eyeballs). The film keeps showing the right values, which is why nothing looks wrong in the panel.
+		// Measured: the 17 names the author's save holds are reproduced by this rule, all 17 (Docs/MEDIDO-E31).
+		//
+		// What this puts back: after the change, for every position i of the list skee holds, the film's
+		// slider at position i of the target sex's sorted names is sent the value that belongs to the name
+		// skee holds at i. The write reaches that name by skee's own rule, so the values end under the names
+		// the film shows them under.
+		struct ExtEntry
+		{
+			std::string  name;  // the label without its '$': skee's own name for the morph
+			double       id = -1;
+			double       position = 0;
+			double       max = 0;
+			RE::GFxValue entry;  // only while the film that holds it is the one in hand
+		};
+
+		struct CiLess
+		{
+			bool operator()(const std::string& a_a, const std::string& a_b) const
+			{
+				return _stricmp(a_a.c_str(), a_b.c_str()) < 0;
+			}
+		};
+
+		bool NameLess(const ExtEntry& a_a, const ExtEntry& a_b)
+		{
+			return _stricmp(a_a.name.c_str(), a_b.name.c_str()) < 0;
+		}
+
+		bool ReadExtended(RE::GFxMovieView* a_movie, std::vector<ExtEntry>& a_out, double& a_idSum)
+		{
+			a_out.clear();
+			a_idSum = 0;
+			RE::GFxValue list;
+			RE::GFxValue entries;
+			if (!a_movie || !a_movie->GetVariable(&list, kList) || !list.IsObject() ||
+				!list.GetMember("_entryList", &entries) || !entries.IsArray()) {
+				return false;
+			}
+			const auto n = entries.GetArraySize();
+			for (std::uint32_t i = 0; i < n; ++i) {
+				RE::GFxValue entry;
+				if (!entries.GetElement(i, &entry) || !entry.IsObject() || Str(entry, "callbackName") != "ChangeDoubleMorph") {
+					continue;
+				}
+				const auto text = Str(entry, "text");
+				if (text.size() < 2 || text[0] != '$') {
+					continue;  // the game's 18 carry their plain labels
+				}
+				ExtEntry e;
+				e.name = text.substr(1);
+				if (!Num(entry, "sliderID", e.id) || e.id < 0) {
+					continue;
+				}
+				Num(entry, "position", e.position);
+				Num(entry, "sliderMax", e.max);
+				a_idSum += e.id;
+				e.entry = entry;
+				a_out.push_back(std::move(e));
+			}
+			std::stable_sort(a_out.begin(), a_out.end(), NameLess);
+			return true;
+		}
+
+		// A slider that is a head-part chooser (RM_FacePart, RM_MouthPart: 0..N, N past the morphs' 3) is
+		// not a morph: skee sends it through another path, and it is never written here.
+		bool IsPartSlider(const ExtEntry& a_e)
+		{
+			return a_e.name.rfind("RM_", 0) == 0 || a_e.max > 3.0001;
+		}
+
+		// What the menu session knows about skee's list: which sexes of this race were loaded, and the
+		// names of the list skee holds now. Reset when the film (the menu) or the race is not the one it
+		// was built for.
+		struct ListModel
+		{
+			RE::GFxMovieView*        movie = nullptr;
+			RE::FormID               race = 0;
+			std::set<int>            seen;  // sexes whose sliders the game has loaded in this menu
+			std::vector<std::string> internal;
+		} g_model;
+
+		struct Source
+		{
+			bool                  valid = false;
+			bool                  female = false;
+			std::vector<ExtEntry> entries;
+		} g_src;
+
+		std::vector<std::string> Names(const std::vector<ExtEntry>& a_entries)
+		{
+			std::vector<std::string> out;
+			out.reserve(a_entries.size());
+			for (const auto& e : a_entries) {
+				out.push_back(e.name);
+			}
+			return out;
+		}
+
+		void RememberExtended(RE::GFxMovieView* a_movie, bool a_targetFemale)
+		{
+			double sum = 0;
+			g_src.valid = ReadExtended(a_movie, g_src.entries, sum);
+			g_src.female = a_targetFemale;
+			for (auto& e : g_src.entries) {
+				e.entry = RE::GFxValue();
+			}
+			auto*      player = RE::PlayerCharacter::GetSingleton();
+			auto*      npc = player ? player->GetActorBase() : nullptr;
+			const auto race = npc && npc->GetRace() ? npc->GetRace()->GetFormID() : 0;
+			const int  sourceSex = npc ? static_cast<int>(npc->GetSex()) : -1;
+			if (g_model.movie != a_movie || g_model.race != race) {
+				g_model = {};
+				g_model.movie = a_movie;
+				g_model.race = race;
+				g_model.seen.insert(sourceSex);
+				g_model.internal = Names(g_src.entries);
+				spdlog::info("[film] extended sliders: list model built from the film in front ({} names, sex {}, race {:08X})",
+					g_model.internal.size(), sourceSex, race);
+			}
+			std::size_t nonzero = 0;
+			for (const auto& e : g_src.entries) {
+				nonzero += std::abs(e.position) > 0.0005 ? 1 : 0;
+			}
+			spdlog::info("[film] extended sliders before the sex change: {} ({} not at 0), film {}", g_src.entries.size(), nonzero,
+				g_src.valid ? "read" : "NOT read");
+		}
+
+		struct Reassert
+		{
+			bool                  active = false;
+			std::function<void()> done;
+			Clock::time_point     start;
+			std::size_t           lastAll = 0;
+			double                lastSum = -1.0;
+			int                   stable = 0;
+		} g_re;
+
+		void ScheduleUi(std::chrono::milliseconds a_after, std::function<void()> a_fn)
+		{
+			std::thread([a_after, fn = std::move(a_fn)]() {
+				std::this_thread::sleep_for(a_after);
+				if (auto* tasks = SKSE::GetTaskInterface()) {
+					tasks->AddUITask(fn);
+				}
+			}).detach();
+		}
+
+		void FinishReassert()
+		{
+			auto done = std::move(g_re.done);
+			g_re.active = false;
+			g_re.done = nullptr;
+			if (done) {
+				done();
+			}
+		}
+
+		void ReassertStep()
+		{
+			if (!g_re.active) {
+				return;
+			}
+			auto*      ui = RE::UI::GetSingleton();
+			auto       menu = ui ? ui->GetMenu(RE::RaceSexMenu::MENU_NAME) : nullptr;
+			auto*      movie = menu ? menu->uiMovie.get() : nullptr;
+			const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_re.start);
+			if (!movie || !menu->fxDelegate) {
+				spdlog::warn("[film] extended sliders not put back: the RaceSex Menu is gone after {} ms", waited.count());
+				FinishReassert();
+				return;
+			}
+			std::vector<ExtEntry> now;
+			double                sum = 0;
+			const bool            read = ReadExtended(movie, now, sum);
+			if (read && !now.empty() && now.size() == g_re.lastAll && sum == g_re.lastSum) {
+				++g_re.stable;
+			} else {
+				g_re.stable = 0;
+			}
+			g_re.lastAll = now.size();
+			g_re.lastSum = sum;
+			// Papyrus registers the sliders again after the change: wait until the list stops moving.
+			const bool settled = g_re.stable >= 2 && waited >= std::chrono::milliseconds(900);
+			if (!settled && waited < std::chrono::milliseconds(8000)) {
+				ScheduleUi(std::chrono::milliseconds(300), []() { ReassertStep(); });
+				return;
+			}
+			if (!read || now.empty() || !g_src.valid || g_model.movie != movie) {
+				spdlog::info("[film] extended sliders: nothing put back (film {}, {} now, source {}, model {})",
+					read ? "read" : "NOT read", now.size(), g_src.valid ? "kept" : "NOT kept",
+					g_model.movie == movie ? "this menu" : "another");
+				FinishReassert();
+				return;
+			}
+
+			// What the player set is what the film showed BEFORE the change: RaceMenu's own change can hand the
+			// film back with the values moved to other labels (measured, second round trip), so the values
+			// are taken from that reading, and the film is put back to it.
+			std::map<std::string, double, CiLess> film;
+			for (const auto& e : g_src.entries) {
+				film[e.name] = e.position;
+			}
+			for (const auto& e : now) {
+				film.emplace(e.name, e.position);
+			}
+			int moved = 0;
+			for (auto& e : now) {
+				const auto truth = std::find_if(g_src.entries.begin(), g_src.entries.end(),
+					[&](const ExtEntry& s) { return _stricmp(s.name.c_str(), e.name.c_str()) == 0; });
+				if (truth == g_src.entries.end() || IsPartSlider(e)) {
+					continue;
+				}
+				Set(e.entry, truth->position, moved);
+			}
+			if (moved > 0) {
+				RE::GFxValue list;
+				if (movie->GetVariable(&list, kList) && list.IsObject()) {
+					for (const char* name : kRefresh) {
+						RE::GFxValue fn;
+						if (list.GetMember(name, &fn) && !fn.IsUndefined()) {
+							list.Invoke(name);
+							break;
+						}
+					}
+				}
+			}
+			spdlog::info("[film] extended sliders: {} film positions put back to what they showed before the change", moved);
+
+			const int  target = g_src.female ? 1 : 0;
+			const auto targetNames = Names(now);
+			if (g_model.seen.insert(target).second) {
+				// First time this sex is shown in this menu: the game has just loaded its sliders and skee
+				// built its list from them. Indices and list agree.
+				g_model.internal = targetNames;
+				spdlog::info("[film] extended sliders: sex {} loaded now ({} names) - list and indices agree, nothing to put "
+							 "back, settled after {} ms",
+					target, targetNames.size(), waited.count());
+				FinishReassert();
+				return;
+			}
+			if (g_model.internal == targetNames) {
+				spdlog::info("[film] extended sliders: skee's list is this sex's ({} names) - nothing to put back, settled "
+							 "after {} ms",
+					targetNames.size(), waited.count());
+				FinishReassert();
+				return;
+			}
+
+			// skee's list is the other sex's: position i of its names is where a slider at position i of
+			// the target sex's names will write.
+			const auto  start = Clock::now();
+			const auto  count = (std::min)(g_model.internal.size(), now.size());
+			std::size_t sent = 0;
+			std::size_t skipped = 0;
+			std::string first;
+			for (std::size_t i = 0; i < count; ++i) {
+				const auto& holder = now[i];  // the slider that writes to position i
+				const auto& name = g_model.internal[i];  // the name skee holds at position i
+				if (IsPartSlider(holder) || name.rfind("RM_", 0) == 0) {
+					++skipped;
+					continue;
+				}
+				const auto it = film.find(name);
+				const double value = it != film.end() ? it->second : 0.0;
+				if (!CallNative(movie, menu.get(), "ChangeDoubleMorph", value, holder.id)) {
+					break;
+				}
+				if (first.empty() && std::abs(value) > 0.0005) {
+					first = fmt::format("{} = {} via '{}' (id {})", name, value, holder.name, holder.id);
+				}
+				++sent;
+			}
+			const auto us = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+			spdlog::info("[film] extended sliders put back under their names after the sex change: skee's list held {} names, "
+						 "the film shows {} ({} sent, {} part sliders skipped), settled after {} ms, {} us; first non-zero: {}",
+				g_model.internal.size(), now.size(), sent, skipped, waited.count(), us, first.empty() ? "-" : first);
+			FinishReassert();
+		}
+
 		std::string Lower(std::string a_s)
 		{
 			for (auto& c : a_s) {
@@ -601,6 +889,7 @@ namespace Lifecast::Panel::RaceMenuFilm
 			double id = -1;
 			bool   called = false;
 			Edit::RacePresets::LogPlayerFields("sex-before");
+			RememberExtended(movie, a_female);
 			if (movie && FindSliderID(movie, { "ChangeSex", nullptr }, id)) {
 				called = CallNative(movie, menu.get(), "ChangeSex", a_female ? 1.0 : 0.0, id);
 			}
@@ -670,6 +959,32 @@ namespace Lifecast::Panel::RaceMenuFilm
 			return;
 		}
 		tasks->AddUITask([a_female, a_done = std::move(a_done)]() { DoChangeSex(a_female, a_done); });
+	}
+
+	void ReassertExtendedSliders(std::function<void()> a_done)
+	{
+		auto begin = [a_done = std::move(a_done)]() {
+			if (g_re.active) {
+				spdlog::warn("[film] extended sliders: a put-back is already running");
+				if (a_done) {
+					a_done();
+				}
+				return;
+			}
+			g_re.active = true;
+			g_re.done = a_done;
+			g_re.start = Clock::now();
+			g_re.lastAll = 0;
+			g_re.lastSum = -1.0;
+			g_re.stable = 0;
+			ReassertStep();
+		};
+		auto* tasks = SKSE::GetTaskInterface();
+		if (!tasks) {
+			begin();
+			return;
+		}
+		tasks->AddUITask(std::move(begin));
 	}
 
 	void ChangeRace(std::string a_raceName, std::function<void(bool)> a_done)

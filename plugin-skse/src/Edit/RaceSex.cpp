@@ -40,7 +40,11 @@ namespace Lifecast::Edit::RaceSex
 			Clock::time_point     start;
 			bool                  changed = false;
 			Clock::time_point     changedAt;
+			bool                  reasserted = false;  // the extended face sliders were asked to go back (sex only)
 		} g_wait;
+
+		// True from the ask to RaceMenuFilm until it has answered (the UI thread answers; OnTick reads).
+		std::atomic<bool> g_reasserting{ false };
 
 		RE::PlayerCharacter* Player() { return RE::PlayerCharacter::GetSingleton(); }
 
@@ -225,6 +229,7 @@ namespace Lifecast::Edit::RaceSex
 			auto* player = Player();
 			g_wait = { true, "sex", female, player && player->GetRace() ? player->GetRace()->GetFormID() : 0, npc->GetSex(),
 				Clock::now(), false, {} };
+			g_reasserting.store(false);
 			Panel::RaceMenuFilm::ChangeSex(female, [](bool a_called) {
 				if (!a_called) {
 					g_wait.active = false;
@@ -263,6 +268,20 @@ namespace Lifecast::Edit::RaceSex
 			}
 			if (now - g_wait.changedAt < std::chrono::milliseconds(600)) {
 				return;
+			}
+			if (std::string_view(g_wait.what) == "sex") {
+				// RaceMenu's sex change moves its extended face sliders' values onto other names (E31):
+				// they go back before the panel is told the change is done, so what it restores next
+				// lands on the right face.
+				if (g_reasserting.load()) {
+					return;
+				}
+				if (!g_wait.reasserted) {
+					g_wait.reasserted = true;
+					g_reasserting.store(true);
+					Panel::RaceMenuFilm::ReassertExtendedSliders([]() { g_reasserting.store(false); });
+					return;
+				}
 			}
 			g_wait.active = false;
 			spdlog::info("[race-sex]   settled: {}", State());
