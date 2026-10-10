@@ -19,7 +19,9 @@
 #include "Preset/Library.h"
 
 #include <atomic>
+#include <mutex>
 #include <thread>
+#include <unordered_set>
 
 namespace Lifecast::Edit::Compare
 {
@@ -40,10 +42,19 @@ namespace Lifecast::Edit::Compare
 		// same tick as the Disable is what poisoned the next duplicate in V099;
 		// Retire never does that on the close path. The duplicated base has no
 		// unmake and stays behind, unreferenced.
+		//
+		// Deleted is not enough. A deleted reference can still be written to the
+		// save - it was, in the autosave the Finish button makes, in the one save
+		// that crashed after the fix above - and the base it points at never is,
+		// so the game that loads it builds an actor out of nothing. Every
+		// reference this module places is therefore also refused by the save
+		// itself: Character::CheckSaveGame answers false for it (KeepOutOfSave).
 
 		RE::TESNPC*         g_base = nullptr;  // the duplicate she is made of
 		RE::ObjectRefHandle g_twin{};          // her reference
 		std::vector<RE::ObjectRefHandle> g_made;  // every reference this module placed, this game, until retired
+		std::mutex                       g_keepOutLock;
+		std::unordered_set<RE::FormID>   g_keepOut;  // every reference this module placed, this game: never saved
 		RE::FormID          g_cellId = 0;      // the cell she was born in
 		bool                g_bornInMenu = false;
 		Clock::time_point   g_bornAt{};
@@ -1383,6 +1394,10 @@ namespace Lifecast::Edit::Compare
 			g_base = dup;
 			g_twin = placed->CreateRefHandle();
 			g_made.push_back(g_twin);
+			{
+				std::scoped_lock lock(g_keepOutLock);
+				g_keepOut.insert(placed->GetFormID());
+			}
 			g_hidden = false;
 			g_hidePending = false;
 			g_cellId = CellOf(placed.get());
@@ -2091,6 +2106,11 @@ namespace Lifecast::Edit::Compare
 			if (g_on) {
 				Park("the RaceSex Menu closed");
 			}
+			// Culled is not gone: until the Disable below she can still be
+			// talked to in the world (the author, E36). Not from now on.
+			if (auto* actor = Twin()) {
+				actor->SetActivationBlocked(true);
+			}
 			g_on = false;
 			g_why.clear();
 			// E19: she goes when the editor does. TryVanish waits for her body,
@@ -2098,6 +2118,29 @@ namespace Lifecast::Edit::Compare
 			g_hidePending = true;
 			g_settleUntil = Clock::now() + kSettle;
 		}
+
+		// The save asks every form whether it is to be written; for a reference
+		// this module placed the answer is no, whatever state she is in.
+		struct KeepOutOfSave
+		{
+			static bool thunk(RE::TESObjectREFR* a_this, RE::BGSSaveFormBuffer* a_buf)
+			{
+				if (a_this) {
+					const auto id = a_this->GetFormID();
+					bool       ours = false;
+					{
+						std::scoped_lock lock(g_keepOutLock);
+						ours = g_keepOut.contains(id);
+					}
+					if (ours) {
+						spdlog::info("[compare] save: {:08X} is a figure this module placed - kept out of the save", id);
+						return false;
+					}
+				}
+				return func(a_this, a_buf);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
 	}
 
 	void Install()
@@ -2105,6 +2148,9 @@ namespace Lifecast::Edit::Compare
 		if (g_installed) {
 			return;
 		}
+		REL::Relocation<std::uintptr_t> vtbl{ RE::VTABLE_Character[0] };
+		KeepOutOfSave::func = vtbl.write_vfunc(0x0D, KeepOutOfSave::thunk);
+		spdlog::info("[compare] save filter on Character::CheckSaveGame (0x0D) installed");
 		Session::OnMenuOpened(&OnOpened);
 		Session::OnMenuClosed(&OnClosed);
 		Session::OnTick(&OnTick);
@@ -2137,7 +2183,13 @@ namespace Lifecast::Edit::Compare
 	{
 		// The references of the game being left are that game's, and the
 		// handles to them are about to mean nothing. Nothing is called on them.
+		// Their form IDs are handed out again in the next game, so the save
+		// filter forgets them too.
 		g_made.clear();
+		{
+			std::scoped_lock lock(g_keepOutLock);
+			g_keepOut.clear();
+		}
 		g_twin = {};
 		g_base = nullptr;
 		g_hidden = false;
