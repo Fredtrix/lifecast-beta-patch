@@ -693,10 +693,16 @@
     if (!loading || !data || loadingName === null || !same(loadingName, String(data.name))) {
       return;
     }
-    notice = data.silent
-      ? "RaceMenu has not answered after " + Math.round(Number(data.ms) / 1000) + " s - " + data.name +
-        " may still apply"
-      : "applying " + data.name + " - the game is busy, RaceMenu will answer when it can";
+    if (data.silent) {
+      // The DLL accepts a new load from here on, and an answer from this one that comes later is only logged
+      // when a new load took its place - or comes as "preset-loaded" as usual when none did.
+      loading = false;
+      loadingName = null;
+      notice = "RaceMenu has not answered after " + Math.round(Number(data.ms) / 1000) + " s - " + data.name +
+        " may still apply; another preset can be loaded";
+    } else {
+      notice = "applying " + data.name + " - the game is busy, RaceMenu will answer when it can";
+    }
     render();
   });
 

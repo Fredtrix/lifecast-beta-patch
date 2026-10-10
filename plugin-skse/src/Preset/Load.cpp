@@ -37,6 +37,7 @@ namespace Lifecast::Preset::Load
 			std::string       name;
 			std::string       bytes;  // the file as it was when the load was asked
 			Clock::time_point sentAt{};
+			bool              silent{ false };  // the long warning went out: a new load may replace this one
 		};
 
 		std::optional<Pending>                    g_pending;
@@ -65,6 +66,7 @@ namespace Lifecast::Preset::Load
 			if (!g_pending || g_pending->id != a_id) {
 				return;
 			}
+			g_pending->silent = a_silent;
 			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_pending->sentAt).count();
 			spdlog::info("[preset-load] #{} still running after {} ms - the page is told \"{}\", not \"failed\"", a_id, ms,
 				a_silent ? "no answer yet" : "applying");
@@ -165,8 +167,20 @@ namespace Lifecast::Preset::Load
 				return;
 			}
 			if (g_pending) {
-				Reply(name, false, "a load is still running", false);
-				return;
+				if (!g_pending->silent) {
+					spdlog::info("[preset-load] refused \"{}\": #{} is still running ({} ms)", name, g_pending->id,
+						std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - g_pending->sentAt).count());
+					Reply(name, false, "a load is still running", false);
+					return;
+				}
+				// The old call has been out for kSilent without an answer and the page was told so. A new load
+				// replaces it as the one being waited for; the old call is not cancelled (it cannot be), and if it
+				// ever returns, Finish() finds another id and only logs it - the page and the state stay as the
+				// new load leaves them.
+				spdlog::info("[preset-load] #{} had no answer after {} s - a new load is accepted, its late answer "
+							 "will only be logged",
+					g_pending->id, std::chrono::duration_cast<std::chrono::seconds>(kSilent).count());
+				g_pending.reset();
 			}
 
 			// The name comes from the list, which is the folder's own file

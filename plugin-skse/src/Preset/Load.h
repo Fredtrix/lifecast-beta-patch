@@ -61,6 +61,7 @@ namespace Lifecast::Preset::Load
 	void Install();
 
 	// A load is running: RaceMenu was asked to apply a preset and has not
-	// answered yet, nor timed out. Game thread only.
+	// answered yet. Stays true after the long warning too, until the answer or
+	// until a new load replaces it. Game thread only.
 	bool Busy();
 }
