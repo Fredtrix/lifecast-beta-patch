@@ -954,7 +954,7 @@ namespace Lifecast::Panel::Stage
 					span > 0.0 ? (predicted - centre) / span * 100.0 : 0.0, g_target.distance,
 					pan != wantedPan
 						? " - THE PAN LIMIT WAS HIT, so the figure comes out short of the centre. kPanMax is the "
-						  "author's number (E4, Fase 6.5) and is not retuned here; the 'wanted' above is what the rule "
+						  "number set in review (E4, Fase 6.5) and is not retuned here; the 'wanted' above is what the rule "
 						  "would have needed"
 						: "");
 			}

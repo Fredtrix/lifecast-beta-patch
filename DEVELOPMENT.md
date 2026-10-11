@@ -62,9 +62,9 @@ as `mod://Lifecast/index.html` - the host of that URL is the folder name under
 A copy does not delete: a file removed from `panel/` stays in the destination
 until you remove it there too.
 
-## What the author's own tree does differently, and why you do not need it
+## What the original development tree does differently, and why you do not need it
 
-The author develops inside a Mod Organizer 2 instance, where this repository
+Development happens inside a Mod Organizer 2 instance, where this repository
 sits inside the mod folder and the build copies the DLL up into it, so the
 game loads a build immediately. That arrangement is convenient and entirely
 optional: it is one way of pointing `LIFECAST_OUTPUT_FOLDER`, and nothing in
