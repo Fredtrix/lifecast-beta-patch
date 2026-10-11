@@ -38,6 +38,10 @@
 // arguments that slider sends - the value and the entry's sliderID. The
 // menu's handler then reshapes the head in place, where DoReset3D rebuilds
 // the whole actor (and, with HDT-SMP hair, leaves nodes behind every time).
+// The face morphs are no longer handed over here: they are entries of the
+// slider list, and Edit/FilmSliders writes every entry of that list (D243).
+// The 18 stay in the Sync above, which puts the game's face back on the film
+// after a preset or a race preset changed it behind the film's back.
 
 #pragma once
 
@@ -55,7 +59,6 @@ namespace Lifecast::Panel::RaceMenuFilm
 
 	enum class Slider
 	{
-		kMorph,       // a_which: the faceData morph index, 0 to 17
 		kType,        // a_which: the faceData part index (nose 0, eyes 2, mouth 3)
 		kComplexion,  // a_which: unused
 		kHeadPreset,  // a_which: unused; the value is the race's preset index

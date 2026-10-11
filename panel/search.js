@@ -65,7 +65,7 @@
     let totalSections = 0;
 
     host.querySelectorAll(":scope > .section").forEach((section) => {
-      // .slider at any depth under this section's body - scales.js and
+      // .slider at any depth under this section's body - sliders.js and
       // tints.js hang rows off an intermediate div (E1) - but stopping at
       // the nearest .section ancestor keeps a future nested section's own
       // rows out of this count, same as the old > selector did.

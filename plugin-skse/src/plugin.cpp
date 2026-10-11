@@ -22,10 +22,8 @@
 #include "Core/SkeeLink.h"
 #include "Edit/Appearance.h"
 #include "Edit/Body.h"
-#include "Edit/BodyMorphs.h"
-#include "Edit/BodyScales.h"
 #include "Edit/Compare.h"
-#include "Edit/FaceSliders.h"
+#include "Edit/FilmSliders.h"
 #include "Edit/Finish.h"
 #include "Edit/Session.h"
 #include "Edit/Freeze.h"
@@ -137,13 +135,11 @@ namespace
 			// the session they share owns the menu and input sinks and the
 			// redraw, so it goes first.
 			Lifecast::Edit::Session::Install();
-			Lifecast::Edit::FaceSliders::Install();
+			Lifecast::Edit::FilmSliders::Install();
 			Lifecast::Core::ListSig::Install();
 			Lifecast::Edit::Appearance::Install();
 			Lifecast::Edit::RacePresets::Install();
 			Lifecast::Edit::RaceSex::Install();
-			Lifecast::Edit::BodyScales::Install();
-			Lifecast::Edit::BodyMorphs::Install();
 			Lifecast::Panel::RaceMenuTabs::Install();
 			Lifecast::Edit::Tints::Install();
 			Lifecast::Edit::Overlays::Install();

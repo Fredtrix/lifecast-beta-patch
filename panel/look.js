@@ -36,7 +36,7 @@
 
   // Lists that sit in the section of the part of the face they change, the
   // way RaceMenu's tabs hold them (E19, F35). [key, label, section title];
-  // the section is face.js's, joined by key.
+  // the section is joined by key (sliders.js puts the face sliders there).
   const FACE_LISTS = [
     ["nose-type", "Nose Type", "Nose"],
     ["eye-shape", "Eye Shape", "Eyes"],

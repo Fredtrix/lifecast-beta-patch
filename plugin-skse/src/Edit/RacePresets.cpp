@@ -3,7 +3,6 @@
 
 #include "Edit/RacePresets.h"
 
-#include "Edit/FaceSliders.h"
 #include "Edit/Session.h"
 #include "Core/ListSig.h"
 #include "Panel/Bridge.h"
@@ -144,7 +143,8 @@ namespace Lifecast::Edit::RacePresets
 				return "(no face data)";
 			}
 			std::string out;
-			for (int i = 0; i < FaceSliders::kUsableMorphs; ++i) {
+			// The game's face morphs: 18 plausible values, then FLT_MAX.
+			for (int i = 0; i < 18; ++i) {
 				out += fmt::format("{}{:.3f}", i ? " " : "", a_face->morphs[i]);
 			}
 			out += fmt::format(" | parts {} {} {}", a_face->parts[FaceData::Parts::kNose],

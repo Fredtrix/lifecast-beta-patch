@@ -21,16 +21,15 @@
 "use strict";
 
 (() => {
+  // RaceMenu's extended face sliders, its Extra and Expressions tabs had a door
+  // each until every slider of RaceMenu's list came into the panel (D243).
   const ENTRIES = [
-    ["face-sliders", "Extended Face Sliders", "RaceMenu's own face sliders, beyond the game's."],
-    ["extra", "Extra Sliders", "The sliders RaceMenu files under its own Extra tab."],
-    ["expressions", "Expressions", "The face expression sliders."],
     ["sculpt", "Sculpt", "Free-form editing of the head mesh."],
   ];
 
   // Categories that already have a home here, matched by the category's own
   // label - and "a home" is a section OR a fixed row above. $EXTRA and
-  // $EXPRESSIONS have a row each. The four overlay categories have sections
+  // $EXPRESSIONS have a section each (sliders.js). The four overlay categories have sections
   // of their own (overlays.js). $MAKEUP is war paint, which is a tint mask
   // and not an overlay: its home is the War Paint layer in Skin & Tints,
   // which carries the full catalog too (D084; the door to it left with D125).
@@ -95,8 +94,8 @@
     "HEAD": { section: "face:" }, "FACE": { section: "face:" }, "EYES": { section: "face:" },
     "BROW": { section: "face:" }, "MOUTH": { section: "face:" },
     "HAIR": { section: "look:Hair" },
-    "$EXTRA": { door: "extra" },
-    "$EXPRESSIONS": { door: "expressions" },
+    "$EXTRA": { section: "face:tab:$EXTRA" },
+    "$EXPRESSIONS": { section: "face:tab:$EXPRESSIONS" },
     // The 15 colours of the film's COLORS tab live in seven sections: the skin
     // layers in tints, hair in look, and the face tints in the face sections
     // that tints.js files them under. All seven must be there.
@@ -194,7 +193,7 @@
       if (typeof entry.text !== "string" || entry.text === "" || COVERED.indexOf(entry.text) >= 0) {
         continue;
       }
-      // A category a mod registered carries its own key, and morphs.js builds
+      // A category a mod registered carries its own key, and sliders.js builds
       // a section for every one of those - empty when the mod registered no
       // sliders this time. So a keyed category already has a home and must
       // not get a door as well. The film's own categories have no key and are

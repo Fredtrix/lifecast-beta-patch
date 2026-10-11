@@ -930,8 +930,8 @@ namespace Lifecast::Edit::Compare
 		// The player's body lives in morphs held by SKEE per REFERENCE, not in
 		// her base record, so CreateDuplicateForm does not carry it and the
 		// figure is born with none. Written here under the same name and key the
-		// player's were read with. Edit/BodyMorphs.h warns that a third party's
-		// key sums when it is written from outside; that is about the PLAYER,
+		// player's were read with. A third party's key sums when it is written
+		// from outside (why sliders go through RaceMenu's film, D243); that is about the PLAYER,
 		// who already holds a value under it. Whether it reaches a reference
 		// that holds none is what the counts below measure.
 
@@ -1975,11 +1975,11 @@ namespace Lifecast::Edit::Compare
 				PresetRoute("the comparison was turned on");
 				RefreshLook(Twin(), "after the preset route");
 #endif
-				// The face: the RaceMenu's own preset route, onto the copy. Without the
-				// SMP-NPC crash fix the game dies inside CharGen.LoadCharacterPresetEx on
-				// a copy under hdtSMP64, which is why that mod is a hard requirement. The
-				// FSMP then opens a message box; the Switcher lets the panel go of the
-				// focus while it is there.
+				// The face: the RaceMenu's own preset route, onto the copy. A crash with
+				// SMP inside CharGen.LoadCharacterPresetEx on a copy is what the SMP-NPC
+				// crash fix covers; it is advice, not a requirement (D241). The FSMP may
+				// open a message box; the Switcher lets the panel go of the focus while
+				// it is there.
 				FaceByPreset("the comparison was turned on");
 					Panel::Stage::FramePair(true, left, right);
 				g_on = true;

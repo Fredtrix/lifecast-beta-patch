@@ -347,7 +347,7 @@ const LifecastBelt = (() => {
   }
 
   // The controls of a section, through the bare wrapper divs that tints.js
-  // and face.js keep in a section body.
+  // and sliders.js keep in a section body.
   function itemsOf(section) {
     const out = [];
     const walk = (parent) => {

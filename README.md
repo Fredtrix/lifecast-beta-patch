@@ -14,9 +14,11 @@ go to the Bugs tab there, or to this repository's issues.
 - SKSE, Address Library for SKSE Plugins
 - RaceMenu
 - Meridian UI
-- **SMP-NPC crash fix** - required. The comparison view copies the player's face onto a
-  second figure with RaceMenu's own preset loader. With hdtSMP64 installed and without this
-  fix, the game crashes inside that call.
+
+**A crash with SMP when you turn the comparison view on?** Install the SMP-NPC crash fix and
+see if it goes away. The comparison view copies the player's face onto a second figure with
+RaceMenu's own preset loader, and that fix is what covers a crash inside that call under
+hdtSMP64.
 
 ## License
 

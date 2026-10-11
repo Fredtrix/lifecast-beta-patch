@@ -330,9 +330,9 @@ const LifecastControls = (() => {
   // The section mounted under a_key, made and mounted the first time anyone
   // asks for it. Several files add rows to one section (E19: Eye Color from
   // look.js and a tint layer from tints.js both land in the Eyes section that
-  // face.js owns the sliders of), and section() above makes a NEW one on every
+  // sliders.js puts the sliders in), and section() above makes a NEW one on every
   // call. The join is by KEY, never by title: titles are not unique (Hair is a
-  // section and a control) and some come from a mod (morphs.js).
+  // section and a control) and some come from a mod (sliders.js).
   const slots = new Map();
 
   function slot(a_title, a_key, a_opts) {

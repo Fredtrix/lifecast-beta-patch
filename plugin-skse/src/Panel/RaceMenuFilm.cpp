@@ -318,13 +318,6 @@ namespace Lifecast::Panel::RaceMenuFilm
 		Target TargetOf(Slider a_slider, int a_which)
 		{
 			switch (a_slider) {
-			case Slider::kMorph:
-				for (const auto& l : kMorphs) {
-					if (l.index == a_which) {
-						return { "ChangeDoubleMorph", l.text };
-					}
-				}
-				break;
 			case Slider::kType:
 				for (const auto& l : kTypes) {
 					if (l.index == a_which) {

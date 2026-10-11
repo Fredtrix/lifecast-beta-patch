@@ -26,12 +26,11 @@
 // back before the menu closes, same OnMenuClosed hook. A forced close
 // bypasses that hook - which is the one case this feature does not cover,
 // by design - and cannot leave a save with the character undressed, which is
-// why "what if the game is force-closed undressed" was cancelled as a test
-// (EMENDA de 2026-09-29, _Steward\Projetos\Lifecast\Fase-6.6-o-controle-de-personagem.md):
+// why "what if the game is force-closed undressed" was cancelled as a test:
 // there is no path that reaches that state to begin with.
 //
-// The button label is FIXED, not a state readout (by design, same
-// EMENDA, after finding it in the E5 round): opening the RaceSex Menu always
+// The button label is FIXED, not a state readout (by design, decided after
+// a test round found it): opening the RaceSex Menu always
 // pushes "on: false" to the page, whatever the character is actually
 // wearing - closing while undressed already re-dresses (above), so a label
 // that instead reported real state would drift the moment it did. Fixed +
