@@ -471,4 +471,64 @@ namespace Lifecast::Edit::Tints
 			PushTints(a_why);
 		}
 	}
+
+	namespace
+	{
+		// A colour as RaceMenu's script hands it to the film: 0xAARRGGBB as
+		// the signed int Papyrus prints.
+		std::int32_t FilmArgb(std::uint32_t a_alpha, const RE::Color& a_c)
+		{
+			const std::uint32_t v = (a_alpha << 24) | (static_cast<std::uint32_t>(a_c.red) << 16) |
+			                        (static_cast<std::uint32_t>(a_c.green) << 8) | a_c.blue;
+			return static_cast<std::int32_t>(v);
+		}
+
+		// The script's Int for a mask: the alpha times 255, truncated.
+		std::int32_t FilmArgb(const RE::TintMask* a_mask)
+		{
+			return FilmArgb(static_cast<std::uint32_t>(std::clamp(a_mask->alpha, 0.0F, 1.0F) * 255.0F), a_mask->color);
+		}
+	}
+
+	std::vector<std::string> FilmTintRows()
+	{
+		// RaceMenu's TINT_TYPE_HAIR: the hair colour travels with the masks.
+		constexpr int kHairType = 128;
+
+		std::vector<std::string> out;
+		auto*                    player = RE::PlayerCharacter::GetSingleton();
+		auto*                    list = player ? player->GetTintList() : nullptr;
+		if (!list) {
+			return out;
+		}
+		auto* npc = player->GetActorBase();
+		auto* hair = npc && npc->headRelatedData ? npc->headRelatedData->hairColor : nullptr;
+		if (hair) {
+			out.push_back(fmt::format("{};;{};;", kHairType, FilmArgb(0xFF, hair->color)));
+		}
+		for (const auto* mask : *list) {
+			if (!mask) {
+				continue;
+			}
+			out.push_back(fmt::format("{};;{};;{}", static_cast<int>(mask->type.get()), FilmArgb(mask),
+				TextureOf(mask)));
+		}
+		return out;
+	}
+
+	int ShownMask(RE::TintMask::Type a_type, int& a_showing, std::int32_t& a_argb)
+	{
+		const auto masks = MasksOf(a_type);
+		a_showing = 0;
+		for (const auto* m : masks) {
+			if (m->alpha > 0.0F) {
+				++a_showing;
+			}
+		}
+		const int shown = ShownIndex(masks);
+		if (shown >= 0) {
+			a_argb = FilmArgb(masks[shown]);
+		}
+		return shown;
+	}
 }

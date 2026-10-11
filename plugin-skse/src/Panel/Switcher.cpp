@@ -3,6 +3,7 @@
 
 #include "Panel/Switcher.h"
 
+#include "Edit/FilmPaint.h"
 #include "Panel/Bridge.h"
 #include "Panel/Panel.h"
 #include "Panel/RaceMenuFilm.h"
@@ -396,6 +397,7 @@ namespace Lifecast::Panel::Switcher
 		Panel::DisarmFocusChord();
 		SetFilmVisible(true);
 		RaceMenuFilm::Sync();
+		Edit::FilmPaint::Sync("switch to RaceMenu");
 
 		SetMode(Mode::kRaceMenu);
 	}

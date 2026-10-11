@@ -77,4 +77,16 @@ namespace Lifecast::Edit::Tints
 	// Sends the layers to the page again. Edit/Overlays calls it when the war
 	// paint catalog has been read off the film.
 	void Resend(const char* a_why);
+
+	// What RaceMenu's script hands its film for the masks (UpdateColors in
+	// racemenu.psc), read from the game now, for Edit/FilmPaint: the hair
+	// colour first, then one "type;;ARGB;;texture" row per mask in the
+	// player's list order, ARGB as the signed decimal a Papyrus Int prints.
+	// Empty when the player has no tint list yet.
+	std::vector<std::string> FilmTintRows();
+
+	// The first mask of a type that shows, as its index among the player's
+	// masks of that type, or -1; a_showing gets how many show, and a_argb
+	// that mask's colour in the FilmTintRows form (untouched when none shows).
+	int ShownMask(RE::TintMask::Type a_type, int& a_showing, std::int32_t& a_argb);
 }

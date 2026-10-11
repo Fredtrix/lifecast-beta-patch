@@ -48,6 +48,8 @@ namespace Lifecast::Edit::Overlays
 			const char*   nodePrefix;  // the index and "]" follow it
 			std::uint32_t catalog;     // which of the film's five paint lists
 			std::uint32_t armorMask;   // RevertOverlay's mask; 0 = a head overlay
+			int           tintType;    // RaceMenu's TINT_TYPE_*PAINT for the area
+			const char*   filmFunction;  // what RaceMenu's script calls to list the layers
 		};
 
 		// The four areas, in the order RaceMenu lists their categories. The
@@ -56,10 +58,10 @@ namespace Lifecast::Edit::Overlays
 		// (NodeName below), and the catalog index 0 is war paint, which is a
 		// tint mask and not an overlay - see the header.
 		constexpr Area kAreas[] = {
-			{ "body", "Body Paint", Location::Body, "Body [Ovl", 1, 4 },
-			{ "hand", "Hand Paint", Location::Hand, "Hands [Ovl", 2, 8 },
-			{ "foot", "Foot Paint", Location::Feet, "Feet [Ovl", 3, 128 },
-			{ "face", "Face Paint", Location::Face, "Face [Ovl", 4, 0 },
+			{ "body", "Body Paint", Location::Body, "Body [Ovl", 1, 4, 256, "RSM_AddBodyTints" },
+			{ "hand", "Hand Paint", Location::Hand, "Hands [Ovl", 2, 8, 257, "RSM_AddHandTints" },
+			{ "foot", "Foot Paint", Location::Feet, "Feet [Ovl", 3, 128, 258, "RSM_AddFeetTints" },
+			{ "face", "Face Paint", Location::Face, "Face [Ovl", 4, 0, 259, "RSM_AddFaceTints" },
 		};
 
 		constexpr std::size_t kCatalogCount = 5;
@@ -726,6 +728,46 @@ namespace Lifecast::Edit::Overlays
 		out.reserve(g_catalog[0].size());
 		for (const auto& p : g_catalog[0]) {
 			out.push_back({ p.name, p.texture });
+		}
+		return out;
+	}
+
+	std::vector<FilmRows> FilmOverlayRows()
+	{
+		std::vector<FilmRows> out;
+		auto*                 player = RE::PlayerCharacter::GetSingleton();
+		if (!player || !Overlay() || !Override()) {
+			return out;
+		}
+		const bool female = IsFemale(player);
+		for (const auto& a : kAreas) {
+			FilmRows   area{ a.label, a.filmFunction, {} };
+			const auto n = LayerCount(a);
+			for (std::uint32_t i = 0; i < n; ++i) {
+				// The script's reads, raw: the colour and glow ints as SKEE
+				// holds them, a key that is not there reading as zero.
+				const auto node = NodeName(a, i);
+				const bool onNode = HasNode(player, node);
+				Reader     rgb;
+				Reader     glow;
+				Reader     alpha;
+				Reader     texture;
+				Reader     multiple;
+				ReadKey(player, node, onNode, female, kTintColor, kNoIndex, rgb);
+				ReadKey(player, node, onNode, female, kGlowColor, kNoIndex, glow);
+				ReadKey(player, node, onNode, female, kAlpha, kNoIndex, alpha);
+				ReadKey(player, node, onNode, female, kTexture, kFirstTexture, texture);
+				ReadKey(player, node, onNode, female, kGlowMultiple, kNoIndex, multiple);
+				const auto truncated = [](float a_f) {
+					return std::isfinite(a_f) ? static_cast<std::uint32_t>(static_cast<std::int32_t>(a_f)) : 0u;
+				};
+				const auto color = (static_cast<std::uint32_t>(rgb.asInt) & 0xFFFFFF) |
+				                   (truncated(alpha.asFloat * 255.0F) << 24);
+				const auto glowed = (truncated(multiple.asFloat * 10.0F) << 24) | static_cast<std::uint32_t>(glow.asInt);
+				area.rows.push_back(fmt::format("{};;{};;{};;{}", a.tintType, static_cast<std::int32_t>(color),
+					texture.asString.empty() ? kNoTexture : texture.asString, static_cast<std::int32_t>(glowed)));
+			}
+			out.push_back(std::move(area));
 		}
 		return out;
 	}

@@ -26,8 +26,10 @@
 //   - the Presets slider (ChangeHeadPreset), which only moves when the Lifecast
 //     hands it a preset: the game does not keep which one is worn, so this
 //     remembers the last index handed over.
-// Hair colour and tint masks are not here: RaceMenu re-reads those itself
-// on the mod events the Lifecast sends (Core/RaceMenuSync).
+// Hair colour, tint masks and paint overlays are not here: Edit/FilmPaint
+// rewrites those entries right after this, on the same switch (D245).
+// RaceMenu's own re-read on the mod events the Lifecast sends
+// (Core/RaceMenuSync) did not always reach the film.
 //
 // Labels are the English ones RaceMenu shows. An entry whose label is not
 // known is left alone.

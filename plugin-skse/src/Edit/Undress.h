@@ -8,7 +8,7 @@
 // enchantment and charge survive by construction, not by anything this code
 // restores. There is no co-save: a forced close of the game while undressed
 // leaves the character undressed, not robbed, and that is the accepted
-// worst case (Docs/PARA-PLANEJAMENTO.md, E5).
+// worst case.
 //
 // Captured on undress: for every worn TESBoundObject, the exact
 // ExtraDataList* that RE::ExtraDataList::GetWorn() finds true among that

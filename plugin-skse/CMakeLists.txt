@@ -78,6 +78,7 @@ add_commonlibsse_plugin(
         src/Edit/Appearance.cpp
         src/Edit/Body.cpp
         src/Edit/Compare.cpp
+        src/Edit/FilmPaint.cpp
         src/Edit/FilmSliders.cpp
         src/Edit/Freeze.cpp
         src/Edit/Finish.cpp

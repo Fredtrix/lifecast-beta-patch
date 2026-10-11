@@ -76,4 +76,18 @@ namespace Lifecast::Edit::Overlays
 		std::string texture;
 	};
 	std::vector<WarPaint> WarPaintCatalog();
+
+	// What RaceMenu's script hands its film for one paint area (UpdateOverlay
+	// in racemenu.psc), read from the game now, for Edit/FilmPaint: the film
+	// function to call and one "type;;colour;;texture;;glow" row per layer,
+	// with the script's packing and its default texture. All four areas, an
+	// area with no layers as no rows (the script clears it the same way);
+	// empty without SKEE.
+	struct FilmRows
+	{
+		const char*              label;
+		const char*              function;
+		std::vector<std::string> rows;
+	};
+	std::vector<FilmRows> FilmOverlayRows();
 }
