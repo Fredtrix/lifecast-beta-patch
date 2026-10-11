@@ -9,8 +9,8 @@
   /* The LB structure (D119): a belt along the bottom, and a small panel over
      its left end. The panel's width and the type scale together with the
      player's scale control, and .stage follows because its left edge is the
-     same expression. The width is the LB's in the E4a photos the author
-     chose from; --panel-tall is how far up the small panel grows for one
+     same expression. The width is the LB's in the E4a photos the choice
+     was made from; --panel-tall is how far up the small panel grows for one
      region (All, search and Changed take the whole height). */
   --panel-width: 430px;
   --panel-scale: 1;
@@ -41,7 +41,7 @@
   --scrollbar-track: rgba(255, 255, 255, 0.04);
   --font: "Segoe UI", system-ui, sans-serif;
   --gap: 8px;
-  /* Type and spacing the author chose by eye (D114: compact, strong titles).
+  /* Type and spacing chosen by eye (D114: compact, strong titles).
      They are variables so a later skin or density changes them without
      touching a rule. */
   --text-size: 12.5px;
@@ -57,8 +57,8 @@
   --slider-gap: 2px;
   /* How long a section takes to open and shut (D115). ZERO is the off
      switch: it gives back the instant toggle with no code touched. 160 ms
-     with ease is what the author watched in the probe - an inference from
-     what he SAW, not a number he chose; revisit with the colour. */
+     with ease is what was watched in the probe - an inference from
+     what was SEEN, not a chosen number; revisit with the colour. */
   --section-anim: 160ms;
   --section-ease: ease;
 }

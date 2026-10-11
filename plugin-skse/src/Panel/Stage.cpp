@@ -30,7 +30,7 @@ namespace Lifecast::Panel::Stage
 		// what this camera sliding should feel like is the engine's own zoom
 		// delegate, and that is one grandeza, one boot, and a movement with no
 		// value to read - not a population to derive a rate from. The number
-		// is the author's to pick once he has seen it move.
+		// is picked once it has been seen moving in game.
 		//
 		// The snap epsilons are in the units each grandeza is measured in:
 		// game units for distance and height, degrees for turn and tilt.
@@ -51,7 +51,7 @@ namespace Lifecast::Panel::Stage
 		// The seven as they were COMPILED, taken at load and never written again.
 		// "Reset" on the page sends these back through the same stage-tune path
 		// every typed number takes, so a reset is a number like any other and the
-		// DLL has no second way to set one. The author's word (2026-10-06): reset
+		// DLL has no second way to set one. By design (2026-10-06): reset
 		// returns the compiled default, not the value the box opened with.
 		const nlohmann::json g_tuneCompiled = { { "maxDistance", kMaxDistance }, { "liftUp", kLiftUp },
 			{ "panMax", kPanMax }, { "tiltMax", kTiltMax }, { "pairApart", kPairApart }, { "pairSpan", kPairSpan },
@@ -90,7 +90,7 @@ namespace Lifecast::Panel::Stage
 		// rule fighting its own audit.
 		//
 		// Neither is tunable and neither is taste: they are what makes the rule
-		// track a measured movement, and the author's seven knobs are
+		// track a measured movement, and the seven tuning knobs are
 		// elsewhere (Stage.h).
 		constexpr int    kTrackMs = 100;
 		constexpr double kTrackBand = 0.005;  // of the character view's width
@@ -258,7 +258,7 @@ namespace Lifecast::Panel::Stage
 		double PanLo() { return -kPanMax; }
 		double PanHi() { return kPanMax; }
 
-		// Born OFF (E26, F14/F30, the author: the lock is switched on by hand). It was born ON in every mode, the first
+		// Born OFF (E26, F14/F30: by design the lock is switched on by hand). It was born ON in every mode, the first
 		// "stage" payload of a boot already said lock:true with free:false.
 		bool g_lockOn = false;
 
@@ -1431,7 +1431,7 @@ namespace Lifecast::Panel::Stage
 
 		// The frame is read once when the menu opens, and that reading can be stale (V099) or simply a camera that
 		// RaceMenu has moved since: its own zoom, and above all a game camera that was turned to the side before
-		// the menu opened (the author's test of 2026-10-06 - the kept frame was the side view, the camera RaceMenu
+		// the menu opened (the in-game test of 2026-10-06 - the kept frame was the side view, the camera RaceMenu
 		// actually had was 100 units away on the other side, and everything the free camera was built on, the
 		// direction, the height and the rotation the tilt starts from, was the old one). So it is read again at the
 		// moment the free camera takes over. The body's turn is the body's and is kept as it was.
@@ -2004,13 +2004,13 @@ namespace Lifecast::Panel::Stage
 
 #ifdef LIFECAST_TUNING
 		// Reads one tunable, and ABSENT is not zero: the page sends the single
-		// field the author just typed, so every number it leaves out has to
+		// field the user just typed, so every number it leaves out has to
 		// stay where it is. Number() above cannot be used for this - it answers
 		// 0.0 for a missing key, which here would mean "set it to zero".
 		//
 		// A value that is not finite is dropped rather than clamped: there is
 		// no sane bound to clamp a tuning knob to, and silently substituting a
-		// number the author did not type is worse than ignoring him.
+		// number the user did not type is worse than ignoring the input.
 		bool Tuned(const json& a_data, const char* a_key, double& a_out)
 		{
 			if (!a_data.is_object() || !a_data.contains(a_key)) {
@@ -2058,7 +2058,7 @@ namespace Lifecast::Panel::Stage
 		// floor for a v under it and the limit for a v at the floor, and the
 		// target flips between the two on every tune (Acabamento 1: 32 and 33.56,
 		// 2130 "clamped" lines in 281 s). The other six have no such number and
-		// no floor; that is the author's call (Acabamento 5), not an omission.
+		// no floor; that is a decision (Acabamento 5), not an omission.
 		void FloorMaxDistance()
 		{
 			const double lowest = g_frame.have ? DistanceMin() : kMinDistance;
@@ -2137,7 +2137,7 @@ namespace Lifecast::Panel::Stage
 					// numbers, so it is solved again. The twin herself does not
 					// move: Edit/Compare placed her at the old kPairApart and
 					// only a fresh placement puts her anywhere else, which is
-					// why the author is told to toggle the comparison off and
+					// why the user is told to toggle the comparison off and
 					// on. Said here so the log shows the gap rather than
 					// leaving the rule aiming at a figure that is not there.
 					if (g_pairOn) {

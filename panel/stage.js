@@ -41,8 +41,8 @@
 // controls go away; nothing else in the panel changes.
 //
 // A development build of the DLL also sends "tuning", and then a section of
-// number boxes appears under Settings (D132): the seven numbers of the view the
-// author retunes at OLHO DO AUTOR, each with what the DLL said it did. A release DLL never sends that key, so the
+// number boxes appears under Settings (D132): the seven numbers of the view
+// retuned during in-game review, each with what the DLL said it did. A release DLL never sends that key, so the
 // section is never built - there is no flag here to set, and nothing to
 // remember to turn off. Said here because the comment above this one was once
 // left behind by a feature that arrived later (the pan axis), and a reader who
@@ -210,8 +210,8 @@
     if (drag.mode === "turn") {
       move("turn", dx * TURN_PER_PX);
     } else if (drag.mode === "lift") {
-      // E4 (Fase 6.5): the author measured the old vertical-only, inverted
-      // drag as wrong - "o eixo ta invertido... alem disso ele so mexe na
+      // E4 (Fase 6.5): the old vertical-only, inverted
+      // drag was measured as wrong - "o eixo ta invertido... alem disso ele so mexe na
       // vertical." Both axes now follow the same grab convention as a map
       // or a Blender pan: the view moves WITH the cursor, so the camera
       // itself moves the opposite way.

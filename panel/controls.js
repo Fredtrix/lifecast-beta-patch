@@ -67,7 +67,7 @@ const LifecastControls = (() => {
 
   // ----- opening and closing a section, animated only while it animates -----
   //
-  // D115 (autor, 2026-10-05): a section eases open and shut, and it is in the
+  // D115 (2026-10-05): a section eases open and shut, and it is in the
   // layout ONLY during the animation. A closed section is display:none, which
   // cannot animate, so closing keeps the body displayed (data-closing) until the
   // height reaches 0 and then lets the closed rule hide it again - between
@@ -160,8 +160,8 @@ const LifecastControls = (() => {
     s._animEnd = end;
   }
 
-  // Which sections the player left open, kept by the DLL (autor
-  // 2026-09-28). This file stays ignorant of which key means what, same as
+  // Which sections the player left open, kept by the DLL (2026-09-28).
+  // This file stays ignorant of which key means what, same as
   // order and group - it only reads and writes a key -> bool object under
   // the "sectionsOpen" setting.
   //

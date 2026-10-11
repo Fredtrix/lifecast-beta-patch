@@ -39,8 +39,8 @@
 // WHAT COSTS, AND WHEN. Culled, the root node is not drawn and the subgraph
 // is not walked - animation, skinning and SMP all stop there (D104). The
 // measured cost of the comparison (-2,4% to +2,1% of a frame, D101) is paid
-// only while the button is on, which is what makes the button the decision
-// the author asked for and not a preference.
+// only while the button is on, which is what makes the button a design
+// decision and not a preference.
 //
 // SHE IS NOT DROPPED AND NOT DELETED, ever. SetDelete poisons the next
 // duplicate - measured in V099, and it is what crashed boots 76 and 77. One

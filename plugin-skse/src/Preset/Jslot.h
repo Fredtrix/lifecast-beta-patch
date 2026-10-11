@@ -3,7 +3,7 @@
 // Jslot.h
 // Lifecast
 //
-// Origin: copied from the author's own earlier plugin code - file
+// Origin: copied from earlier plugin code of our own - file
 // src/Core/Jslot.h at commit cb5eb7b. Changed on copy: the namespace (now
 // Lifecast::Jslot), and comments that pointed to that project's documents,
 // test fixtures and phase numbers, reworded to say the fact instead. The

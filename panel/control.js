@@ -3,7 +3,7 @@
 // while editing, as opposed to the sliders that describe what it looks like.
 //
 // It stands where the Index section used to. The Index was a grid of tiles
-// that jumped to a category, and the author cut it in favour of this.
+// that jumped to a category, and it was cut in favour of this.
 //
 // The key is "control" and NOT "character": "character" was taken by
 // the identity section, which is always open because it is identity and not
@@ -40,7 +40,7 @@
 "use strict";
 
 (() => {
-  // Always open and always on screen (autor, 2026-10-05 - D127): not a
+  // Always open and always on screen (D127): not a
   // section of the list but a fixed bar of its own over the stage's corner,
   // so no category, search or collapse can take it away.
   const section = { body: document.getElementById("control-bar") };

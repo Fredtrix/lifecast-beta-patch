@@ -501,8 +501,8 @@ namespace Lifecast::Edit::Compare
 		// The inventory says what she carries. What is attached to her 3D is
 		// BipedAnim::objects[slot] (RE/B/BipedAnim.h:47): `item` is the form the
 		// slot was built from and `partClone` is the node actually hanging on
-		// her. A slot that has a partClone is drawn. Read for the five slots the
-		// author saw on her back: shield, sword, dagger, bow, quiver.
+		// her. A slot that has a partClone is drawn. Read for the five slots seen
+		// on her back in game: shield, sword, dagger, bow, quiver.
 		struct BipedSlot
 		{
 			RE::BIPED_OBJECT slot;
@@ -1344,7 +1344,7 @@ namespace Lifecast::Edit::Compare
 			// E28: a copy is the player as she is NOW, sex and race included. The
 			// duplicate is read back against the base it came from; a difference is
 			// written over and logged, so the log says whether the engine carried
-			// them (the author saw a female head on a male body).
+			// them (a female head on a male body was seen in game).
 			{
 				const bool pf = base->GetSex() == RE::SEX::kFemale;
 				const bool df = dup->GetSex() == RE::SEX::kFemale;
@@ -1502,7 +1502,7 @@ namespace Lifecast::Edit::Compare
 
 		// ----- gone, and back (E19) -----------------------------------------------
 		//
-		// The author's requirement, verbatim: after she leaves the panel she must
+		// The requirement, verbatim: after she leaves the panel she must
 		// vanish - not stay in the world, not be interactable, not walk away, not
 		// exist to the player's eyes. Park() only culls her node, and boot 107
 		// showed what that leaves: a culled actor is still standing there, with
@@ -2096,8 +2096,8 @@ namespace Lifecast::Edit::Compare
 				consoleOpen ? "OPEN" : "closed", reused ? "reused" : (bornNow ? "born now" : "not made"));
 
 			// Pushed rather than only reset: the page does not reliably ask
-			// again across a Finish and reopen, which is the defect the author
-			// found in Undress.
+			// again across a Finish and reopen, which is the defect found
+			// in Undress.
 			Push("menu opened");
 		}
 
@@ -2107,7 +2107,7 @@ namespace Lifecast::Edit::Compare
 				Park("the RaceSex Menu closed");
 			}
 			// Culled is not gone: until the Disable below she can still be
-			// talked to in the world (the author, E36). Not from now on.
+			// talked to in the world (E36). Not from now on.
 			if (auto* actor = Twin()) {
 				actor->SetActivationBlocked(true);
 			}

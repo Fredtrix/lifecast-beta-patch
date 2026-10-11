@@ -28,8 +28,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # forgetting produces a DLL with no tuning in it rather than one with tuning
 # left on.
 #
-# Turn it on deliberately, for a development build the author is going to turn
-# knobs in:
+# Turn it on deliberately, for a development build where knobs are going to be
+# turned:
 #
 #   cmake --preset vs2022-windows -S . -DLIFECAST_TUNING=ON
 #
@@ -50,8 +50,8 @@ configure_file(
 # this project's own and is stated here as a version, so that it can be read
 # off this file instead of being inferred from whatever is checked out.
 #
-# ENABLE_SKYRIM_VR is forced OFF: VR is out of the 1.0 scope by the author's
-# decision. It also avoids needing the nested openvr submodule, which is not
+# ENABLE_SKYRIM_VR is forced OFF: VR is out of the 1.0 scope by design.
+# It also avoids needing the nested openvr submodule, which is not
 # initialized here.
 set(BUILD_TESTS OFF CACHE BOOL "Disable CommonLibSSE-NG tests in consumer" FORCE)
 set(ENABLE_SKYRIM_VR OFF CACHE BOOL "Lifecast does not target VR" FORCE)

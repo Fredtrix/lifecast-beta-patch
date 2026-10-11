@@ -1,7 +1,7 @@
 // racesex.js
 // Lifecast - race and sex, the last of RaceMenu's doors with a public way in
 // (D125). The door was one row, "Race & Sex"; it comes inside as TWO controls
-// in two categories, because that is where the author put them: the race is
+// in two categories, by design: the race is
 // the Race category's picker (groups.js), the sex lives in Body (D133).
 //
 // Both are one expensive change each - the DLL switches the actor and redraws

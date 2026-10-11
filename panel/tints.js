@@ -21,7 +21,7 @@
   // A layer sits in the section of the thing it paints (D210): the face tints
   // in the face sections, which face.js owns the sliders of. What is not here
   // stays in this section - the skin itself, and the layers whose object has
-  // no section of its own (D210, closed by the author).
+  // no section of its own (D210, closed).
   const HOME = {
     "lips": "Mouth",
     "cheeks": "Cheekbones",

@@ -153,7 +153,7 @@ namespace Lifecast::Edit::Undress
 			g_worn.clear();
 			// Pushed, not just reset: the page cannot be trusted to ask again
 			// on its own (it did not, across a Finish/reopen, and that is the
-			// defect the author found - EMENDA de 2026-09-29). The label is
+			// defect found in game - EMENDA de 2026-09-29). The label is
 			// fixed to what this call says, never to what the character is
 			// actually wearing - by design, so no dressed/undressed detection
 			// is needed (see Undress.h).

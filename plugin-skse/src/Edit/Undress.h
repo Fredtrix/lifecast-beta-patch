@@ -1,7 +1,7 @@
 // Undress.h
 // Lifecast - toggle to see the body while editing, Fase 6.6 E5.
 //
-// SO DESEQUIPAR (fixed by the author, "Despido ate vestir de novo"): every
+// SO DESEQUIPAR (fixed by design, "Despido ate vestir de novo"): every
 // worn item this feature takes off is unequipped in place and never leaves
 // the actor's inventory - never through a container, never recreated. The
 // same InventoryEntryData/ExtraDataList instance goes back on, so
@@ -30,7 +30,7 @@
 // (EMENDA de 2026-09-29, _Steward\Projetos\Lifecast\Fase-6.6-o-controle-de-personagem.md):
 // there is no path that reaches that state to begin with.
 //
-// The button label is FIXED, not a state readout (author's decision, same
+// The button label is FIXED, not a state readout (by design, same
 // EMENDA, after finding it in the E5 round): opening the RaceSex Menu always
 // pushes "on: false" to the page, whatever the character is actually
 // wearing - closing while undressed already re-dresses (above), so a label

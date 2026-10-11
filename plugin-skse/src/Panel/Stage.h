@@ -18,7 +18,7 @@
 //   pan       the camera, sideways - perpendicular to the player-camera
 //             line, in the ground plane - RaceMenu's SetRaceSexCameraPos.
 //             E4, Fase 6.5: the right-button drag moved lift only; the
-//             author measured that as "so mexe na vertical" and this is
+//             in-game testing measured that as "so mexe na vertical" and this is
 //             the axis that was missing.
 //   tilt      the camera node's own rotation, about the horizontal axis
 //             across the line of sight. RaceMenu has no call for this (it
@@ -56,8 +56,8 @@
 // the camera ending up almost on top of the player (1 unit away in the plane
 // and 124 above the origin). kPanMax is not measured the same way - it has
 // no failure mode like that to bound it against, so it is set to the same
-// order of magnitude as kLiftUp and is the author's to retune at OLHO DO
-// AUTOR (E4, Fase 6.5).
+// order of magnitude as kLiftUp and is retuned during in-game review
+// (E4, Fase 6.5).
 //
 // Every RaceMenu call and every node write runs on the UI thread, like
 // RaceMenu's own calls from its film; the answer to the page is sent from
@@ -140,9 +140,9 @@
 
 #pragma once
 
-// Seven numbers of the view are the author's to retune at OLHO DO AUTOR (six
+// Seven numbers of the view are retuned during in-game review (six
 // are declared below, kEase lives in Stage.cpp), and trying one used to cost
-// a build and a boot. LIFECAST_TUNABLE is how he turns them instead: in a
+// a build and a boot. LIFECAST_TUNABLE is how they are turned instead: in a
 // release build it is plain constexpr and nothing can write them, and in a
 // build configured with LIFECAST_TUNING the panel can set them
 // at run time ("stage-tune"). The VALUE is written once, here, for both.
@@ -154,7 +154,7 @@
 // site changes spelling.
 //
 // Which numbers are tunable is NOT a judgement about which matter: it is the
-// list the author asked for. kMinDistance and kFloorMargin stay constant
+// list chosen by design. kMinDistance and kFloorMargin stay constant
 // because they bound the one measured way to lose the character (see the note
 // below). kTiltMax joined the list later, because the tilt limit is one more
 // number the view's reach depends on and costs one declaration to expose.
@@ -193,7 +193,7 @@ namespace Lifecast::Panel::Stage
 	// at both borders - which is what the boot 87 capture shows at the right
 	// edge.
 	//
-	// WORKING VALUE, and this one is the author's to retune at OLHO DO AUTOR:
+	// WORKING VALUE, and this one is retuned during in-game review:
 	// it is the one number here that is pure taste. Nothing measures it.
 	LIFECAST_TUNABLE kPairSpan = 0.5;
 
@@ -214,7 +214,7 @@ namespace Lifecast::Panel::Stage
 	// accumulating on one side.
 	//
 	// Not tunable, and deliberately not kPairApart: this is an instrument,
-	// not a taste knob. kPairApart is the author's to retune at OLHO DO AUTOR,
+	// not a taste knob. kPairApart is retuned during in-game review,
 	// and a ruler that changes length when a taste knob is turned would make
 	// this solve depend on a number with nothing to do with it.
 	inline constexpr double kProbeStep = 10.0;
@@ -280,7 +280,7 @@ namespace Lifecast::Panel::Stage
 	// closing, with the panel scale the player sets, with the belt's narrow
 	// form and with the resolution. Any constant here would be a number that
 	// is right on one screen - and the one measurement that exists is on the
-	// author's (2560 CSS px), which is the single worst population to
+	// test screen (2560 CSS px), which is the single worst population to
 	// generalise a layout constant from.
 	//
 	// It moves PAN and nothing else, and that is also a decision rather than

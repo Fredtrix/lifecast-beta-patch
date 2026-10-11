@@ -546,7 +546,7 @@ namespace Lifecast::Panel::RaceMenuFilm
 		// value the player's edits (or RaceMenu's own ChangeSex) send lands on the name that sits at the same
 		// position in that list: same numbers, other names (a lip value on EXPR_Aah, a chin value on the
 		// eyeballs). The film keeps showing the right values, which is why nothing looks wrong in the panel.
-		// Measured: the 17 names the author's save holds are reproduced by this rule, all 17 (Docs/MEDIDO-E31).
+		// Measured: the 17 names a test save holds are reproduced by this rule, all 17 (Docs/MEDIDO-E31).
 		//
 		// What this puts back: after the change, for every position i of the list skee holds, the film's
 		// slider at position i of the target sex's sorted names is sent the value that belongs to the name

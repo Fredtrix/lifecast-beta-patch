@@ -1,6 +1,6 @@
 // groups.js
 // Lifecast - a level above the section (E2 item 1 - D074: read second-hand off
-// the author's Prisma captures, origin in the phase document, not copied).
+// Prisma captures, origin in the phase document, not copied).
 //
 // controls.js knows how to draw a group heading and how to reveal a section
 // by key; it does not know what "Body" or "Face" means. That mapping lives
@@ -8,7 +8,7 @@
 //
 // This file used to do a second job as well: an "Index" section holding a
 // grid of tiles, one per category, that jumped to the first section under it.
-// The author cut that section, so the grid, the set of keys it skipped and
+// That section was cut, so the grid, the set of keys it skipped and
 // the observer that rebuilt it all left with it - they had no other caller.
 // What stays is the grouping, which is the job the file is named after.
 "use strict";

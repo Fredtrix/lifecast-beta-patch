@@ -80,7 +80,7 @@ const LifecastBelt = (() => {
   nav.appendChild(track);
   nav.appendChild(next);
 
-  // A clipped strip starts at its RIGHT end (autor, 2026-10-10): RACE and
+  // A clipped strip starts at its RIGHT end (2026-10-10): RACE and
   // BODY are what a new character goes to first. It stays pinned there,
   // through every relayout (fonts, scale, resize), until the player moves it
   // - the wheel or an arrow - and from then on it stays where they left it.
@@ -162,7 +162,7 @@ const LifecastBelt = (() => {
     }
   }
 
-  // The always-visible buttons (autor, 2026-10-05 - D126), after the
+  // The always-visible buttons (D126), after the
   // categories: Presets and OBody open their region from anywhere, Sculpt
   // hands over to RaceMenu (the one thing the Lifecast does not do - D125).
   // OBody shows only when its section exists: without the mod there is no
