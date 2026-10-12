@@ -1,0 +1,48 @@
+name: Build Lifecast diagnostic DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - diagnostic/stage-tick-b6
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout including CommonLibSSE-NG
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: ${{ github.workspace }}/vcpkg
+
+      - name: Configure Release build
+        shell: pwsh
+        run: |
+          cmake --preset vs2022-windows -S plugin-skse -DLIFECAST_OUTPUT_FOLDER=""
+
+      - name: Compile Lifecast
+        shell: pwsh
+        run: |
+          cmake --build plugin-skse/build --config Release --parallel 2
+
+      - name: Package DLL
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Path plugin-skse/build -Filter Lifecast.dll -Recurse | Where-Object { $_.FullName -match '[\\/]Release[\\/]' } | Select-Object -First 1
+          if (-not $dll) { throw 'Lifecast.dll not found in Release output' }
+          New-Item -ItemType Directory -Force -Path artifact/SKSE/Plugins | Out-Null
+          Copy-Item $dll.FullName artifact/SKSE/Plugins/Lifecast.dll
+
+      - name: Upload MO2-ready diagnostic DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lifecast-b6-stage-tick-diagnostic
+          path: artifact/
+          if-no-files-found: error
