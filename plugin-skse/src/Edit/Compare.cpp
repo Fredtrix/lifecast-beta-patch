@@ -53,8 +53,15 @@ namespace Lifecast::Edit::Compare
 		RE::TESNPC*         g_base = nullptr;  // the duplicate she is made of
 		RE::ObjectRefHandle g_twin{};          // her reference
 		std::vector<RE::ObjectRefHandle> g_made;  // every reference this module placed, this game, until retired
-		std::mutex                       g_keepOutLock;
-		std::unordered_set<RE::FormID>   g_keepOut;  // every reference this module placed, this game: never saved
+		// The save filter. A figure is known by her form ID AND by her base,
+		// both kept for the whole process: a load in the same process leaves
+		// the retired figure in memory, deleted, and the save after it would
+		// write her with a base no save carries (D248). The base is compared
+		// as a pointer and never dereferenced. A form that gets the same ID
+		// later has another base and is saved as usual.
+		std::mutex                             g_keepOutLock;
+		std::unordered_set<RE::FormID>         g_keepOut;       // every reference this module placed
+		std::unordered_set<const RE::TESForm*> g_keepOutBases;  // every base this module duplicated
 		RE::FormID          g_cellId = 0;      // the cell she was born in
 		bool                g_bornInMenu = false;
 		Clock::time_point   g_bornAt{};
@@ -1361,6 +1368,10 @@ namespace Lifecast::Edit::Compare
 				}
 			}
 			g_bases.push_back(dup);
+			{
+				std::scoped_lock lock(g_keepOutLock);
+				g_keepOutBases.insert(dup);
+			}
 
 			// E22.1, prevention: her own outfit and bag are the source of the
 			// shield, bow and dagger on her back. Assigned on the DUPLICATE only,
@@ -2120,20 +2131,23 @@ namespace Lifecast::Edit::Compare
 		}
 
 		// The save asks every form whether it is to be written; for a reference
-		// this module placed the answer is no, whatever state she is in.
+		// this module placed the answer is no, whatever state she is in, and
+		// in whatever game of this process she was placed (D248).
 		struct KeepOutOfSave
 		{
 			static bool thunk(RE::TESObjectREFR* a_this, RE::BGSSaveFormBuffer* a_buf)
 			{
 				if (a_this) {
-					const auto id = a_this->GetFormID();
-					bool       ours = false;
+					const auto  id = a_this->GetFormID();
+					const auto* base = a_this->GetObjectReference();  // the pointer only
+					bool        ours = false;
 					{
 						std::scoped_lock lock(g_keepOutLock);
-						ours = g_keepOut.contains(id);
+						ours = g_keepOut.contains(id) && g_keepOutBases.contains(base);
 					}
 					if (ours) {
-						spdlog::info("[compare] save: {:08X} is a figure this module placed - kept out of the save", id);
+						spdlog::info("[compare] save: {:08X} is a figure this module placed (by id and base) - kept out of the save",
+							id);
 						return false;
 					}
 				}
@@ -2183,13 +2197,11 @@ namespace Lifecast::Edit::Compare
 	{
 		// The references of the game being left are that game's, and the
 		// handles to them are about to mean nothing. Nothing is called on them.
-		// Their form IDs are handed out again in the next game, so the save
-		// filter forgets them too.
+		// The save filter does NOT forget them: a retired figure can outlive
+		// the load, still in memory, and the next save would write her (D248).
+		// An ID handed out again goes with another base, which the filter
+		// lets through.
 		g_made.clear();
-		{
-			std::scoped_lock lock(g_keepOutLock);
-			g_keepOut.clear();
-		}
 		g_twin = {};
 		g_base = nullptr;
 		g_hidden = false;
