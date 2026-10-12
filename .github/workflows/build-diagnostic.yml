@@ -17,6 +17,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Refresh CommonLibSSE-NG for Skyrim 1.7.x
+        shell: pwsh
+        run: |
+          git -C plugin-skse/extern/commonlibsse-ng fetch origin ng
+          git -C plugin-skse/extern/commonlibsse-ng checkout FETCH_HEAD
+          git -C plugin-skse/extern/commonlibsse-ng submodule update --init --recursive
+          git -C plugin-skse/extern/commonlibsse-ng rev-parse HEAD
+
       - name: Bootstrap vcpkg
         shell: pwsh
         run: |
@@ -45,6 +53,6 @@ jobs:
       - name: Upload MO2-ready diagnostic DLL
         uses: actions/upload-artifact@v4
         with:
-          name: Lifecast-b6-stage-tick-diagnostic
+          name: Lifecast-b6-v5-addresslib-diagnostic
           path: artifact/
           if-no-files-found: error
