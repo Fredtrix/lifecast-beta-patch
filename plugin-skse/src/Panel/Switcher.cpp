@@ -298,7 +298,9 @@ namespace Lifecast::Panel::Switcher
 				// tick of its own would buy nothing extra; the stage reads
 				// two atomics and returns unless something is moving or the
 				// one-figure rule is on and watching its subject drift.
-				Stage::Tick();
+				// Diagnostic b6: isolate the stage input-tick path from the RaceMenu open crash.
+			// This temporarily disables stage movement and one-figure drift monitoring.
+			// Stage::Tick();
 
 				if (!a_event || g_mode != Mode::kRaceMenu) {
 					// With the Lifecast on screen, F4 never gets here: it is
