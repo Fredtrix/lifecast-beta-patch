@@ -1358,7 +1358,7 @@ namespace Lifecast::Edit::Compare
 				spdlog::info("[e28] {}: duplicate sex {} / player base sex {}; race {:08X} / {:08X}", a_when, df ? 1 : 0, pf ? 1 : 0,
 					FormIdOf(dup->race), FormIdOf(base->race));
 				if (df != pf) {
-					dup->SetActorBaseFlag(RE::ACTOR_BASE_DATA::Flag::kFemale, pf, false);
+					dup->SetFlagBit(RE::ACTOR_BASE_DATA::Flag::kFemale, pf, false);
 					spdlog::info("[e28] {}: duplicate sex was wrong - written, now reads {}", a_when,
 						dup->GetSex() == RE::SEX::kFemale ? 1 : 0);
 				}
@@ -1759,7 +1759,7 @@ namespace Lifecast::Edit::Compare
 				return false;
 			}
 			const bool pf = pbase->GetSex() == RE::SEX::kFemale;
-			g_base->SetActorBaseFlag(RE::ACTOR_BASE_DATA::Flag::kFemale, pf, false);
+			g_base->SetFlagBit(RE::ACTOR_BASE_DATA::Flag::kFemale, pf, false);
 			g_base->race = pbase->race;
 			spdlog::info("[e28] resync: base {:08X} sex now reads {}, race {:08X}", g_base->GetFormID(),
 				g_base->GetSex() == RE::SEX::kFemale ? 1 : 0, FormIdOf(g_base->race));
