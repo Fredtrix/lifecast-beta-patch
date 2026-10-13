@@ -135,30 +135,12 @@ namespace Lifecast::Edit::Appearance
 		// player's hair was 36 here and 1119 there) and one eye fewer (348
 		// against 349). Taking the menu's arrays makes both sides count the
 		// same way. Empty without the menu open or before it built them.
-		std::vector<HeadPart*> MenuPartsOf(HPType a_type)
+		// Newer CommonLibSSE-NG no longer exposes RaceSexMenu::RUNTIME_DATA::unk040.
+		// Prefer the existing race/sex-filtered TESDataHandler fallback rather
+		// than guessing an internal menu layout that may differ by runtime.
+		std::vector<HeadPart*> MenuPartsOf(HPType)
 		{
-			std::vector<HeadPart*> out;
-			auto*                  ui = RE::UI::GetSingleton();
-			auto                   menu = ui ? ui->GetMenu<RE::RaceSexMenu>() : nullptr;
-			const auto             slot = static_cast<std::size_t>(a_type);
-			if (!menu || slot >= 7) {
-				return out;
-			}
-			// CommonLib types these arrays as void*: every item is checked
-			// to be a head part of the asked type, and one that is not
-			// drops the whole list, falling back to the data handler's.
-			for (auto* item : menu->GetRuntimeData().unk040[slot]) {
-				auto* form = static_cast<RE::TESForm*>(item);
-				auto* part = form ? form->As<HeadPart>() : nullptr;
-				if (!part || part->type.get() != a_type) {
-					spdlog::warn("[look] the RaceSex Menu's list {} holds a {:08X} that is not a head part of that "
-								 "type - not used",
-						slot, form ? form->GetFormID() : 0);
-					return {};
-				}
-				out.push_back(part);
-			}
-			return out;
+			return {};
 		}
 
 		template <class T>
