@@ -1,0 +1,55 @@
+name: Build Lifecast diagnostic DLL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout including CommonLibSSE-NG
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Refresh CommonLibSSE-NG for Skyrim 1.7.x
+        shell: pwsh
+        run: |
+          git -C plugin-skse/extern/commonlibsse-ng fetch origin ng
+          git -C plugin-skse/extern/commonlibsse-ng checkout FETCH_HEAD
+          git -C plugin-skse/extern/commonlibsse-ng submodule update --init --recursive
+          git -C plugin-skse/extern/commonlibsse-ng rev-parse HEAD
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          "VCPKG_ROOT=${{ github.workspace }}\\vcpkg" >> $env:GITHUB_ENV
+
+      - name: Configure Release build
+        shell: pwsh
+        run: |
+          cmake --preset vs2022-windows -S plugin-skse -DLIFECAST_OUTPUT_FOLDER=""
+
+      - name: Compile Lifecast
+        shell: pwsh
+        run: |
+          cmake --build plugin-skse/build --config Release --parallel 2
+
+      - name: Package DLL
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Path plugin-skse/build -Filter Lifecast.dll -Recurse | Where-Object { $_.FullName -match '[\\/]Release[\\/]' } | Select-Object -First 1
+          if (-not $dll) { throw 'Lifecast.dll not found in Release output' }
+          New-Item -ItemType Directory -Force -Path artifact/SKSE/Plugins | Out-Null
+          Copy-Item $dll.FullName artifact/SKSE/Plugins/Lifecast.dll
+
+      - name: Upload MO2-ready diagnostic DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lifecast-b6-v5-addresslib-diagnostic
+          path: artifact/
+          if-no-files-found: error
